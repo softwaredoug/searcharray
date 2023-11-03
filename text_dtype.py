@@ -1,6 +1,7 @@
-"""Tokenized, searchable text as a pandas dtype"""
+"""Tokenized, searchable text as a pandas dtype."""
 import pandas as pd
 from pandas.api.extensions import ExtensionDtype, ExtensionArray
+from pandas.api.types import is_list_like
 import numpy as np
 
 
@@ -19,12 +20,18 @@ class TokenizedTextDtype(ExtensionDtype):
         return 'TokenizedTextDtype()'
 
 
+def ws_tokenizer(string):
+    if not isinstance(string, str):
+        raise ValueError("Expected a string")
+    return string.split()
+
+
 class TokenizedTextArray(ExtensionArray):
     dtype = TokenizedTextDtype()
 
-    def __init__(self, strings, tokenize_on=' '):
+    def __init__(self, strings, tokenizer=ws_tokenizer):
         self.data = np.asarray(strings, dtype=object)
-        self.tokenize_on = tokenize_on
+        self.tokenizer = tokenizer
         # Here, we are not actually tokenizing the string yet,
         # but you could tokenize in the initializer if needed.
 
@@ -34,14 +41,44 @@ class TokenizedTextArray(ExtensionArray):
 
     def __getitem__(self, idx):
         if isinstance(idx, int):
-            # Tokenize on the fly when an item is accessed.
-            return self.data[idx].split(self.tokenize_on)
+            return self.data[idx]
         else:
-            # If idx is not a single integer, return a new TokenizedTextArray
             return TokenizedTextArray(self.data[idx])
 
     def __len__(self):
         return len(self.data)
+
+    def __ne__(self, other):
+        if isinstance(other, pd.DataFrame) or isinstance(other, pd.Series) or isinstance(other, pd.Index):
+            return NotImplemented
+
+        return ~(self == other)
+
+    def __eq__(self, other):
+        """Return a boolean numpy array indicating elementwise equality."""
+        # When other is a dataframe or series, not implemented
+        if isinstance(other, pd.DataFrame) or isinstance(other, pd.Series) or isinstance(other, pd.Index):
+            return NotImplemented
+
+        # When other is an ExtensionArray
+        if isinstance(other, TokenizedTextArray):
+            if len(self) != len(other):
+                return False
+            return np.array([self.tokenizer(a) == self.tokenizer(b) for a, b in zip(self.data, other.data)])
+
+        # When other is a scalar value
+        elif isinstance(other, str):
+            return np.array([self.tokenizer(a) == self.tokenizer(other) for a in self.data])
+
+        # When other is a sequence but not an ExtensionArray
+        elif is_list_like(other):
+            if len(self) != len(other):
+                return False
+            return np.array([self.tokenizer(a) == self.tokenizer(b) for a, b in zip(self.data, other)])
+
+        # Return False where 'other' is neither the same length nor a scalar
+        else:
+            return np.full(len(self), False)
 
     def isna(self):
         return np.array([pd.isna(x) for x in self.data], dtype=bool)
@@ -59,4 +96,4 @@ class TokenizedTextArray(ExtensionArray):
 
     # Example method for token-based searching
     def contains_token(self, token):
-        return np.array([token in text.split(self.tokenize_on) for text in self.data])
+        return np.array([token in self.tokenizer(text) for text in self.data])
