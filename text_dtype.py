@@ -12,15 +12,28 @@ class TokenizedTextDtype(ExtensionDtype):
 
     @classmethod
     def construct_from_string(cls, string):
-        if string != cls.name:
-            raise TypeError(f"Cannot construct a '{cls.__name__}' from '{string}'")
-        return cls()
+        if not isinstance(string, str):
+            raise TypeError(
+                "'construct_from_string' expects a string, got {}".format(type(string))
+            )
+        elif string == cls.name:
+            return cls()
+        else:
+            raise TypeError(
+                "Cannot construct a '{}' from '{}'".format(cls.__name__, string)
+            )
+
+    @classmethod
+    def construct_array_type(cls):
+        return TokenizedTextArray
 
     def __repr__(self):
         return 'TokenizedTextDtype()'
 
 
 def ws_tokenizer(string):
+    if pd.isna(string):
+        return []
     if not isinstance(string, str):
         raise ValueError("Expected a string")
     return string.split()
@@ -39,11 +52,23 @@ class TokenizedTextArray(ExtensionArray):
     def _from_sequence(cls, scalars, dtype=None, copy=False):
         return cls(scalars)
 
+    def memory_usage(self, deep=False):
+        # This is required for Series/DataFrame.info() to work
+        return self.nbytes
+
+    def nbytes(self):
+        return sum(len(x) for x in self.data)
+
     def __getitem__(self, idx):
         if isinstance(idx, int):
             return self.data[idx]
         else:
             return TokenizedTextArray(self.data[idx])
+
+    def __setitem__(self, idx, value):
+        if isinstance(value, TokenizedTextArray):
+            value = value.data
+        self.data[idx] = value
 
     def __len__(self):
         return len(self.data)
