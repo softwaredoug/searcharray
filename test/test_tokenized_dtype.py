@@ -1,5 +1,6 @@
 import pytest
 from pandas.tests.extension import base
+import pandas as pd
 
 from text_dtype import TokenizedTextDtype, TokenizedTextArray
 
@@ -21,7 +22,90 @@ def data_missing():
     return TokenizedTextArray(["foo bar baz", None, "data3", None] * 25)
 
 
+@pytest.fixture
+def na_cmp():
+    return lambda x, y: x is None and y is None
+
+
+@pytest.fixture
+def na_value():
+    return None
+
+
+@pytest.fixture(params=[True, False])
+def as_series(request):
+    return request.param
+
+
+@pytest.fixture(params=[True, False])
+def as_frame(request):
+    return request.param
+
+
+@pytest.fixture
+def data_repeated(data):
+
+    def gen(count):
+        for _ in range(count):
+            yield data
+
+    return gen
+
+
+@pytest.fixture
+def invalid_scalar(data):
+    return 123
+
+
+@pytest.fixture(params=[True, False])
+def use_numpy(request):
+    return request.param
+
+
+@pytest.fixture
+def data_for_sorting():
+    return TokenizedTextArray(["mmma dabbb", "zed bar bar", "aaa bb aa"])
+
+
+@pytest.fixture
+def data_missing_for_sorting():
+    return TokenizedTextArray(["mmma dabbb", None, "aaa bb aa"])
+
+
+@pytest.fixture
+def data_for_grouping():
+    """Get data for factorization, grouping, and unique tests.
+
+    Expected to be like [B, B, NA, NA, A, A, B, C]
+
+    Where A < B < C and NA is missing
+    """
+    return TokenizedTextArray(["foo bar baz", "foo bar baz", None, None, "abba cadabra", "abba cadabra",
+                               "foo bar baz", "zunny funny wunny"])
+
+
+@pytest.fixture(params=["data", "data_missing"])
+def all_data(request, data, data_missing):
+    if request.param == "data":
+        return data
+    elif request.param == "data_missing":
+        return data_missing
+
+
+@pytest.fixture(params=[None, lambda x: x])
+def sort_by_key(request):
+    return request.param
+
+
 # Then create a class that inherits from the base tests you want to use
-class TestMyExtension(base.BaseDtypeTests, base.BaseInterfaceTests, base.BaseArithmeticOpsTests):
+class TestTokenizedTextDType(base.BaseDtypeTests):
     # You'll need to at least provide the following attributes
+    pass
+
+
+class TestTokenizedTextInterface(base.BaseInterfaceTests):
+    pass
+
+
+class TestTokenizedTextMethods(base.BaseMethodsTests):
     pass

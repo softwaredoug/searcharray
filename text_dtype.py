@@ -2,6 +2,7 @@
 import pandas as pd
 from pandas.api.extensions import ExtensionDtype, ExtensionArray
 from pandas.api.types import is_list_like
+from pandas.api.extensions import take
 import numpy as np
 
 
@@ -109,13 +110,20 @@ class TokenizedTextArray(ExtensionArray):
         return np.array([pd.isna(x) for x in self.data], dtype=bool)
 
     def take(self, indices, allow_fill=False, fill_value=None):
-        taken = np.take(self.data, indices, allow_fill=allow_fill, fill_value=fill_value)
-        return TokenizedTextArray(taken)
+
+        if allow_fill:
+            if fill_value is None or pd.isna(fill_value):
+                fill_value = None
+        result = take(self.data, indices, allow_fill=allow_fill, fill_value=fill_value)
+        if allow_fill and fill_value is None:
+            result[pd.isna(result)] = None
+        return TokenizedTextArray(result)
 
     def copy(self):
         return TokenizedTextArray(self.data.copy())
 
-    def _concat_same_type(self, to_concat):
+    @classmethod
+    def _concat_same_type(cls, to_concat):
         concatenated_data = np.concatenate([ea.data for ea in to_concat])
         return TokenizedTextArray(concatenated_data)
 
