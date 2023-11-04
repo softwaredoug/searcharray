@@ -70,7 +70,13 @@ class TokenizedTextArray(ExtensionArray):
         if dtype is not None:
             if not isinstance(dtype, TokenizedTextDtype):
                 return scalars
-        if type(scalars) == np.ndarray and scalars.dtype != object:
+        if type(scalars) == np.ndarray and scalars.dtype == TokenizedTextDtype():
+            return cls(scalars)
+        # String types
+        elif type(scalars) == np.ndarray and scalars.dtype.kind in 'US':
+            return cls(scalars)
+        # Other objects
+        elif type(scalars) == np.ndarray and scalars.dtype != object:
             return scalars
         return cls(scalars)
 
