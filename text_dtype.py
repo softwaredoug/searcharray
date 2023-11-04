@@ -71,6 +71,19 @@ class TokenizedTextArray(ExtensionArray):
             value = value.data
         self.data[idx] = value
 
+    def value_counts(
+        self,
+        dropna: bool = True,
+    ):
+        from collections import Counter
+
+        if dropna:
+            counts = Counter(self.data)
+            counts.pop(None, None)
+        else:
+            counts = Counter(self.data)
+        return pd.Series(counts)
+
     def __len__(self):
         return len(self.data)
 

@@ -19,7 +19,7 @@ def data():
 @pytest.fixture
 def data_missing():
     """Return a fixture of your data with missing values here."""
-    return TokenizedTextArray(["foo bar baz", None, "data3", None] * 25)
+    return TokenizedTextArray([None, "foo bar baz"])
 
 
 @pytest.fixture
@@ -98,14 +98,38 @@ def sort_by_key(request):
 
 
 # Then create a class that inherits from the base tests you want to use
-class TestTokenizedTextDType(base.BaseDtypeTests):
+class TestDType(base.BaseDtypeTests):
     # You'll need to at least provide the following attributes
     pass
 
 
-class TestTokenizedTextInterface(base.BaseInterfaceTests):
+class TestInterface(base.BaseInterfaceTests):
     pass
 
 
-class TestTokenizedTextMethods(base.BaseMethodsTests):
+class TestMethods(base.BaseMethodsTests):
+    pass
+
+
+class TestConstructors(base.BaseConstructorsTests):
+    pass
+
+
+class TestReshaping(base.BaseReshapingTests):
+    pass
+
+
+class TestGetitem(base.BaseGetitemTests):
+    pass
+
+
+class TestSetitem(base.BaseSetitemTests):
+    pass
+
+
+class TestCasting(base.BaseCastingTests):
+    pass
+
+
+class TestPrinting(base.BasePrintingTests):
     pass
