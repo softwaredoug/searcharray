@@ -48,6 +48,12 @@ class TokenizedTextArray(ExtensionArray):
     dtype = TokenizedTextDtype()
 
     def __init__(self, strings, tokenizer=ws_tokenizer):
+        # Check dtype, raise TypeError
+        if not is_list_like(strings):
+            raise TypeError("Expected list-like object, got {}".format(type(strings)))
+        if not all(isinstance(x, str) or pd.isna(x) for x in strings):
+            raise TypeError("Expected a list of strings")
+
         self.data = np.asarray(strings, dtype=object)
         self.tokenizer = tokenizer
 
