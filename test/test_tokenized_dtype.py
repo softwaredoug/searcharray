@@ -1,6 +1,5 @@
 import pytest
 from pandas.tests.extension import base
-import pandas as pd
 
 from text_dtype import TokenizedTextDtype, TokenizedTextArray
 
@@ -109,6 +108,11 @@ def as_array(request):
     return request.param
 
 
+@pytest.fixture(params=["ffill", "bfill"])
+def fillna_method(request):
+    return request.param
+
+
 # Then create a class that inherits from the base tests you want to use
 class TestDType(base.BaseDtypeTests):
     # You'll need to at least provide the following attributes
@@ -145,3 +149,11 @@ class TestCasting(base.BaseCastingTests):
 
 class TestPrinting(base.BasePrintingTests):
     pass
+
+
+class TestMissing(base.BaseMissingTests):
+    pass
+
+
+# class TestReduce(base.BaseNoReduceTests):
+#     pass
