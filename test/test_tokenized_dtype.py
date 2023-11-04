@@ -119,11 +119,11 @@ class TestReshaping(base.BaseReshapingTests):
     pass
 
 
-class TestGetitem(base.BaseGetitemTests):
+class TestGetItem(base.BaseGetitemTests):
     pass
 
 
-class TestSetitem(base.BaseSetitemTests):
+class TestSetItem(base.BaseSetitemTests):
     pass
 
 

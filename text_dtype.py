@@ -31,6 +31,10 @@ class TokenizedTextDtype(ExtensionDtype):
     def __repr__(self):
         return 'TokenizedTextDtype()'
 
+    @property
+    def na_value(self):
+        return None
+
 
 def ws_tokenizer(string):
     if pd.isna(string):
@@ -46,11 +50,14 @@ class TokenizedTextArray(ExtensionArray):
     def __init__(self, strings, tokenizer=ws_tokenizer):
         self.data = np.asarray(strings, dtype=object)
         self.tokenizer = tokenizer
-        # Here, we are not actually tokenizing the string yet,
-        # but you could tokenize in the initializer if needed.
 
     @classmethod
     def _from_sequence(cls, scalars, dtype=None, copy=False):
+        if dtype is not None:
+            if not isinstance(dtype, TokenizedTextDtype):
+                return scalars
+        if type(scalars) == np.ndarray and scalars.dtype != object:
+            return scalars
         return cls(scalars)
 
     def memory_usage(self, deep=False):
@@ -66,10 +73,15 @@ class TokenizedTextArray(ExtensionArray):
         else:
             return TokenizedTextArray(self.data[idx])
 
-    def __setitem__(self, idx, value):
+    def __setitem__(self, key, value):
+        key = pd.api.indexers.check_array_indexer(self, key)
+        if isinstance(value, pd.Series):
+            value = value.values
+        if isinstance(value, pd.DataFrame):
+            value = value.values.flatten()
         if isinstance(value, TokenizedTextArray):
             value = value.data
-        self.data[idx] = value
+        self.data[key] = value
 
     def value_counts(
         self,
@@ -139,6 +151,14 @@ class TokenizedTextArray(ExtensionArray):
     def _concat_same_type(cls, to_concat):
         concatenated_data = np.concatenate([ea.data for ea in to_concat])
         return TokenizedTextArray(concatenated_data)
+
+    @classmethod
+    def _from_factorized(cls, values, original):
+        return cls(values)
+
+    def _values_for_factorize(self):
+        arr = self.data.copy()
+        return arr, None
 
     # Example method for token-based searching
     def contains_token(self, token):
