@@ -1,5 +1,6 @@
 """Tokenized, searchable text as a pandas dtype."""
 import pandas as pd
+import numbers
 from pandas.api.extensions import ExtensionDtype, ExtensionArray, register_extension_dtype
 from pandas.api.types import is_list_like
 from pandas.api.extensions import take
@@ -35,6 +36,9 @@ class TokenizedTextDtype(ExtensionDtype):
     @property
     def na_value(self):
         return None
+
+    def valid_value(self, value):
+        return isinstance(value, str) or pd.isna(value)
 
 
 register_extension_dtype(TokenizedTextDtype)
@@ -92,6 +96,16 @@ class TokenizedTextArray(ExtensionArray):
             value = value.values.flatten()
         if isinstance(value, TokenizedTextArray):
             value = value.data
+        if isinstance(value, list):
+            value = np.asarray(value, dtype=object)
+
+        if not isinstance(value, np.ndarray) and not self.dtype.valid_value(value):
+            raise ValueError(f"Cannot set non-object array to TokenizedTextArray -- you passed type:{type(value)} -- {value}")
+
+        # Cant set a single value to an array
+        if isinstance(key, numbers.Integral) and isinstance(value, np.ndarray):
+            raise ValueError("Cannot set a single value to an array")
+
         self.data[key] = value
 
     def value_counts(

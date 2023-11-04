@@ -103,6 +103,12 @@ def box_in_series(request):
     return request.param
 
 
+@pytest.fixture(params=[True, False])
+def as_array(request):
+    """Return whether to support ExtensionDtype _from_sequence method testing."""
+    return request.param
+
+
 # Then create a class that inherits from the base tests you want to use
 class TestDType(base.BaseDtypeTests):
     # You'll need to at least provide the following attributes
