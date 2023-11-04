@@ -97,6 +97,12 @@ def sort_by_key(request):
     return request.param
 
 
+@pytest.fixture(params=[True, False])
+def box_in_series(request):
+    """Return whether to box the data in a Series."""
+    return request.param
+
+
 # Then create a class that inherits from the base tests you want to use
 class TestDType(base.BaseDtypeTests):
     # You'll need to at least provide the following attributes
