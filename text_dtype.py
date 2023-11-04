@@ -1,8 +1,9 @@
 """Tokenized, searchable text as a pandas dtype."""
 import pandas as pd
-from pandas.api.extensions import ExtensionDtype, ExtensionArray
+from pandas.api.extensions import ExtensionDtype, ExtensionArray, register_extension_dtype
 from pandas.api.types import is_list_like
 from pandas.api.extensions import take
+
 import numpy as np
 
 
@@ -34,6 +35,9 @@ class TokenizedTextDtype(ExtensionDtype):
     @property
     def na_value(self):
         return None
+
+
+register_extension_dtype(TokenizedTextDtype)
 
 
 def ws_tokenizer(string):
@@ -73,11 +77,12 @@ class TokenizedTextArray(ExtensionArray):
     def nbytes(self):
         return sum(len(x) for x in self.data)
 
-    def __getitem__(self, idx):
-        if isinstance(idx, int):
-            return self.data[idx]
+    def __getitem__(self, key):
+        key = pd.api.indexers.check_array_indexer(self, key)
+        if isinstance(key, int):
+            return self.data[key]
         else:
-            return TokenizedTextArray(self.data[idx])
+            return TokenizedTextArray(self.data[key], tokenizer=self.tokenizer)
 
     def __setitem__(self, key, value):
         key = pd.api.indexers.check_array_indexer(self, key)
