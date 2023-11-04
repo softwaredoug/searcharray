@@ -8,7 +8,7 @@ from pandas.api.extensions import take
 import numpy as np
 
 
-class TokenizedTextDtype(ExtensionDtype):
+class PostingsDtype(ExtensionDtype):
     name = 'tokenized_text'
     type = str
     kind = 'O'  # Object kind
@@ -28,10 +28,10 @@ class TokenizedTextDtype(ExtensionDtype):
 
     @classmethod
     def construct_array_type(cls):
-        return TokenizedTextArray
+        return PostingsArray
 
     def __repr__(self):
-        return 'TokenizedTextDtype()'
+        return 'PostingsDtype()'
 
     @property
     def na_value(self):
@@ -41,7 +41,7 @@ class TokenizedTextDtype(ExtensionDtype):
         return isinstance(value, str) or pd.isna(value)
 
 
-register_extension_dtype(TokenizedTextDtype)
+register_extension_dtype(PostingsDtype)
 
 
 def ws_tokenizer(string):
@@ -52,8 +52,8 @@ def ws_tokenizer(string):
     return string.split()
 
 
-class TokenizedTextArray(ExtensionArray):
-    dtype = TokenizedTextDtype()
+class PostingsArray(ExtensionArray):
+    dtype = PostingsDtype()
 
     def __init__(self, strings, tokenizer=ws_tokenizer):
         # Check dtype, raise TypeError
@@ -68,9 +68,9 @@ class TokenizedTextArray(ExtensionArray):
     @classmethod
     def _from_sequence(cls, scalars, dtype=None, copy=False):
         if dtype is not None:
-            if not isinstance(dtype, TokenizedTextDtype):
+            if not isinstance(dtype, PostingsDtype):
                 return scalars
-        if type(scalars) == np.ndarray and scalars.dtype == TokenizedTextDtype():
+        if type(scalars) == np.ndarray and scalars.dtype == PostingsDtype():
             return cls(scalars)
         # String types
         elif type(scalars) == np.ndarray and scalars.dtype.kind in 'US':
@@ -93,7 +93,7 @@ class TokenizedTextArray(ExtensionArray):
         if isinstance(key, int):
             return self.data[key]
         else:
-            return TokenizedTextArray(self.data[key], tokenizer=self.tokenizer)
+            return PostingsArray(self.data[key], tokenizer=self.tokenizer)
 
     def __setitem__(self, key, value):
         key = pd.api.indexers.check_array_indexer(self, key)
@@ -101,13 +101,13 @@ class TokenizedTextArray(ExtensionArray):
             value = value.values
         if isinstance(value, pd.DataFrame):
             value = value.values.flatten()
-        if isinstance(value, TokenizedTextArray):
+        if isinstance(value, PostingsArray):
             value = value.data
         if isinstance(value, list):
             value = np.asarray(value, dtype=object)
 
         if not isinstance(value, np.ndarray) and not self.dtype.valid_value(value):
-            raise ValueError(f"Cannot set non-object array to TokenizedTextArray -- you passed type:{type(value)} -- {value}")
+            raise ValueError(f"Cannot set non-object array to PostingsArray -- you passed type:{type(value)} -- {value}")
 
         # Cant set a single value to an array
         if isinstance(key, numbers.Integral) and isinstance(value, np.ndarray):
@@ -144,7 +144,7 @@ class TokenizedTextArray(ExtensionArray):
             return NotImplemented
 
         # When other is an ExtensionArray
-        if isinstance(other, TokenizedTextArray):
+        if isinstance(other, PostingsArray):
             if len(self) != len(other):
                 return False
             elif len(other) == 0:
@@ -178,15 +178,15 @@ class TokenizedTextArray(ExtensionArray):
         result = take(self.data, indices, allow_fill=allow_fill, fill_value=fill_value)
         if allow_fill and fill_value is None:
             result[pd.isna(result)] = None
-        return TokenizedTextArray(result)
+        return PostingsArray(result)
 
     def copy(self):
-        return TokenizedTextArray(self.data.copy())
+        return PostingsArray(self.data.copy())
 
     @classmethod
     def _concat_same_type(cls, to_concat):
         concatenated_data = np.concatenate([ea.data for ea in to_concat])
-        return TokenizedTextArray(concatenated_data)
+        return PostingsArray(concatenated_data)
 
     @classmethod
     def _from_factorized(cls, values, original):

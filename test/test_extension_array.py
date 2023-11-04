@@ -1,24 +1,24 @@
 import pytest
 from pandas.tests.extension import base
 
-from text_dtype import TokenizedTextDtype, TokenizedTextArray
+from postings import PostingsDtype, PostingsArray
 
 
 @pytest.fixture
 def dtype():
-    return TokenizedTextDtype()
+    return PostingsDtype()
 
 
 @pytest.fixture
 def data():
     """Return a fixture of your data here that returns an instance of your ExtensionArray."""
-    return TokenizedTextArray(["foo bar baz", "data2", "data3", "bunny funny wunny"] * 25)
+    return PostingsArray(["foo bar baz", "data2", "data3", "bunny funny wunny"] * 25)
 
 
 @pytest.fixture
 def data_missing():
     """Return a fixture of your data with missing values here."""
-    return TokenizedTextArray([None, "foo bar baz"])
+    return PostingsArray([None, "foo bar baz"])
 
 
 @pytest.fixture
@@ -63,12 +63,12 @@ def use_numpy(request):
 
 @pytest.fixture
 def data_for_sorting():
-    return TokenizedTextArray(["mmma dabbb", "zed bar bar", "aaa bb aa"])
+    return PostingsArray(["mmma dabbb", "zed bar bar", "aaa bb aa"])
 
 
 @pytest.fixture
 def data_missing_for_sorting():
-    return TokenizedTextArray(["mmma dabbb", None, "aaa bb aa"])
+    return PostingsArray(["mmma dabbb", None, "aaa bb aa"])
 
 
 @pytest.fixture
@@ -79,8 +79,8 @@ def data_for_grouping():
 
     Where A < B < C and NA is missing
     """
-    return TokenizedTextArray(["foo bar baz", "foo bar baz", None, None, "abba cadabra", "abba cadabra",
-                               "foo bar baz", "zunny funny wunny"])
+    return PostingsArray(["foo bar baz", "foo bar baz", None, None, "abba cadabra", "abba cadabra",
+                          "foo bar baz", "zunny funny wunny"])
 
 
 @pytest.fixture(params=["data", "data_missing"])
