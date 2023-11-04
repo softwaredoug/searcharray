@@ -121,6 +121,8 @@ class TokenizedTextArray(ExtensionArray):
         if isinstance(other, TokenizedTextArray):
             if len(self) != len(other):
                 return False
+            elif len(other) == 0:
+                return np.array([], dtype=bool)
             return np.array([self.tokenizer(a) == self.tokenizer(b) for a, b in zip(self.data, other.data)])
 
         # When other is a scalar value
@@ -131,6 +133,8 @@ class TokenizedTextArray(ExtensionArray):
         elif is_list_like(other):
             if len(self) != len(other):
                 return False
+            elif len(other) == 0:
+                return np.array([], dtype=bool)
             return np.array([self.tokenizer(a) == self.tokenizer(b) for a, b in zip(self.data, other)])
 
         # Return False where 'other' is neither the same length nor a scalar
