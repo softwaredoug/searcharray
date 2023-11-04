@@ -75,11 +75,12 @@ class TokenizedTextArray(ExtensionArray):
         return cls(scalars)
 
     def memory_usage(self, deep=False):
-        # This is required for Series/DataFrame.info() to work
         return self.nbytes
 
+    @property
     def nbytes(self):
-        return sum(len(x) for x in self.data)
+        all_bytes = [len(x) for x in self.data]
+        return sum(all_bytes)
 
     def __getitem__(self, key):
         key = pd.api.indexers.check_array_indexer(self, key)
