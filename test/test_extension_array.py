@@ -1,4 +1,5 @@
 import pytest
+import numpy as np
 from pandas.tests.extension import base
 
 from postings import PostingsDtype, PostingsArray
@@ -175,6 +176,7 @@ def test_bm25(data):
     assert bm25_idf > 0.0
     bm25 = data.bm25("bar")
     assert bm25.shape == (100,)
+    assert np.isclose(bm25, [1.75278597, 0.0, 1.49502333, 0.0] * 25).all()
 
 
 # class TestReduce(base.BaseNoReduceTests):

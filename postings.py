@@ -238,7 +238,7 @@ class PostingsArray(ExtensionArray):
         return np.sum(term_freq > 0)
 
     def doc_lengths(self):
-        return np.sum(self.term_freqs, axis=1)
+        return np.array(np.sum(self.term_freqs, axis=1).flatten())[0]
 
     def match(self, tokenized_term):
         """Return a boolean numpy array indicating which elements contain the given term."""
@@ -252,9 +252,10 @@ class PostingsArray(ExtensionArray):
 
     def bm25_tf(self, tokenized_term, k1=1.2, b=0.75):
         tf = self.term_freq(tokenized_term)
-        return (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (self.doc_lengths() / self.avg_doc_length)))
+        numer = (k1 + 1) * tf
+        denom = k1 * (1 - b + b * (self.doc_lengths() / self.avg_doc_length))
+        return numer / denom
 
     def bm25(self, tokenized_term, k1=1.2, b=0.75):
         """Score each doc using BM25."""
-        import pdb; pdb.set_trace()
         return self.bm25_idf(tokenized_term) * self.bm25_tf(tokenized_term)
