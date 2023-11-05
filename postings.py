@@ -6,6 +6,10 @@ from pandas.api.types import is_list_like
 from pandas.api.extensions import take
 
 import numpy as np
+from term_dict import TermDict
+
+# Doc,Term -> freq
+from scipy.sparse import lil_matrix, csr_matrix
 
 
 class PostingsDtype(ExtensionDtype):
@@ -62,6 +66,24 @@ class PostingsArray(ExtensionArray):
         if not all(isinstance(x, str) or pd.isna(x) for x in strings):
             raise TypeError("Expected a list of strings")
 
+        freqs_table = lil_matrix((len(strings), 0))
+        self.term_dict = TermDict()
+        self.avg_doc_length = 0
+        for doc_id, string in enumerate(strings):
+            if pd.isna(string):
+                continue
+            tokenized = tokenizer(string)
+            self.avg_doc_length += len(tokenized)
+            for token in tokenized:
+                term_id = self.term_dict.add_term(token)
+                if term_id >= freqs_table.shape[1]:
+                    freqs_table.resize((freqs_table.shape[0], term_id + 1))
+                freqs_table[doc_id, term_id] += 1
+
+        self.term_freqs = csr_matrix(freqs_table)
+        self.avg_doc_length /= len(strings)
+
+        # How to eliminate data?
         self.data = np.asarray(strings, dtype=object)
         self.tokenizer = tokenizer
 
@@ -178,15 +200,15 @@ class PostingsArray(ExtensionArray):
         result = take(self.data, indices, allow_fill=allow_fill, fill_value=fill_value)
         if allow_fill and fill_value is None:
             result[pd.isna(result)] = None
-        return PostingsArray(result)
+        return PostingsArray(result, tokenizer=self.tokenizer)
 
     def copy(self):
-        return PostingsArray(self.data.copy())
+        return PostingsArray(self.data.copy(), tokenizer=self.tokenizer)
 
     @classmethod
     def _concat_same_type(cls, to_concat):
         concatenated_data = np.concatenate([ea.data for ea in to_concat])
-        return PostingsArray(concatenated_data)
+        return PostingsArray(concatenated_data, tokenizer=to_concat[0].tokenizer)
 
     @classmethod
     def _from_factorized(cls, values, original):
@@ -196,6 +218,43 @@ class PostingsArray(ExtensionArray):
         arr = self.data.copy()
         return arr, None
 
-    # Example method for token-based searching
-    def contains_token(self, token):
-        return np.array([token in self.tokenizer(text) for text in self.data])
+    # ***********************************************************
+    # Naive implementations of search functions to clean up later
+    # ***********************************************************
+    def term_freq(self, tokenized_term):
+        if not isinstance(tokenized_term, str):
+            raise TypeError("Expected a string")
+
+        term_id = self.term_dict.get_term_id(tokenized_term)
+        matches = self.term_freqs[:, term_id].todense().flatten()
+        matches = np.asarray(matches).flatten()
+        return matches
+
+    def doc_freq(self, tokenized_term):
+        if not isinstance(tokenized_term, str):
+            raise TypeError("Expected a string")
+        # Count number of rows where the term appears
+        term_freq = self.term_freq(tokenized_term)
+        return np.sum(term_freq > 0)
+
+    def doc_lengths(self):
+        return np.sum(self.term_freqs, axis=1)
+
+    def match(self, tokenized_term):
+        """Return a boolean numpy array indicating which elements contain the given term."""
+        term_freq = self.term_freq(tokenized_term)
+        return term_freq > 0
+
+    def bm25_idf(self, tokenized_term):
+        df = self.doc_freq(tokenized_term)
+        num_docs = len(self)
+        return np.log(1 + (num_docs - df + 0.5) / (df + 0.5))
+
+    def bm25_tf(self, tokenized_term, k1=1.2, b=0.75):
+        tf = self.term_freq(tokenized_term)
+        return (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (self.doc_lengths() / self.avg_doc_length)))
+
+    def bm25(self, tokenized_term, k1=1.2, b=0.75):
+        """Score each doc using BM25."""
+        import pdb; pdb.set_trace()
+        return self.bm25_idf(tokenized_term) * self.bm25_tf(tokenized_term)

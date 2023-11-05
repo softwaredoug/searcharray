@@ -12,7 +12,7 @@ def dtype():
 @pytest.fixture
 def data():
     """Return a fixture of your data here that returns an instance of your ExtensionArray."""
-    return PostingsArray(["foo bar baz", "data2", "data3", "bunny funny wunny"] * 25)
+    return PostingsArray(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25)
 
 
 @pytest.fixture
@@ -153,6 +153,28 @@ class TestPrinting(base.BasePrintingTests):
 
 class TestMissing(base.BaseMissingTests):
     pass
+
+
+def test_match(data):
+    matches = data.match("foo")
+    assert (matches == [True, False, False, False] * 25).all()
+
+
+def test_term_freqs(data):
+    matches = data.term_freq("bar")
+    assert (matches == [2, 0, 1, 0] * 25).all()
+
+
+def test_doc_freq(data):
+    doc_freq = data.doc_freq("bar")
+    assert doc_freq == (2 * 25)
+
+
+def test_bm25(data):
+    bm25_idf = data.bm25_idf("bar")
+    assert bm25_idf > 0.0
+    bm25 = data.bm25("bar")
+    assert bm25.shape == (100,)
 
 
 # class TestReduce(base.BaseNoReduceTests):
