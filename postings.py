@@ -81,7 +81,8 @@ class PostingsArray(ExtensionArray):
                 freqs_table[doc_id, term_id] += 1
 
         self.term_freqs = csr_matrix(freqs_table)
-        self.avg_doc_length /= len(strings)
+        if len(strings) > 0:
+            self.avg_doc_length /= len(strings)
 
         # How to eliminate data?
         self.data = np.asarray(strings, dtype=object)
