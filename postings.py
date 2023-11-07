@@ -230,11 +230,15 @@ class PostingsArray(ExtensionArray):
 
     def __getitem__(self, key):
         key = pd.api.indexers.check_array_indexer(self, key)
-        rows = self.term_freqs[key, :]
+        # Want to take rows of term freqs
         if isinstance(key, int):
+            rows = self.term_freqs[key]
             return _row_to_postings_row(rows[0], self.term_dict)
         else:
-            return PostingsArray([_row_to_postings_row(row, self.term_dict) for row in rows], tokenizer=self.tokenizer)
+            row_indices = np.arange(self.term_freqs.shape[0])[key]
+            rows = [_row_to_postings_row(self.term_freqs[row], self.term_dict)
+                    for row in row_indices]
+            return PostingsArray(rows, tokenizer=self.tokenizer)
 
     def __setitem__(self, key, value):
         return NotImplemented

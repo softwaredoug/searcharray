@@ -24,7 +24,7 @@ def data_missing():
 
 @pytest.fixture
 def na_cmp():
-    return lambda x, y: x is None and y is None
+    return lambda x, y: x == PostingsRow({}) or y == PostingsRow({})
 
 
 @pytest.fixture
