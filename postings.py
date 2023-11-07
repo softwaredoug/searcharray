@@ -5,6 +5,7 @@ from collections import Counter
 from pandas.api.extensions import ExtensionDtype, ExtensionArray, register_extension_dtype
 from pandas.api.types import is_list_like
 from pandas.api.extensions import take
+import json
 
 import numpy as np
 from term_dict import TermDict
@@ -25,10 +26,10 @@ class PostingsRow:
     def __init__(self, postings):
         self.postings = postings
 
-    def __getitem__(self, item):
-        return self.postings[item]
+    def termfreq(self, term):
+        return self.postings[term]
 
-    def items(self):
+    def terms(self):
         return self.postings.items()
 
     def __len__(self):
@@ -39,6 +40,15 @@ class PostingsRow:
 
     def __str__(self):
         return str(self.postings)
+
+    def __eq__(self, other):
+        return isinstance(other, PostingsRow) and self.postings == other.postings
+
+    def __lt__(self, other):
+        return isinstance(other, PostingsRow) and hash(self) < hash(other)
+
+    def __hash__(self):
+        return hash(json.dumps(self.postings, sort_keys=True))
 
 
 class PostingsDtype(ExtensionDtype):
@@ -109,7 +119,7 @@ def _build_index_from_dict(tokenized_postings):
     term_dict = TermDict()
     avg_doc_length = 0
     for doc_id, tokenized in enumerate(tokenized_postings):
-        for token, term_freq in tokenized.items():
+        for token, term_freq in tokenized.terms():
             term_id = term_dict.add_term(token)
             if term_id >= freqs_table.shape[1]:
                 freqs_table.resize((freqs_table.shape[0], term_id + 1))
@@ -219,13 +229,11 @@ class PostingsArray(ExtensionArray):
         self,
         dropna: bool = True,
     ):
-        from collections import Counter
-
         if dropna:
-            counts = Counter(self.data)
-            counts.pop(None, None)
+            counts = Counter(self[:])
+            counts.pop(PostingsRow({}), None)
         else:
-            counts = Counter(self.data)
+            counts = Counter(self[:])
         return pd.Series(counts)
 
     def __len__(self):
@@ -249,16 +257,12 @@ class PostingsArray(ExtensionArray):
                 return False
             elif len(other) == 0:
                 return np.array([], dtype=bool)
-            return (self.term_freqs == other.term_freqs and
-                    self.term_dict == other.term_dict and
-                    self.avg_doc_length == other.avg_doc_length)
+            return np.array(self[:]) == np.array(other[:])
 
         # When other is a scalar value
         elif isinstance(other, dict):
             other = PostingsArray([other], tokenizer=self.tokenizer)
-            return (self.term_freqs == other.term_freqs and  # noqa: E127
-                    self.term_dict == other.term_dict and  # noqa: E127
-                    self.avg_doc_length == other.avg_doc_length)
+            return np.array(self[:]) == np.array(other[:])
 
         # When other is a sequence but not an ExtensionArray
         # its an array of dicts
@@ -269,9 +273,7 @@ class PostingsArray(ExtensionArray):
                 return np.array([], dtype=bool)
             # We actually don't know how it was tokenized
             other = PostingsArray(other, tokenizer=self.tokenizer)
-            return (self.term_freqs == other.term_freqs and  # noqa: E127
-                    self.term_dict == other.term_dict and  # noqa: E127
-                    self.avg_doc_length == other.avg_doc_length)
+            return np.array(self[:]) == np.array(other[:])
 
         # Return False where 'other' is neither the same length nor a scalar
         else:
@@ -306,7 +308,7 @@ class PostingsArray(ExtensionArray):
 
     @classmethod
     def _concat_same_type(cls, to_concat):
-        concatenated_data = np.concatenate([ea.data for ea in to_concat])
+        concatenated_data = np.concatenate([ea[:] for ea in to_concat])
         return PostingsArray(concatenated_data, tokenizer=to_concat[0].tokenizer)
 
     @classmethod

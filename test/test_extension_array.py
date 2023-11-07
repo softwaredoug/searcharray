@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 from pandas.tests.extension import base
 
-from postings import PostingsDtype, PostingsArray
+from postings import PostingsDtype, PostingsArray, PostingsRow
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ def na_cmp():
 
 @pytest.fixture
 def na_value():
-    return None
+    return PostingsRow({})
 
 
 @pytest.fixture(params=[True, False])
