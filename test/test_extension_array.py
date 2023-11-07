@@ -64,12 +64,19 @@ def use_numpy(request):
 
 @pytest.fixture
 def data_for_sorting():
-    return PostingsArray.index(["mmma dabbb", "zed bar bar", "aaa bb aa"])
+    """Length-3 array with a known sort order.
+
+    This should be three items [B, C, A] with
+    A < B < C
+    """
+    arr = PostingsArray.index(["abba mmma dabbb", "abba abba aska", "caa cata"])
+    return arr
 
 
 @pytest.fixture
 def data_missing_for_sorting():
-    return PostingsArray.index(["mmma dabbb", None, "aaa bb aa"])
+    arr = PostingsArray.index(["abba mmma dabbb", "", "caa cata"])
+    return arr
 
 
 @pytest.fixture

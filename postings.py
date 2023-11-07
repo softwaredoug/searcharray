@@ -36,16 +36,41 @@ class PostingsRow:
         return len(self.postings)
 
     def __repr__(self):
-        return repr(self.postings)
+        return f"PostingsRow({repr(self.postings)})"
 
     def __str__(self):
-        return str(self.postings)
+        return f"PostingsRow({str(self.postings)})"
 
     def __eq__(self, other):
         return isinstance(other, PostingsRow) and self.postings == other.postings
 
     def __lt__(self, other):
-        return isinstance(other, PostingsRow) and hash(self) < hash(other)
+        # return isinstance(other, PostingsRow) and hash(self) < hash(other)
+        keys_both = set(self.postings.keys()).union(set(other.postings.keys()))
+        # Sort lexically
+        keys_both = sorted(keys_both)
+
+        # Iterate as if these are two vectors of the same large dimensional vector sparse
+        for key in keys_both:
+            lhs_val = 0
+            rhs_val = 0
+            try:
+                lhs_val = self.postings[key]
+            except KeyError:
+                pass
+
+            try:
+                rhs_val = other.postings[key]
+            except KeyError:
+                pass
+
+            if lhs_val < rhs_val:
+                return True
+            elif lhs_val > rhs_val:
+                return False
+            else:
+                continue
+        return False
 
     def __hash__(self):
         return hash(json.dumps(self.postings, sort_keys=True))
@@ -131,7 +156,7 @@ def _build_index_from_dict(tokenized_postings):
     return csr_matrix(freqs_table), term_dict, avg_doc_length
 
 
-def _row_to_postings_dict(row, term_dict):
+def _row_to_postings_row(row, term_dict):
     result = PostingsRow({term_dict.get_term(term_id): int(row[0, term_id])
                           for term_id in range(row.shape[1]) if row[0, term_id] > 0})
     return result
@@ -200,9 +225,9 @@ class PostingsArray(ExtensionArray):
         key = pd.api.indexers.check_array_indexer(self, key)
         rows = self.term_freqs[key, :]
         if isinstance(key, int):
-            return _row_to_postings_dict(rows[0], self.term_dict)
+            return _row_to_postings_row(rows[0], self.term_dict)
         else:
-            return PostingsArray([_row_to_postings_dict(row, self.term_dict) for row in rows], tokenizer=self.tokenizer)
+            return PostingsArray([_row_to_postings_row(row, self.term_dict) for row in rows], tokenizer=self.tokenizer)
 
     def __setitem__(self, key, value):
         return NotImplemented
@@ -298,7 +323,7 @@ class PostingsArray(ExtensionArray):
             if result_index == -1:
                 taken_postings.append(fill_value)
             else:
-                taken_postings.append(_row_to_postings_dict(self.term_freqs[result_index], self.term_dict))
+                taken_postings.append(_row_to_postings_row(self.term_freqs[result_index], self.term_dict))
         # if allow_fill and fill_value is None:
         #     result[pd.isna(result)] = None
         return PostingsArray(taken_postings, tokenizer=self.tokenizer)
@@ -316,7 +341,7 @@ class PostingsArray(ExtensionArray):
         return cls(values)
 
     def _values_for_factorize(self):
-        arr = self[~pd.isna(self)]
+        arr = np.asarray(self[:])
         return arr, None
 
     # ***********************************************************
