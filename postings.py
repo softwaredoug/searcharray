@@ -42,6 +42,10 @@ class PostingsRow:
         return f"PostingsRow({str(self.postings)})"
 
     def __eq__(self, other):
+        # Flip to the other implementation if we're comparing to a PostingsArray
+        # to get a boolean array back
+        if isinstance(other, PostingsArray):
+            return other == self
         return isinstance(other, PostingsRow) and self.postings == other.postings
 
     def __lt__(self, other):
@@ -296,7 +300,7 @@ class PostingsArray(ExtensionArray):
             return np.array(self[:]) == np.array(other[:])
 
         # When other is a scalar value
-        elif isinstance(other, dict):
+        elif isinstance(other, PostingsRow):
             other = PostingsArray([other], tokenizer=self.tokenizer)
             return np.array(self[:]) == np.array(other[:])
 
