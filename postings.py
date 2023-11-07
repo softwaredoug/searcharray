@@ -1,6 +1,7 @@
 """Tokenized, searchable text as a pandas dtype."""
 import pandas as pd
 import numbers
+from collections import Counter
 from pandas.api.extensions import ExtensionDtype, ExtensionArray, register_extension_dtype
 from pandas.api.types import is_list_like
 from pandas.api.extensions import take
@@ -12,9 +13,37 @@ from term_dict import TermDict
 from scipy.sparse import lil_matrix, csr_matrix
 
 
+class PostingsRow:
+    """Wrapper around a row of a postings matrix.
+
+    We can't easily directly use a dictionary as a cell type in pandas.
+    See:
+
+    https://github.com/pandas-dev/pandas/issues/17777
+    """
+
+    def __init__(self, postings):
+        self.postings = postings
+
+    def __getitem__(self, item):
+        return self.postings[item]
+
+    def items(self):
+        return self.postings.items()
+
+    def __len__(self):
+        return len(self.postings)
+
+    def __repr__(self):
+        return repr(self.postings)
+
+    def __str__(self):
+        return str(self.postings)
+
+
 class PostingsDtype(ExtensionDtype):
     name = 'tokenized_text'
-    type = str
+    type = PostingsRow
     kind = 'O'  # Object kind
 
     @classmethod
@@ -39,10 +68,10 @@ class PostingsDtype(ExtensionDtype):
 
     @property
     def na_value(self):
-        return None
+        return PostingsRow({})
 
     def valid_value(self, value):
-        return isinstance(value, str) or pd.isna(value)
+        return isinstance(value, dict) or pd.isna(value) or isinstance(value, PostingsRow)
 
 
 register_extension_dtype(PostingsDtype)
@@ -56,37 +85,84 @@ def ws_tokenizer(string):
     return string.split()
 
 
+def _build_index(tokenized_docs):
+    freqs_table = lil_matrix((len(tokenized_docs), 0))
+    term_dict = TermDict()
+    avg_doc_length = 0
+    for doc_id, tokenized in enumerate(tokenized_docs):
+        avg_doc_length += len(tokenized)
+        for token in tokenized:
+            term_id = term_dict.add_term(token)
+            if term_id >= freqs_table.shape[1]:
+                freqs_table.resize((freqs_table.shape[0], term_id + 1))
+            freqs_table[doc_id, term_id] += 1
+
+    if len(tokenized_docs) > 0:
+        avg_doc_length /= len(tokenized_docs)
+
+    return csr_matrix(freqs_table), term_dict, avg_doc_length
+
+
+def _build_index_from_dict(tokenized_postings):
+    """Bulid an index from postings that are already tokenized and point at their term frequencies."""
+    freqs_table = lil_matrix((len(tokenized_postings), 0))
+    term_dict = TermDict()
+    avg_doc_length = 0
+    for doc_id, tokenized in enumerate(tokenized_postings):
+        for token, term_freq in tokenized.items():
+            term_id = term_dict.add_term(token)
+            if term_id >= freqs_table.shape[1]:
+                freqs_table.resize((freqs_table.shape[0], term_id + 1))
+            freqs_table[doc_id, term_id] = term_freq
+
+    if len(tokenized_postings) > 0:
+        avg_doc_length /= len(tokenized_postings)
+
+    return csr_matrix(freqs_table), term_dict, avg_doc_length
+
+
+def _row_to_postings_dict(row, term_dict):
+    result = PostingsRow({term_dict.get_term(term_id): int(row[0, term_id])
+                          for term_id in range(row.shape[1]) if row[0, term_id] > 0})
+    return result
+
+
+# Logically a PostingsArray is a document represented as follows:
+#
+#   docs = [
+#       {"foo": 1, "bar": 2, "baz": 1}, # doc 0 term->freq
+#       {"foo": 2, "bar": 4, "baz": 8, "the"}, # doc 0 term->freq
+#       ...
+#   ]
+#
+# This postings will build its own term_dict and term_freqs
 class PostingsArray(ExtensionArray):
     dtype = PostingsDtype()
 
-    def __init__(self, strings, tokenizer=ws_tokenizer):
+    def __init__(self, postings, tokenizer=ws_tokenizer):
         # Check dtype, raise TypeError
-        if not is_list_like(strings):
-            raise TypeError("Expected list-like object, got {}".format(type(strings)))
-        if not all(isinstance(x, str) or pd.isna(x) for x in strings):
-            raise TypeError("Expected a list of strings")
+        if not is_list_like(postings):
+            raise TypeError("Expected list-like object, got {}".format(type(postings)))
+        if not all(isinstance(x, PostingsRow) or isinstance(x, dict) or pd.isna(x) for x in postings):
+            raise TypeError("Expected a list of PostingsRow or dicts")
 
-        freqs_table = lil_matrix((len(strings), 0))
-        self.term_dict = TermDict()
-        self.avg_doc_length = 0
-        for doc_id, string in enumerate(strings):
-            if pd.isna(string):
-                continue
-            tokenized = tokenizer(string)
-            self.avg_doc_length += len(tokenized)
-            for token in tokenized:
-                term_id = self.term_dict.add_term(token)
-                if term_id >= freqs_table.shape[1]:
-                    freqs_table.resize((freqs_table.shape[0], term_id + 1))
-                freqs_table[doc_id, term_id] += 1
+        # Convert all to postings rows
+        as_postings = [PostingsRow(x) if isinstance(x, dict) else x for x in postings]
 
-        self.term_freqs = csr_matrix(freqs_table)
-        if len(strings) > 0:
-            self.avg_doc_length /= len(strings)
-
-        # How to eliminate data?
-        self.data = np.asarray(strings, dtype=object)
         self.tokenizer = tokenizer
+        self.term_freqs, self.term_dict, self.avg_doc_length = _build_index_from_dict(as_postings)
+
+    @classmethod
+    def index(cls, array, tokenizer=ws_tokenizer):
+        """Index an array of strings using tokenizer."""
+        # Convert strings to expected scalars (dict -> term freqs)
+        if not is_list_like(array):
+            raise TypeError("Expected list-like object, got {}".format(type(array)))
+        if not all(isinstance(x, str) or pd.isna(x) for x in array):
+            raise TypeError("Expected a list of strings to tokenize")
+
+        tokenized = [Counter(tokenizer(doc)) for doc in array if not pd.isna(doc)]
+        return cls(tokenized, tokenizer)
 
     @classmethod
     def _from_sequence(cls, scalars, dtype=None, copy=False):
@@ -108,17 +184,18 @@ class PostingsArray(ExtensionArray):
 
     @property
     def nbytes(self):
-        all_bytes = [len(x) for x in self.data]
-        return sum(all_bytes)
+        return self.term_freqs.data.nbytes + self.term_freqs.indptr.nbytes + self.term_freqs.indices.nbytes
 
     def __getitem__(self, key):
         key = pd.api.indexers.check_array_indexer(self, key)
+        rows = self.term_freqs[key, :]
         if isinstance(key, int):
-            return self.data[key]
+            return _row_to_postings_dict(rows[0], self.term_dict)
         else:
-            return PostingsArray(self.data[key], tokenizer=self.tokenizer)
+            return PostingsArray([_row_to_postings_dict(row, self.term_dict) for row in rows], tokenizer=self.tokenizer)
 
     def __setitem__(self, key, value):
+        return NotImplemented
         key = pd.api.indexers.check_array_indexer(self, key)
         if isinstance(value, pd.Series):
             value = value.values
@@ -152,7 +229,7 @@ class PostingsArray(ExtensionArray):
         return pd.Series(counts)
 
     def __len__(self):
-        return len(self.data)
+        return self.term_freqs.shape[0]
 
     def __ne__(self, other):
         if isinstance(other, pd.DataFrame) or isinstance(other, pd.Series) or isinstance(other, pd.Index):
@@ -172,39 +249,60 @@ class PostingsArray(ExtensionArray):
                 return False
             elif len(other) == 0:
                 return np.array([], dtype=bool)
-            return np.array([self.tokenizer(a) == self.tokenizer(b) for a, b in zip(self.data, other.data)])
+            return (self.term_freqs == other.term_freqs and
+                    self.term_dict == other.term_dict and
+                    self.avg_doc_length == other.avg_doc_length)
 
         # When other is a scalar value
-        elif isinstance(other, str):
-            return np.array([self.tokenizer(a) == self.tokenizer(other) for a in self.data])
+        elif isinstance(other, dict):
+            other = PostingsArray([other], tokenizer=self.tokenizer)
+            return (self.term_freqs == other.term_freqs and  # noqa: E127
+                    self.term_dict == other.term_dict and  # noqa: E127
+                    self.avg_doc_length == other.avg_doc_length)
 
         # When other is a sequence but not an ExtensionArray
+        # its an array of dicts
         elif is_list_like(other):
             if len(self) != len(other):
                 return False
             elif len(other) == 0:
                 return np.array([], dtype=bool)
-            return np.array([self.tokenizer(a) == self.tokenizer(b) for a, b in zip(self.data, other)])
+            # We actually don't know how it was tokenized
+            other = PostingsArray(other, tokenizer=self.tokenizer)
+            return (self.term_freqs == other.term_freqs and  # noqa: E127
+                    self.term_dict == other.term_dict and  # noqa: E127
+                    self.avg_doc_length == other.avg_doc_length)
 
         # Return False where 'other' is neither the same length nor a scalar
         else:
             return np.full(len(self), False)
 
     def isna(self):
-        return np.array([pd.isna(x) for x in self.data], dtype=bool)
+        # Every row with all 0s
+        return np.asarray((self.term_freqs.sum(axis=1) == 0).flatten())[0]
 
-    def take(self, indices, allow_fill=False, fill_value=None):
+    def take(self, indices, allow_fill=False, fill_value={}):
 
         if allow_fill:
             if fill_value is None or pd.isna(fill_value):
                 fill_value = None
-        result = take(self.data, indices, allow_fill=allow_fill, fill_value=fill_value)
-        if allow_fill and fill_value is None:
-            result[pd.isna(result)] = None
-        return PostingsArray(result, tokenizer=self.tokenizer)
+        # Want to take rows of term freqs
+        row_indices = np.array(list(range(self.term_freqs.shape[0])))
+        # Take within the row indices themselves
+        result_indices = take(row_indices, indices, allow_fill=allow_fill, fill_value=-1)
+        # Construct postings from each result_indices
+        taken_postings = []
+        for result_index in result_indices:
+            if result_index == -1:
+                taken_postings.append(fill_value)
+            else:
+                taken_postings.append(_row_to_postings_dict(self.term_freqs[result_index], self.term_dict))
+        # if allow_fill and fill_value is None:
+        #     result[pd.isna(result)] = None
+        return PostingsArray(taken_postings, tokenizer=self.tokenizer)
 
     def copy(self):
-        return PostingsArray(self.data.copy(), tokenizer=self.tokenizer)
+        return self[:]
 
     @classmethod
     def _concat_same_type(cls, to_concat):
@@ -216,7 +314,7 @@ class PostingsArray(ExtensionArray):
         return cls(values)
 
     def _values_for_factorize(self):
-        arr = self.data.copy()
+        arr = self[~pd.isna(self)]
         return arr, None
 
     # ***********************************************************

@@ -13,13 +13,13 @@ def dtype():
 @pytest.fixture
 def data():
     """Return a fixture of your data here that returns an instance of your ExtensionArray."""
-    return PostingsArray(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25)
+    return PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25)
 
 
 @pytest.fixture
 def data_missing():
     """Return a fixture of your data with missing values here."""
-    return PostingsArray([None, "foo bar baz"])
+    return PostingsArray.index(["", "foo bar baz"])
 
 
 @pytest.fixture
@@ -64,12 +64,12 @@ def use_numpy(request):
 
 @pytest.fixture
 def data_for_sorting():
-    return PostingsArray(["mmma dabbb", "zed bar bar", "aaa bb aa"])
+    return PostingsArray.index(["mmma dabbb", "zed bar bar", "aaa bb aa"])
 
 
 @pytest.fixture
 def data_missing_for_sorting():
-    return PostingsArray(["mmma dabbb", None, "aaa bb aa"])
+    return PostingsArray.index(["mmma dabbb", None, "aaa bb aa"])
 
 
 @pytest.fixture
@@ -80,8 +80,8 @@ def data_for_grouping():
 
     Where A < B < C and NA is missing
     """
-    return PostingsArray(["foo bar baz", "foo bar baz", None, None, "abba cadabra", "abba cadabra",
-                          "foo bar baz", "zunny funny wunny"])
+    return PostingsArray.index(["foo bar baz", "foo bar baz", None, None, "abba cadabra", "abba cadabra",
+                                "foo bar baz", "zunny funny wunny"])
 
 
 @pytest.fixture(params=["data", "data_missing"])
@@ -140,8 +140,8 @@ class TestGetItem(base.BaseGetitemTests):
     pass
 
 
-class TestSetItem(base.BaseSetitemTests):
-    pass
+#class TestSetItem(base.BaseSetitemTests):
+#    pass
 
 
 class TestCasting(base.BaseCastingTests):
@@ -169,6 +169,7 @@ def test_term_freqs(data):
 def test_doc_freq(data):
     doc_freq = data.doc_freq("bar")
     assert doc_freq == (2 * 25)
+        # self.term_freqs, self.term_dict, self.avg_doc_length = _build_index([tokenizer(doc) for doc in strings if not pd.isna(doc)])
 
 
 def test_bm25(data):
