@@ -72,6 +72,12 @@ class PostingsRow:
                 continue
         return False
 
+    def __le__(self, other):
+        return self < other or self == other
+
+    def __gt__(self, other):
+        return not (self < other) and self != other
+
     def __hash__(self):
         return hash(json.dumps(self.postings, sort_keys=True))
 
@@ -201,6 +207,7 @@ class PostingsArray(ExtensionArray):
 
     @classmethod
     def _from_sequence(cls, scalars, dtype=None, copy=False):
+        """Construct a new PostingsArray from a sequence of scalars (PostingRow or convertible into)."""
         if dtype is not None:
             if not isinstance(dtype, PostingsDtype):
                 return scalars
@@ -308,11 +315,11 @@ class PostingsArray(ExtensionArray):
         # Every row with all 0s
         return np.asarray((self.term_freqs.sum(axis=1) == 0).flatten())[0]
 
-    def take(self, indices, allow_fill=False, fill_value={}):
+    def take(self, indices, allow_fill=False, fill_value=None):
 
         if allow_fill:
             if fill_value is None or pd.isna(fill_value):
-                fill_value = None
+                fill_value = PostingsRow({})
         # Want to take rows of term freqs
         row_indices = np.array(list(range(self.term_freqs.shape[0])))
         # Take within the row indices themselves
@@ -324,8 +331,6 @@ class PostingsArray(ExtensionArray):
                 taken_postings.append(fill_value)
             else:
                 taken_postings.append(_row_to_postings_row(self.term_freqs[result_index], self.term_dict))
-        # if allow_fill and fill_value is None:
-        #     result[pd.isna(result)] = None
         return PostingsArray(taken_postings, tokenizer=self.tokenizer)
 
     def copy(self):
@@ -341,8 +346,9 @@ class PostingsArray(ExtensionArray):
         return cls(values)
 
     def _values_for_factorize(self):
-        arr = np.asarray(self[:])
-        return arr, None
+        """Return an array and missing value suitable for factorization (ie grouping)."""
+        arr = np.asarray(self[:], dtype=object)
+        return arr, PostingsRow({})
 
     # ***********************************************************
     # Naive implementations of search functions to clean up later

@@ -87,7 +87,7 @@ def data_for_grouping():
 
     Where A < B < C and NA is missing
     """
-    return PostingsArray.index(["foo bar baz", "foo bar baz", None, None, "abba cadabra", "abba cadabra",
+    return PostingsArray.index(["foo bar baz", "foo bar baz", "", "", "abba cadabra", "abba cadabra",
                                 "foo bar baz", "zunny funny wunny"])
 
 
