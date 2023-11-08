@@ -152,6 +152,7 @@ class RowViewableMatrix:
         return RowViewableMatrix(self.csr_mat, self.rows[keys])
 
     def slice_assign(self, keys, values):
+        # Replace nan with 0
         self.csr_mat[self.rows[keys]] = values
 
     def copy_row_at(self, row):
@@ -168,6 +169,12 @@ class RowViewableMatrix:
             return self.copy_row_at(key)
         else:
             return self.slice(key)
+
+    def __repr__(self):
+        return f"RowViewableMatrix({repr(self.csr_mat)}, {repr(self.rows)})"
+
+    def __str__(self):
+        return f"RowViewableMatrix({str(self.csr_mat)}, {str(self.rows)})"
 
 
 def _build_index(tokenized_docs):
@@ -314,10 +321,13 @@ class PostingsArray(ExtensionArray):
         if isinstance(key, numbers.Integral) and isinstance(value, np.ndarray):
             raise ValueError("Cannot set a single value to an array")
 
-        if isinstance(value, PostingsRow):
+        if isinstance(value, float):
+            value = np.asarray([value])
+        elif isinstance(value, PostingsRow):
             value = np.asarray([value.to_dense(self.term_dict)])
         elif isinstance(value, np.ndarray):
             value = np.asarray([x.to_dense(self.term_dict) for x in value])
+        np.nan_to_num(value, copy=False, nan=0)
         self.term_freqs.slice_assign(key, value)
 
     def value_counts(
@@ -378,7 +388,8 @@ class PostingsArray(ExtensionArray):
         # Every row with all 0s
         key_slice_all = slice(None)
         sliced = self.term_freqs.slice(key_slice_all)
-        return np.asarray((sliced.sum(axis=1) == 0).flatten())[0]
+        empties = np.asarray((sliced.sum(axis=1) == 0).flatten())[0]
+        return empties
 
     def take(self, indices, allow_fill=False, fill_value=None):
         if allow_fill:
