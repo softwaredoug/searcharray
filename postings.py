@@ -160,11 +160,14 @@ class RowViewableMatrix:
     def sum(self, axis=0):
         return self.csr_mat[self.rows].sum(axis=axis)
 
+    def copy_col_at(self, col):
+        return self.csr_mat[self.rows, col]
+
     def __getitem__(self, key):
         if isinstance(key, numbers.Number):
             return self.copy_row_at(key)
         else:
-            return self.slice(self.csr_mat, key)
+            return self.slice(key)
 
 
 def _build_index(tokenized_docs):
@@ -191,6 +194,7 @@ def _build_index_from_dict(tokenized_postings):
     term_dict = TermDict()
     avg_doc_length = 0
     for doc_id, tokenized in enumerate(tokenized_postings):
+        avg_doc_length += len(tokenized)
         for token, term_freq in tokenized.terms():
             term_id = term_dict.add_term(token)
             if term_id >= freqs_table.shape[1]:
@@ -421,7 +425,7 @@ class PostingsArray(ExtensionArray):
             raise TypeError("Expected a string")
 
         term_id = self.term_dict.get_term_id(tokenized_term)
-        matches = self.term_freqs[:, term_id].todense().flatten()
+        matches = self.term_freqs.copy_col_at(term_id).todense().flatten()
         matches = np.asarray(matches).flatten()
         return matches
 
@@ -433,7 +437,7 @@ class PostingsArray(ExtensionArray):
         return np.sum(term_freq > 0)
 
     def doc_lengths(self):
-        return np.array(np.sum(self.term_freqs, axis=1).flatten())[0]
+        return np.array(self.term_freqs.sum(axis=1).flatten())[0]
 
     def match(self, tokenized_term):
         """Return a boolean numpy array indicating which elements contain the given term."""

@@ -176,7 +176,6 @@ def test_term_freqs(data):
 def test_doc_freq(data):
     doc_freq = data.doc_freq("bar")
     assert doc_freq == (2 * 25)
-        # self.term_freqs, self.term_dict, self.avg_doc_length = _build_index([tokenizer(doc) for doc in strings if not pd.isna(doc)])
 
 
 def test_bm25(data):
@@ -184,7 +183,7 @@ def test_bm25(data):
     assert bm25_idf > 0.0
     bm25 = data.bm25("bar")
     assert bm25.shape == (100,)
-    assert np.isclose(bm25, [1.75278597, 0.0, 1.49502333, 0.0] * 25).all()
+    assert np.isclose(bm25, [1.60518294, 0.0 , 1.38629436, 0.0] * 25).all()
 
 
 # class TestReduce(base.BaseNoReduceTests):
