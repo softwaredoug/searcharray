@@ -243,13 +243,21 @@ class PostingsArray(ExtensionArray):
         key = pd.api.indexers.check_array_indexer(self, key)
         # Want to take rows of term freqs
         if isinstance(key, int):
-            rows = self.term_freqs[key]
-            return _row_to_postings_row(rows[0], self.term_dict)
+            try:
+                rows = self.term_freqs[key]
+                return _row_to_postings_row(rows[0], self.term_dict)
+            except IndexError:
+                raise IndexError("index out of bounds")
         else:
             row_indices = np.arange(self.term_freqs.shape[0])[key]
-            rows = [_row_to_postings_row(self.term_freqs[row], self.term_dict)
-                    for row in row_indices]
-            return PostingsArray(rows, tokenizer=self.tokenizer)
+            rows = self.term_freqs[row_indices]
+            # This will copy, but may offer an ability to get a view
+            # in the future
+            arr = PostingsArray([], tokenizer=self.tokenizer)
+            arr.term_freqs = rows
+            arr.term_dict = self.term_dict
+            arr.avg_doc_length = self.avg_doc_length
+            return arr
 
     def __setitem__(self, key, value):
         """Set an item in the array."""
@@ -272,10 +280,10 @@ class PostingsArray(ExtensionArray):
 
         row_indices = np.arange(self.term_freqs.shape[0])[key]
         if isinstance(value, PostingsRow):
-            values = np.asarray([value.to_dense(self.term_dict)])
+            value = np.asarray([value.to_dense(self.term_dict)])
         if isinstance(value, np.ndarray):
-            values = np.asarray([x.to_dense(self.term_dict) for x in value])
-        self.term_freqs[row_indices] = values
+            value = np.asarray([x.to_dense(self.term_dict) for x in value])
+        self.term_freqs[row_indices] = value
 
     def value_counts(
         self,
@@ -336,7 +344,6 @@ class PostingsArray(ExtensionArray):
         return np.asarray((self.term_freqs.sum(axis=1) == 0).flatten())[0]
 
     def take(self, indices, allow_fill=False, fill_value=None):
-
         if allow_fill:
             if fill_value is None or pd.isna(fill_value):
                 fill_value = PostingsRow({})
