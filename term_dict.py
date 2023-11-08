@@ -19,3 +19,6 @@ class TermDict:
 
     def get_term(self, term_id):
         return self.id_to_terms[term_id]
+
+    def __len__(self):
+        return len(self.term_to_ids)

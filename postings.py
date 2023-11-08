@@ -32,6 +32,13 @@ class PostingsRow:
     def terms(self):
         return self.postings.items()
 
+    def to_dense(self, term_dict):
+        """Convert to a dense vector of term frequencies."""
+        dense = np.zeros(len(term_dict))
+        for term, freq in self.terms():
+            dense[term_dict.get_term_id(term)] = freq
+        return dense
+
     def __len__(self):
         return len(self.postings)
 
@@ -245,14 +252,14 @@ class PostingsArray(ExtensionArray):
             return PostingsArray(rows, tokenizer=self.tokenizer)
 
     def __setitem__(self, key, value):
-        return NotImplemented
+        """Set an item in the array."""
         key = pd.api.indexers.check_array_indexer(self, key)
         if isinstance(value, pd.Series):
             value = value.values
         if isinstance(value, pd.DataFrame):
             value = value.values.flatten()
         if isinstance(value, PostingsArray):
-            value = value.data
+            value = value.to_numpy()
         if isinstance(value, list):
             value = np.asarray(value, dtype=object)
 
@@ -263,7 +270,12 @@ class PostingsArray(ExtensionArray):
         if isinstance(key, numbers.Integral) and isinstance(value, np.ndarray):
             raise ValueError("Cannot set a single value to an array")
 
-        self.data[key] = value
+        row_indices = np.arange(self.term_freqs.shape[0])[key]
+        if isinstance(value, PostingsRow):
+            values = np.asarray([value.to_dense(self.term_dict)])
+        if isinstance(value, np.ndarray):
+            values = np.asarray([x.to_dense(self.term_dict) for x in value])
+        self.term_freqs[row_indices] = values
 
     def value_counts(
         self,
