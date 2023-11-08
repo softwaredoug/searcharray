@@ -11,6 +11,8 @@ import numpy as np
 from term_dict import TermDict
 
 # Doc,Term -> freq
+# Note scipy sparse switching to *_array, which is more numpy like
+# However, as of now, these don't seem fully baked
 from scipy.sparse import lil_matrix, csr_matrix
 
 
@@ -137,6 +139,34 @@ def ws_tokenizer(string):
     return string.split()
 
 
+class RowViewableMatrix:
+
+    def __init__(self, csr_mat: csr_matrix, rows: np.ndarray = None):
+        self.csr_mat = csr_mat
+        if rows is None:
+            self.rows = np.arange(self.csr_mat.shape[0])
+        else:
+            self.rows = rows
+
+    def slice(self, keys):
+        return RowViewableMatrix(self.csr_mat, self.rows[keys])
+
+    def slice_assign(self, keys, values):
+        self.csr_mat[self.rows[keys]] = values
+
+    def copy_row_at(self, row):
+        return self.csr_mat[self.rows[row]]
+
+    def sum(self, axis=0):
+        return self.csr_mat[self.rows].sum(axis=axis)
+
+    def __getitem__(self, key):
+        if isinstance(key, numbers.Number):
+            return self.copy_row_at(key)
+        else:
+            return self.slice(self.csr_mat, key)
+
+
 def _build_index(tokenized_docs):
     freqs_table = lil_matrix((len(tokenized_docs), 0))
     term_dict = TermDict()
@@ -152,7 +182,7 @@ def _build_index(tokenized_docs):
     if len(tokenized_docs) > 0:
         avg_doc_length /= len(tokenized_docs)
 
-    return csr_matrix(freqs_table), term_dict, avg_doc_length
+    return RowViewableMatrix(csr_matrix(freqs_table)), term_dict, avg_doc_length
 
 
 def _build_index_from_dict(tokenized_postings):
@@ -170,7 +200,7 @@ def _build_index_from_dict(tokenized_postings):
     if len(tokenized_postings) > 0:
         avg_doc_length /= len(tokenized_postings)
 
-    return csr_matrix(freqs_table), term_dict, avg_doc_length
+    return RowViewableMatrix(csr_matrix(freqs_table)), term_dict, avg_doc_length
 
 
 def _row_to_postings_row(row, term_dict):
@@ -237,7 +267,10 @@ class PostingsArray(ExtensionArray):
 
     @property
     def nbytes(self):
-        return self.term_freqs.data.nbytes + self.term_freqs.indptr.nbytes + self.term_freqs.indices.nbytes
+        return self.term_freqs.csr_mat.data.nbytes + \
+            self.term_freqs.csr_mat.indptr.nbytes + \
+            self.term_freqs.csr_mat.indices.nbytes + \
+            self.term_freqs.rows.nbytes
 
     def __getitem__(self, key):
         key = pd.api.indexers.check_array_indexer(self, key)
@@ -249,12 +282,11 @@ class PostingsArray(ExtensionArray):
             except IndexError:
                 raise IndexError("index out of bounds")
         else:
-            row_indices = np.arange(self.term_freqs.shape[0])[key]
-            rows = self.term_freqs[row_indices]
+            sliced = self.term_freqs.slice(key)
             # This will copy, but may offer an ability to get a view
             # in the future
             arr = PostingsArray([], tokenizer=self.tokenizer)
-            arr.term_freqs = rows
+            arr.term_freqs = sliced
             arr.term_dict = self.term_dict
             arr.avg_doc_length = self.avg_doc_length
             return arr
@@ -278,12 +310,11 @@ class PostingsArray(ExtensionArray):
         if isinstance(key, numbers.Integral) and isinstance(value, np.ndarray):
             raise ValueError("Cannot set a single value to an array")
 
-        row_indices = np.arange(self.term_freqs.shape[0])[key]
         if isinstance(value, PostingsRow):
             value = np.asarray([value.to_dense(self.term_dict)])
-        if isinstance(value, np.ndarray):
+        elif isinstance(value, np.ndarray):
             value = np.asarray([x.to_dense(self.term_dict) for x in value])
-        self.term_freqs[row_indices] = value
+        self.term_freqs.slice_assign(key, value)
 
     def value_counts(
         self,
@@ -297,7 +328,7 @@ class PostingsArray(ExtensionArray):
         return pd.Series(counts)
 
     def __len__(self):
-        return self.term_freqs.shape[0]
+        return len(self.term_freqs.rows)
 
     def __ne__(self, other):
         if isinstance(other, pd.DataFrame) or isinstance(other, pd.Series) or isinstance(other, pd.Index):
@@ -341,14 +372,16 @@ class PostingsArray(ExtensionArray):
 
     def isna(self):
         # Every row with all 0s
-        return np.asarray((self.term_freqs.sum(axis=1) == 0).flatten())[0]
+        key_slice_all = slice(None)
+        sliced = self.term_freqs.slice(key_slice_all)
+        return np.asarray((sliced.sum(axis=1) == 0).flatten())[0]
 
     def take(self, indices, allow_fill=False, fill_value=None):
         if allow_fill:
             if fill_value is None or pd.isna(fill_value):
                 fill_value = PostingsRow({})
         # Want to take rows of term freqs
-        row_indices = np.array(list(range(self.term_freqs.shape[0])))
+        row_indices = np.arange(len(self.term_freqs.rows))
         # Take within the row indices themselves
         result_indices = take(row_indices, indices, allow_fill=allow_fill, fill_value=-1)
         # Construct postings from each result_indices
@@ -357,11 +390,14 @@ class PostingsArray(ExtensionArray):
             if result_index == -1:
                 taken_postings.append(fill_value)
             else:
-                taken_postings.append(_row_to_postings_row(self.term_freqs[result_index], self.term_dict))
+                taken_postings.append(_row_to_postings_row(self.term_freqs.copy_row_at(result_index), self.term_dict))
         return PostingsArray(taken_postings, tokenizer=self.tokenizer)
 
     def copy(self):
-        return self[:]
+        taken_postings = []
+        for result_index in range(len(self.term_freqs.rows)):
+            taken_postings.append(_row_to_postings_row(self.term_freqs.copy_row_at(result_index), self.term_dict))
+        return PostingsArray(taken_postings, tokenizer=self.tokenizer)
 
     @classmethod
     def _concat_same_type(cls, to_concat):
