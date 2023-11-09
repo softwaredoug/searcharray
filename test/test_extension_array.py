@@ -147,8 +147,8 @@ class TestGetItem(base.BaseGetitemTests):
     pass
 
 
-#class TestSetItem(base.BaseSetitemTests):
-#    pass
+class TestSetItem(base.BaseSetitemTests):
+    pass
 
 
 class TestCasting(base.BaseCastingTests):

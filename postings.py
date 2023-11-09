@@ -140,29 +140,34 @@ def ws_tokenizer(string):
 
 
 class RowViewableMatrix:
+    """A slicable matrix that can return views without copying."""
 
     def __init__(self, csr_mat: csr_matrix, rows: np.ndarray = None):
-        self.csr_mat = csr_mat
+        self.mat = csr_mat
         if rows is None:
-            self.rows = np.arange(self.csr_mat.shape[0])
+            self.rows = np.arange(self.mat.shape[0])
         else:
             self.rows = rows
 
     def slice(self, keys):
-        return RowViewableMatrix(self.csr_mat, self.rows[keys])
+        return RowViewableMatrix(self.mat, self.rows[keys])
 
     def slice_assign(self, keys, values):
         # Replace nan with 0
-        self.csr_mat[self.rows[keys]] = values
+        actual_keys = self.rows[keys]
+        if isinstance(actual_keys, numbers.Number):
+            self.mat[actual_keys] = values
+        elif len(actual_keys) > 0:
+            self.mat[actual_keys] = values
 
     def copy_row_at(self, row):
-        return self.csr_mat[self.rows[row]]
+        return self.mat[self.rows[row]]
 
     def sum(self, axis=0):
-        return self.csr_mat[self.rows].sum(axis=axis)
+        return self.mat[self.rows].sum(axis=axis)
 
     def copy_col_at(self, col):
-        return self.csr_mat[self.rows, col]
+        return self.mat[self.rows, col]
 
     def __getitem__(self, key):
         if isinstance(key, numbers.Number):
@@ -170,29 +175,17 @@ class RowViewableMatrix:
         else:
             return self.slice(key)
 
+    def nbytes(self):
+        return self.mat.data.nbytes + \
+            self.term_freqs.mat.indptr.nbytes + \
+            self.term_freqs.mat.indices.nbytes + \
+            self.term_freqs.rows.nbytes
+
     def __repr__(self):
-        return f"RowViewableMatrix({repr(self.csr_mat)}, {repr(self.rows)})"
+        return f"RowViewableMatrix({repr(self.mat)}, {repr(self.rows)})"
 
     def __str__(self):
-        return f"RowViewableMatrix({str(self.csr_mat)}, {str(self.rows)})"
-
-
-def _build_index(tokenized_docs):
-    freqs_table = lil_matrix((len(tokenized_docs), 0))
-    term_dict = TermDict()
-    avg_doc_length = 0
-    for doc_id, tokenized in enumerate(tokenized_docs):
-        avg_doc_length += len(tokenized)
-        for token in tokenized:
-            term_id = term_dict.add_term(token)
-            if term_id >= freqs_table.shape[1]:
-                freqs_table.resize((freqs_table.shape[0], term_id + 1))
-            freqs_table[doc_id, term_id] += 1
-
-    if len(tokenized_docs) > 0:
-        avg_doc_length /= len(tokenized_docs)
-
-    return RowViewableMatrix(csr_matrix(freqs_table)), term_dict, avg_doc_length
+        return f"RowViewableMatrix({str(self.mat)}, {str(self.rows)})"
 
 
 def _build_index_from_dict(tokenized_postings):
@@ -278,10 +271,7 @@ class PostingsArray(ExtensionArray):
 
     @property
     def nbytes(self):
-        return self.term_freqs.csr_mat.data.nbytes + \
-            self.term_freqs.csr_mat.indptr.nbytes + \
-            self.term_freqs.csr_mat.indices.nbytes + \
-            self.term_freqs.rows.nbytes
+        return self.term_freqs.nbytes
 
     def __getitem__(self, key):
         key = pd.api.indexers.check_array_indexer(self, key)
@@ -293,9 +283,8 @@ class PostingsArray(ExtensionArray):
             except IndexError:
                 raise IndexError("index out of bounds")
         else:
+            # Construct a sliced view of this array
             sliced = self.term_freqs.slice(key)
-            # This will copy, but may offer an ability to get a view
-            # in the future
             arr = PostingsArray([], tokenizer=self.tokenizer)
             arr.term_freqs = sliced
             arr.term_dict = self.term_dict
