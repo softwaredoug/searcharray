@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
 from pandas.tests.extension import base
+import pandas as pd
 
 from postings import PostingsDtype, PostingsArray, PostingsRow
 
@@ -87,8 +88,24 @@ def data_for_grouping():
 
     Where A < B < C and NA is missing
     """
-    return PostingsArray.index(["foo bar baz", "foo bar baz", "", "", "abba cadabra", "abba cadabra",
-                                "foo bar baz", "zunny funny wunny"])
+    arr = PostingsArray.index(["abba mmma dabbb", "abba mmma dabbb",
+                               "", "",
+                               "caa cata", "caa cata",
+                               "abba mmma dabbb", "abba abba aska"])
+    return arr
+
+
+@pytest.fixture(
+    params=[
+        lambda x: 1,
+        lambda x: [1] * len(x),
+        lambda x: pd.Series([1] * len(x)),
+        lambda x: x,
+    ],
+    ids=["scalar", "list", "series", "object"],
+)
+def groupby_apply_op(request):
+    return request.param
 
 
 @pytest.fixture(params=["data", "data_missing"])
@@ -160,6 +177,10 @@ class TestPrinting(base.BasePrintingTests):
 
 
 class TestMissing(base.BaseMissingTests):
+    pass
+
+
+class TestGroupby(base.BaseGroupbyTests):
     pass
 
 
