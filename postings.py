@@ -6,9 +6,10 @@ from pandas.api.extensions import ExtensionDtype, ExtensionArray, register_exten
 from pandas.api.types import is_list_like
 from pandas.api.extensions import take
 import json
+import warnings
 
 import numpy as np
-from term_dict import TermDict
+from term_dict import TermDict, TermMissingError
 
 # Doc,Term -> freq
 # Note scipy sparse switching to *_array, which is more numpy like
@@ -34,7 +35,7 @@ class PostingsRow:
     def terms(self):
         return self.postings.items()
 
-    def to_dense(self, term_dict):
+    def to_dense(self, term_dict, auto_add=True):
         """Convert to a dense vector of term frequencies."""
         dense = np.zeros(len(term_dict))
         for term, freq in self.terms():
@@ -152,7 +153,7 @@ class RowViewableMatrix:
     def slice(self, keys):
         return RowViewableMatrix(self.mat, self.rows[keys])
 
-    def slice_assign(self, keys, values):
+    def __setitem__(self, keys, values):
         # Replace nan with 0
         actual_keys = self.rows[keys]
         if isinstance(actual_keys, numbers.Number):
@@ -175,11 +176,22 @@ class RowViewableMatrix:
         else:
             return self.slice(key)
 
+    @property
     def nbytes(self):
         return self.mat.data.nbytes + \
-            self.term_freqs.mat.indptr.nbytes + \
-            self.term_freqs.mat.indices.nbytes + \
-            self.term_freqs.rows.nbytes
+            self.mat.indptr.nbytes + \
+            self.mat.indices.nbytes + \
+            self.rows.nbytes
+
+    @property
+    def shape(self):
+        return self.mat.shape
+
+    def resize(self, shape):
+        self.mat.resize(shape)
+
+    def __len__(self):
+        return len(self.rows)
 
     def __repr__(self):
         return f"RowViewableMatrix({repr(self.mat)}, {repr(self.rows)})"
@@ -310,14 +322,34 @@ class PostingsArray(ExtensionArray):
         if isinstance(key, numbers.Integral) and isinstance(value, np.ndarray):
             raise ValueError("Cannot set a single value to an array")
 
-        if isinstance(value, float):
-            value = np.asarray([value])
-        elif isinstance(value, PostingsRow):
-            value = np.asarray([value.to_dense(self.term_dict)])
-        elif isinstance(value, np.ndarray):
-            value = np.asarray([x.to_dense(self.term_dict) for x in value])
-        np.nan_to_num(value, copy=False, nan=0)
-        self.term_freqs.slice_assign(key, value)
+        try:
+            if isinstance(value, float):
+                value = np.asarray([value])
+            elif isinstance(value, PostingsRow):
+                value = np.asarray([value.to_dense(self.term_dict)])
+            elif isinstance(value, np.ndarray):
+                value = np.asarray([x.to_dense(self.term_dict) for x in value])
+            np.nan_to_num(value, copy=False, nan=0)
+            self.term_freqs[key] = value
+        except TermMissingError:
+            self._add_new_terms(key, value)
+
+    def _add_new_terms(self, key, value):
+        msg = """Adding new terms! This might not be good if you tokenized this new text
+                 with a different tokenizer.
+
+                 Also. This is slow."""
+        warnings.warn(msg)
+
+        scan_value = value
+        if isinstance(value, PostingsRow):
+            scan_value = np.asarray([value])
+        for row in scan_value:
+            for term in row.terms():
+                self.term_dict.add_term(term[0])
+
+        self.term_freqs.resize((self.term_freqs.shape[0], len(self.term_dict)))
+        self[key] = value
 
     def value_counts(
         self,
