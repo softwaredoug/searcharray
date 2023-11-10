@@ -26,10 +26,10 @@ class PostingsRow:
     https://github.com/pandas-dev/pandas/issues/17777
     """
 
-    def __init__(self, postings, positions=None):
+    def __init__(self, postings, posns=None):
         self.postings = postings
-        self.positions_lookup = positions  # replace with a roaring bitmap?
-        if self.positions_lookup is not None and len(self.postings) != len(self.positions_lookup):
+        self.posns = None
+        if self.posns is not None and len(self.postings) != len(self.posns):
             raise ValueError("Postings and positions must be the same length.")
 
     def termfreq(self, term):
@@ -38,12 +38,15 @@ class PostingsRow:
     def terms(self):
         return self.postings.items()
 
-    def positions(self, term):
-        if self.positions_lookup is None:
-            return None
-        return self.positions_lookup[term]
+    def positions(self, term=None):
+        if self.posns is None:
+            return {}
+        if term is None:
+            return self.posns.items()
+        else:
+            return self.posns[term]
 
-    def tf_to_dense(self, term_dict, auto_add=True):
+    def tf_to_dense(self, term_dict):
         """Convert to a dense vector of term frequencies."""
         dense = np.zeros(len(term_dict))
         for term, freq in self.terms():
@@ -196,7 +199,7 @@ class RowViewableMatrix:
 
     @property
     def shape(self):
-        return self.mat.shape
+        return (len(self.rows), self.mat.shape[1])
 
     def resize(self, shape):
         self.mat.resize(shape)
@@ -240,7 +243,8 @@ def _build_index_from_dict(tokenized_postings):
     if len(tokenized_postings) > 0:
         avg_doc_length /= len(tokenized_postings)
 
-    return RowViewableMatrix(csr_matrix(freqs_table)), term_dict, avg_doc_length
+    assert freqs_table.shape == posns_table.shape
+    return RowViewableMatrix(csr_matrix(freqs_table)), RowViewableMatrix(csr_matrix(posns_table)), positions_lookup, term_dict, avg_doc_length
 
 
 def _row_to_postings_row(row, term_dict):
@@ -272,7 +276,10 @@ class PostingsArray(ExtensionArray):
         as_postings = [PostingsRow(x) if isinstance(x, dict) else x for x in postings]
 
         self.tokenizer = tokenizer
-        self.term_freqs, self.term_dict, self.avg_doc_length = _build_index_from_dict(as_postings)
+        self.term_freqs, self.posns, self.posns_lookup, \
+            self.term_dict, self.avg_doc_length = _build_index_from_dict(as_postings)
+        if self.posns.shape != self.term_freqs.shape:
+            import pdb; pdb.set_trace()
 
     @classmethod
     def index(cls, array, tokenizer=ws_tokenizer):
@@ -318,7 +325,7 @@ class PostingsArray(ExtensionArray):
 
     @property
     def nbytes(self):
-        return self.term_freqs.nbytes
+        return self.term_freqs.nbytes + self.posns.nbytes
 
     def __getitem__(self, key):
         key = pd.api.indexers.check_array_indexer(self, key)
@@ -331,9 +338,12 @@ class PostingsArray(ExtensionArray):
                 raise IndexError("index out of bounds")
         else:
             # Construct a sliced view of this array
-            sliced = self.term_freqs.slice(key)
+            sliced_tfs = self.term_freqs.slice(key)
+            sliced_posns = self.posns.slice(key)
             arr = PostingsArray([], tokenizer=self.tokenizer)
-            arr.term_freqs = sliced
+            arr.term_freqs = sliced_tfs
+            arr.posns = sliced_posns
+            arr.posns_lookup = self.posns_lookup
             arr.term_dict = self.term_dict
             arr.avg_doc_length = self.avg_doc_length
             return arr
@@ -358,14 +368,28 @@ class PostingsArray(ExtensionArray):
             raise ValueError("Cannot set a single value to an array")
 
         try:
+            posns = None
             if isinstance(value, float):
-                value = np.asarray([value])
+                term_freqs = np.asarray([value])
             elif isinstance(value, PostingsRow):
-                value = np.asarray([value.tf_to_dense(self.term_dict)])
+                term_freqs = np.asarray([value.tf_to_dense(self.term_dict)])
+                posns = np.asarray([value.positions()])
             elif isinstance(value, np.ndarray):
-                value = np.asarray([x.tf_to_dense(self.term_dict) for x in value])
-            np.nan_to_num(value, copy=False, nan=0)
-            self.term_freqs[key] = value
+                term_freqs = np.asarray([x.tf_to_dense(self.term_dict) for x in value])
+                posns = np.asarray([x.positions() for x in value])
+            np.nan_to_num(term_freqs, copy=False, nan=0)
+            self.term_freqs[key] = term_freqs
+
+            if posns is not None:
+                update_rows = self.posns[key]
+                for update_row_idx, new_posns_row in enumerate(posns):
+                    for term, positions in new_posns_row.items():
+                        term_id = self.term_dict[term]
+                        lookup_location = update_rows[update_row_idx, term_id]
+                        self.posns_lookup[lookup_location] = positions
+
+            # Assume we have a positions for each term, doc pair. We can just update it.
+            # Otherwise we would have added new terms
         except TermMissingError:
             self._add_new_terms(key, value)
 
@@ -384,6 +408,9 @@ class PostingsArray(ExtensionArray):
                 self.term_dict.add_term(term[0])
 
         self.term_freqs.resize((self.term_freqs.shape[0], len(self.term_dict)))
+        self.posns.resize((self.term_freqs.shape[0], len(self.term_dict)))
+        if self.posns.shape != self.term_freqs.shape:
+            import pdb; pdb.set_trace()
         self[key] = value
 
     def value_counts(
@@ -462,6 +489,8 @@ class PostingsArray(ExtensionArray):
                 taken_postings.append(fill_value)
             else:
                 taken_postings.append(_row_to_postings_row(self.term_freqs.copy_row_at(result_index), self.term_dict))
+        if self.posns.shape != self.term_freqs.shape:
+            import pdb; pdb.set_trace()
         return PostingsArray(taken_postings, tokenizer=self.tokenizer)
 
     def copy(self):
@@ -471,10 +500,13 @@ class PostingsArray(ExtensionArray):
         # arr1 = PostingsArray(taken_postings, tokenizer=self.tokenizer)
 
         postings_arr = PostingsArray([], tokenizer=self.tokenizer)
+        postings_arr.posns = self.posns.copy()
+        postings_arr.posns_lookup = self.posns_lookup.copy()
         postings_arr.term_freqs = self.term_freqs.copy()
         postings_arr.term_dict = self.term_dict.copy()
         postings_arr.avg_doc_length = self.avg_doc_length
-        # assert (postings_arr == arr1).all()
+        if self.posns.shape != self.term_freqs.shape:
+            import pdb; pdb.set_trace()
         return postings_arr
 
     @classmethod
