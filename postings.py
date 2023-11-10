@@ -1,7 +1,7 @@
 """Tokenized, searchable text as a pandas dtype."""
 import pandas as pd
 import numbers
-from collections import Counter
+from collections import Counter, defaultdict
 from pandas.api.extensions import ExtensionDtype, ExtensionArray, register_extension_dtype
 from pandas.api.types import is_list_like
 from pandas.api.extensions import take
@@ -26,8 +26,11 @@ class PostingsRow:
     https://github.com/pandas-dev/pandas/issues/17777
     """
 
-    def __init__(self, postings):
+    def __init__(self, postings, positions=None):
         self.postings = postings
+        self.positions_lookup = positions  # replace with a roaring bitmap?
+        if self.positions_lookup is not None and len(self.postings) != len(self.positions_lookup):
+            raise ValueError("Postings and positions must be the same length.")
 
     def termfreq(self, term):
         return self.postings[term]
@@ -35,7 +38,12 @@ class PostingsRow:
     def terms(self):
         return self.postings.items()
 
-    def to_dense(self, term_dict, auto_add=True):
+    def positions(self, term):
+        if self.positions_lookup is None:
+            return None
+        return self.positions_lookup[term]
+
+    def tf_to_dense(self, term_dict, auto_add=True):
         """Convert to a dense vector of term frequencies."""
         dense = np.zeros(len(term_dict))
         for term, freq in self.terms():
@@ -164,6 +172,9 @@ class RowViewableMatrix:
     def copy_row_at(self, row):
         return self.mat[self.rows[row]]
 
+    def copy(self):
+        return RowViewableMatrix(self.mat.copy(), self.rows.copy())
+
     def sum(self, axis=0):
         return self.mat[self.rows].sum(axis=axis)
 
@@ -199,19 +210,32 @@ class RowViewableMatrix:
     def __str__(self):
         return f"RowViewableMatrix({str(self.mat)}, {str(self.rows)})"
 
+# To add positions
+# Row/Col -> index to roaring bitmap
+# Must be slicable
+
 
 def _build_index_from_dict(tokenized_postings):
     """Bulid an index from postings that are already tokenized and point at their term frequencies."""
-    freqs_table = lil_matrix((len(tokenized_postings), 0))
+    freqs_table = lil_matrix((len(tokenized_postings), 0), dtype=np.uint8)
+    posns_table = lil_matrix((len(tokenized_postings), 0), dtype=np.uint32)
     term_dict = TermDict()
     avg_doc_length = 0
+    positions_lookup = []
     for doc_id, tokenized in enumerate(tokenized_postings):
         avg_doc_length += len(tokenized)
         for token, term_freq in tokenized.terms():
             term_id = term_dict.add_term(token)
             if term_id >= freqs_table.shape[1]:
                 freqs_table.resize((freqs_table.shape[0], term_id + 1))
+                posns_table.resize((posns_table.shape[0], term_id + 1))
             freqs_table[doc_id, term_id] = term_freq
+
+            positions = tokenized.positions(token)
+            if positions is not None:
+                idx = len(positions_lookup)
+                positions_lookup.append(positions)
+                posns_table[doc_id, term_id] = idx
 
     if len(tokenized_postings) > 0:
         avg_doc_length /= len(tokenized_postings)
@@ -259,8 +283,19 @@ class PostingsArray(ExtensionArray):
         if not all(isinstance(x, str) or pd.isna(x) for x in array):
             raise TypeError("Expected a list of strings to tokenize")
 
-        tokenized = [Counter(tokenizer(doc)) for doc in array if not pd.isna(doc)]
-        return cls(tokenized, tokenizer)
+        def tokenized_docs(docs):
+            for doc in docs:
+                if pd.isna(doc):
+                    yield PostingsRow({})
+                else:
+                    token_stream = tokenizer(doc)
+                    term_freqs = Counter(token_stream)
+                    positions = defaultdict(list)
+                    for posn in range(len(token_stream)):
+                        positions[token_stream[posn]].append(posn)
+                    yield PostingsRow(term_freqs, positions)
+
+        return cls([a for a in tokenized_docs(array)], tokenizer)
 
     @classmethod
     def _from_sequence(cls, scalars, dtype=None, copy=False):
@@ -326,9 +361,9 @@ class PostingsArray(ExtensionArray):
             if isinstance(value, float):
                 value = np.asarray([value])
             elif isinstance(value, PostingsRow):
-                value = np.asarray([value.to_dense(self.term_dict)])
+                value = np.asarray([value.tf_to_dense(self.term_dict)])
             elif isinstance(value, np.ndarray):
-                value = np.asarray([x.to_dense(self.term_dict) for x in value])
+                value = np.asarray([x.tf_to_dense(self.term_dict) for x in value])
             np.nan_to_num(value, copy=False, nan=0)
             self.term_freqs[key] = value
         except TermMissingError:
@@ -430,10 +465,17 @@ class PostingsArray(ExtensionArray):
         return PostingsArray(taken_postings, tokenizer=self.tokenizer)
 
     def copy(self):
-        taken_postings = []
-        for result_index in range(len(self.term_freqs.rows)):
-            taken_postings.append(_row_to_postings_row(self.term_freqs.copy_row_at(result_index), self.term_dict))
-        return PostingsArray(taken_postings, tokenizer=self.tokenizer)
+        # taken_postings = []
+        # for result_index in range(len(self.term_freqs.rows)):
+        #     taken_postings.append(_row_to_postings_row(self.term_freqs.copy_row_at(result_index), self.term_dict))
+        # arr1 = PostingsArray(taken_postings, tokenizer=self.tokenizer)
+
+        postings_arr = PostingsArray([], tokenizer=self.tokenizer)
+        postings_arr.term_freqs = self.term_freqs.copy()
+        postings_arr.term_dict = self.term_dict.copy()
+        postings_arr.avg_doc_length = self.avg_doc_length
+        # assert (postings_arr == arr1).all()
+        return postings_arr
 
     @classmethod
     def _concat_same_type(cls, to_concat):

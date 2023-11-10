@@ -2,8 +2,18 @@ import pytest
 import numpy as np
 from pandas.tests.extension import base
 import pandas as pd
+import gzip
+from time import perf_counter
+import json
 
 from postings import PostingsDtype, PostingsArray, PostingsRow
+
+
+@pytest.fixture
+def tmdb_data():
+    path = 'fixtures/tmdb.json.gz'
+    with gzip.open(path) as f:
+        return json.load(f)
 
 
 @pytest.fixture
@@ -207,5 +217,39 @@ def test_bm25(data):
     assert np.isclose(bm25, [1.60518294, 0.0 , 1.38629436, 0.0] * 25).all()
 
 
-# class TestReduce(base.BaseNoReduceTests):
-#     pass
+def test_tokenize_tmdb(tmdb_data):
+    ids = tmdb_data.keys()
+    titles = []
+    overviews = []
+    for id in ids:
+        try:
+            titles.append(tmdb_data[id]['title'])
+        except KeyError:
+            titles.append('')
+
+        try:
+            overviews.append(tmdb_data[id]['overview'])
+        except KeyError:
+            overviews.append('')
+
+    assert len(ids) == len(titles) == len(overviews)
+
+    df = pd.DataFrame({'title': titles, 'overview': overviews}, index=ids)
+    # Create tokenized versions of each
+    start = perf_counter()
+    print("Indexing title...")
+    indexed = PostingsArray.index(df['title'])
+    stop = perf_counter()
+    df['title_tokens'] = indexed
+    print(f"Memory usage: {indexed.memory_usage()}")
+    print(f"Time: {stop - start}")
+
+    start = perf_counter()
+    print("Indexing overview...")
+    indexed = PostingsArray.index(df['overview'])
+    stop = perf_counter()
+    df['overview_tokens'] = indexed
+    print(f"Memory usage: {indexed.memory_usage()}")
+    print(f"Time: {stop - start}")
+
+    assert len(df) == len(ids)

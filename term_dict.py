@@ -20,6 +20,12 @@ class TermDict:
         self.id_to_terms[term_id] = term
         return term_id
 
+    def copy(self):
+        new_dict = TermDict()
+        new_dict.term_to_ids = dict(self.term_to_ids)
+        new_dict.id_to_terms = dict(self.id_to_terms.copy())
+        return new_dict
+
     def get_term_id(self, term):
         try:
             return self.term_to_ids[term]
