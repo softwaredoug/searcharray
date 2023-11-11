@@ -588,3 +588,18 @@ class PostingsArray(ExtensionArray):
     def bm25(self, tokenized_term, k1=1.2, b=0.75):
         """Score each doc using BM25."""
         return self.bm25_idf(tokenized_term) * self.bm25_tf(tokenized_term)
+
+    def positions(self, tokenized_term, doc_ids=None):
+        """Return a list of lists of positions of the given term."""
+        term_id = self.term_dict.get_term_id(tokenized_term)
+
+        if doc_ids is not None:
+            posns_to_lookup = self.posns[doc_ids].copy_col_at(term_id)
+        else:
+            posns_to_lookup = self.posns.copy_col_at(term_id)
+
+        posns = [[]] * posns_to_lookup.shape[0]
+        for idx in range(posns_to_lookup.shape[0]):
+            lookup_idx = posns_to_lookup[idx, 0]
+            posns[idx] = self.posns_lookup[lookup_idx]
+        return posns

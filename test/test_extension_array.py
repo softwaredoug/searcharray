@@ -217,6 +217,17 @@ def test_bm25(data):
     assert np.isclose(bm25, [1.60518294, 0.0 , 1.38629436, 0.0] * 25).all()
 
 
+def test_positions(data):
+    positions = data.positions("bar")
+    for idx, posn in enumerate(positions):
+        if idx % 4 == 0:
+            assert posn == [1, 2]
+        elif idx % 4 == 2:
+            assert posn == [1]
+        else:
+            assert posn == []
+
+
 def test_tokenize_tmdb(tmdb_data):
     ids = tmdb_data.keys()
     titles = []
