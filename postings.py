@@ -31,6 +31,17 @@ class PostingsRow:
         self.posns = None
         if self.posns is not None and len(self.postings) != len(self.posns):
             raise ValueError("Postings and positions must be the same length.")
+        else:
+            self.posns = posns
+            self._validate_posns()
+
+    def _validate_posns(self):
+        # Confirm every term in positions also in postings
+        if self.posns is None:
+            return
+        for term in self.posns:
+            if term not in self.postings:
+                raise ValueError(f"Term {term} in positions but not in postings. ")
 
     def termfreq(self, term):
         return self.postings[term]
@@ -57,10 +68,11 @@ class PostingsRow:
         return len(self.postings)
 
     def __repr__(self):
-        return f"PostingsRow({repr(self.postings)})"
+        rval = f"PostingsRow({repr(self.postings)}, {repr(self.posns)})"
+        return rval
 
     def __str__(self):
-        return f"PostingsRow({str(self.postings)})"
+        return repr(self)
 
     def __eq__(self, other):
         # Flip to the other implementation if we're comparing to a PostingsArray
@@ -158,6 +170,8 @@ class RowViewableMatrix:
         self.mat = csr_mat
         if rows is None:
             self.rows = np.arange(self.mat.shape[0])
+        elif isinstance(rows, numbers.Integral):
+            self.rows = np.array([rows])
         else:
             self.rows = rows
 
@@ -167,7 +181,7 @@ class RowViewableMatrix:
     def __setitem__(self, keys, values):
         # Replace nan with 0
         actual_keys = self.rows[keys]
-        if isinstance(actual_keys, numbers.Number):
+        if isinstance(actual_keys, numbers.Integral):
             self.mat[actual_keys] = values
         elif len(actual_keys) > 0:
             self.mat[actual_keys] = values
@@ -185,7 +199,7 @@ class RowViewableMatrix:
         return self.mat[self.rows, col]
 
     def __getitem__(self, key):
-        if isinstance(key, numbers.Number):
+        if isinstance(key, numbers.Integral):
             return self.copy_row_at(key)
         else:
             return self.slice(key)
@@ -247,9 +261,18 @@ def _build_index_from_dict(tokenized_postings):
     return RowViewableMatrix(csr_matrix(freqs_table)), RowViewableMatrix(csr_matrix(posns_table)), positions_lookup, term_dict, avg_doc_length
 
 
-def _row_to_postings_row(row, term_dict):
+def _row_to_postings_row(row, term_dict, posns, posns_lookup):
+    labeled_posns = {}
+    for term_id, posn in enumerate(posns):
+        if int(row[0, term_id]) == 0:
+            continue
+        term = term_dict.get_term(term_id)
+        term_posns = posns_lookup[posn]
+        labeled_posns[term] = term_posns
     result = PostingsRow({term_dict.get_term(term_id): int(row[0, term_id])
-                          for term_id in range(row.shape[1]) if row[0, term_id] > 0})
+                          for term_id in range(row.shape[1]) if row[0, term_id] > 0},
+                         labeled_posns)
+    # TODO add positions
     return result
 
 
@@ -278,8 +301,6 @@ class PostingsArray(ExtensionArray):
         self.tokenizer = tokenizer
         self.term_freqs, self.posns, self.posns_lookup, \
             self.term_dict, self.avg_doc_length = _build_index_from_dict(as_postings)
-        if self.posns.shape != self.term_freqs.shape:
-            import pdb; pdb.set_trace()
 
     @classmethod
     def index(cls, array, tokenizer=ws_tokenizer):
@@ -330,10 +351,11 @@ class PostingsArray(ExtensionArray):
     def __getitem__(self, key):
         key = pd.api.indexers.check_array_indexer(self, key)
         # Want to take rows of term freqs
-        if isinstance(key, int):
+        if isinstance(key, numbers.Integral):
             try:
                 rows = self.term_freqs[key]
-                return _row_to_postings_row(rows[0], self.term_dict)
+                posn_keys = self.posns[key].toarray().flatten()
+                return _row_to_postings_row(rows[0], self.term_dict, posn_keys, self.posns_lookup)
             except IndexError:
                 raise IndexError("index out of bounds")
         else:
@@ -383,9 +405,9 @@ class PostingsArray(ExtensionArray):
             if posns is not None:
                 update_rows = self.posns[key]
                 for update_row_idx, new_posns_row in enumerate(posns):
-                    for term, positions in new_posns_row.items():
-                        term_id = self.term_dict[term]
-                        lookup_location = update_rows[update_row_idx, term_id]
+                    for term, positions in new_posns_row:
+                        term_id = self.term_dict.get_term_id(term)
+                        lookup_location = update_rows[update_row_idx][0, term_id]
                         self.posns_lookup[lookup_location] = positions
 
             # Assume we have a positions for each term, doc pair. We can just update it.
@@ -409,8 +431,6 @@ class PostingsArray(ExtensionArray):
 
         self.term_freqs.resize((self.term_freqs.shape[0], len(self.term_dict)))
         self.posns.resize((self.term_freqs.shape[0], len(self.term_dict)))
-        if self.posns.shape != self.term_freqs.shape:
-            import pdb; pdb.set_trace()
         self[key] = value
 
     def value_counts(
@@ -488,25 +508,18 @@ class PostingsArray(ExtensionArray):
             if result_index == -1:
                 taken_postings.append(fill_value)
             else:
-                taken_postings.append(_row_to_postings_row(self.term_freqs.copy_row_at(result_index), self.term_dict))
-        if self.posns.shape != self.term_freqs.shape:
-            import pdb; pdb.set_trace()
+                row = self[result_index]
+                taken_postings.append(row)
+
         return PostingsArray(taken_postings, tokenizer=self.tokenizer)
 
     def copy(self):
-        # taken_postings = []
-        # for result_index in range(len(self.term_freqs.rows)):
-        #     taken_postings.append(_row_to_postings_row(self.term_freqs.copy_row_at(result_index), self.term_dict))
-        # arr1 = PostingsArray(taken_postings, tokenizer=self.tokenizer)
-
         postings_arr = PostingsArray([], tokenizer=self.tokenizer)
         postings_arr.posns = self.posns.copy()
         postings_arr.posns_lookup = self.posns_lookup.copy()
         postings_arr.term_freqs = self.term_freqs.copy()
         postings_arr.term_dict = self.term_dict.copy()
         postings_arr.avg_doc_length = self.avg_doc_length
-        if self.posns.shape != self.term_freqs.shape:
-            import pdb; pdb.set_trace()
         return postings_arr
 
     @classmethod
