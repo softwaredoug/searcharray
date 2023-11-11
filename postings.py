@@ -301,6 +301,13 @@ class PostingsArray(ExtensionArray):
         self.tokenizer = tokenizer
         self.term_freqs, self.posns, self.posns_lookup, \
             self.term_dict, self.avg_doc_length = _build_index_from_dict(as_postings)
+        if self.posns is not None and len(self.posns) > 0 and self.posns.shape[1] > 0:
+            max_lookup = self.posns.mat.max()
+            if max_lookup > len(self.posns_lookup):
+                self.posns_lookup = np.resize(self.posns_lookup, max_lookup + 1)
+
+        if len(self.posns_lookup) == 0:
+            self.posns_lookup = [[]]
 
     @classmethod
     def index(cls, array, tokenizer=ws_tokenizer):
@@ -431,6 +438,10 @@ class PostingsArray(ExtensionArray):
 
         self.term_freqs.resize((self.term_freqs.shape[0], len(self.term_dict)))
         self.posns.resize((self.term_freqs.shape[0], len(self.term_dict)))
+        # Ensure posns_lookup has at least max self.posns
+        max_lookup = self.posns.mat.max()
+        if max_lookup > len(self.posns_lookup):
+            self.posns_lookup = np.resize(self.posns_lookup, max_lookup + 1)
         self[key] = value
 
     def value_counts(
