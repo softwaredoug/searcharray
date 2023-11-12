@@ -600,3 +600,39 @@ class PostingsArray(ExtensionArray):
             lookup_idx = posns_to_lookup[idx, 0]
             posns[idx] = self.posns_lookup[lookup_idx]
         return posns
+
+    def and_query(self, tokenized_terms):
+        """Return a mask on the postings array indicating which elements contain all terms."""
+        masks = [self.match(term) for term in tokenized_terms]
+        mask = np.array([True] * len(self))
+        for curr_mask in masks:
+            mask = mask & curr_mask
+        return mask
+
+    def phrase_match(self, tokenized_terms):
+        """Return a boolean numpy array indicating which elements contain the given phrase."""
+        # Has both terms
+        mask = self.and_query(tokenized_terms)
+        # For detailed documentation of this algorithm, see this ChatGPT4 discussion
+        # https://chat.openai.com/share/31affaad-dc91-4757-b31c-e85bdb5a0eb6
+
+        def pad_arrays(arrays, pad_value=99999999999):
+            max_len = max(len(arr) for arr in arrays)
+            return np.array([np.pad(arr, (0, max_len - len(arr)), constant_values=pad_value) for arr in arrays])
+
+        # Pad for easy difference computation
+        term_posns = []
+        for term in tokenized_terms:
+            term_posns.append(pad_arrays(self.positions(term, mask)))
+
+        # Compute positional differences
+        prior_term = term_posns[0]
+        for term in term_posns[1:]:
+            difference_matrices = term[:, :, np.newaxis] - prior_term[:, np.newaxis, :]
+            # Count to get "term freq" or just update a mask
+            terms_adjacent = np.sum(difference_matrices == 1, axis=1).flatten()
+            # Update mask
+            mask[mask] &= terms_adjacent == 1
+            prior_term = term
+
+        return mask

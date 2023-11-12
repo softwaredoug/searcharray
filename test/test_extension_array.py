@@ -228,6 +228,16 @@ def test_positions(data):
             assert posn == []
 
 
+def test_phrase_match(data):
+    matches = data.phrase_match(["foo", "bar"])
+    assert (matches == [True, False, False, False] * 25).all()
+
+
+def test_phrase_match_three_terms(data):
+    matches = data.phrase_match(["bunny", "funny", "wunny"])
+    assert (matches == [False, False, False, True] * 25).all()
+
+
 def test_tokenize_tmdb(tmdb_data):
     ids = tmdb_data.keys()
     titles = []
