@@ -238,7 +238,7 @@ def _build_index_from_dict(tokenized_postings):
     posns_table = lil_matrix((len(tokenized_postings), 0), dtype=np.uint32)
     term_dict = TermDict()
     avg_doc_length = 0
-    positions_lookup = []
+    positions_lookup = [[]]  # 0th is empty / None due to using a sparse matrix to lookup into this
     for doc_id, tokenized in enumerate(tokenized_postings):
         avg_doc_length += len(tokenized)
         for token, term_freq in tokenized.terms():
@@ -305,9 +305,6 @@ class PostingsArray(ExtensionArray):
             max_lookup = self.posns.mat.max()
             if max_lookup > len(self.posns_lookup):
                 self.posns_lookup = np.resize(self.posns_lookup, max_lookup + 1)
-
-        if len(self.posns_lookup) == 0:
-            self.posns_lookup = [[]]
 
     @classmethod
     def index(cls, array, tokenizer=ws_tokenizer):
