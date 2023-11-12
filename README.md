@@ -86,7 +86,9 @@ More use cases, like phrase search, can be seen [in the tests](https://github.co
 
 This project is very much in prototype stage. 
 
-The overall goals are to recreate a lot of the lexical features (term / phrase search) of a search engine like Solr or Elasticsearch, but in a dataframe. In the future, however, naive vector search likely will be added to assist in prototyping.
+The overall goals are to recreate a lot of the lexical features (term / phrase search) of a search engine like Solr or Elasticsearch, but in a dataframe. This includes more tokenization / text analysis features. As well as some wrappers that emulate the lexical query DSL of these search engines.
+
+In the future, however, naive vector search likely will be added to assist in prototyping.
 
 We care right now about relatively small scale "local" (or in colab environnment) prototyping of search ideas that could be promising for deeper investigation 100k-1m docs. We want to prioritize the offline / testing use case right now.
 
