@@ -1,5 +1,7 @@
 # SearchArray 
 
+⛔️ Proceed with caution. Prototype code
+
 Making search experimentation colab-notebook-able
 
 Anytime I run an offline search relevance experiment, I have to standup a lot of systems. Something like Solr or Elasticsearch, maybe other services, components, vector databases, whatever.
@@ -77,6 +79,8 @@ Out[5]:
 35888        Cat Chaser  A Miami hotel owner finds danger when be becom...  PostingsRow({'Cat': 1, 'Chaser': 1}, {'Cat': [...
 6217         Cat People  After years of separation, Irina (Nastassja Ki...  PostingsRow({'Cat': 1, 'People': 1}, {'Cat': [...
 ```
+
+More use cases, like phrase search, can be seen [in the tests](https://github.com/softwaredoug/searcharray/blob/main/test/test_extension_array.py#L197)
 
 ## Goals 
 
