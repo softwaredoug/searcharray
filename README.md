@@ -50,8 +50,12 @@ Out[2]:
 Then search, getting top N with `Cat`
 
 ```
-In[3]: df['title_indexed'].bm25('Cat').argsort()
-Out[3]: 
+In[3]: np.sort(df['title_indexed'].array.bm25('Cat'))
+Out[3]: array([ 0.        ,  0.        ,  0.        , ..., 15.84568033,
+                15.84568033, 15.84568033])
+
+In[4]: df['title_indexed'].bm25('Cat').argsort()
+Out[4]: 
 
 array([0, 18561, 18560, ..., 15038, 19012,  4392])
 ```
@@ -59,8 +63,8 @@ array([0, 18561, 18560, ..., 15038, 19012,  4392])
 And since its just pandas, we can, of course just retrieve the top matches
 
 ```
-In[4]: df.iloc[top_n_cat[-10:]]
-Out[4]:
+In[5]: df.iloc[top_n_cat[-10:]]
+Out[5]:
                   title                                           overview                                      title_indexed
 24106     The Black Cat  American honeymooners in Hungary are trapped i...  PostingsRow({'Black': 1, 'The': 1, 'Cat': 1}, ...
 12593     Fritz the Cat  A hypocritical swinging college student cat ra...  PostingsRow({'Cat': 1, 'the': 1, 'Fritz': 1}, ...
