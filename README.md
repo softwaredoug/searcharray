@@ -77,3 +77,18 @@ Out[5]:
 35888        Cat Chaser  A Miami hotel owner finds danger when be becom...  PostingsRow({'Cat': 1, 'Chaser': 1}, {'Cat': [...
 6217         Cat People  After years of separation, Irina (Nastassja Ki...  PostingsRow({'Cat': 1, 'People': 1}, {'Cat': [...
 ```
+
+## Goals 
+
+This project is very much in prototype stage. 
+
+The overall goals are to recreate a lot of the lexical features (term / phrase search) of a search engine like Solr or Elasticsearch, but in a dataframe. In the future, however, naive vector search likely will be added to assist in prototyping.
+
+We care right now about relatively small scale "local" (or in colab environnment) prototyping of search ideas that could be promising for deeper investigation 100k-1m docs. We want to prioritize the offline / testing use case right now.
+
+## TODOs / Future Work
+
+* Make more memory efficient - underlying we use a Scipy sparse matrix, one for term freqs, another for positions. This can be cleaned up further.
+* Flesh out wrapper functions that recreate most Solr / Elasticsearch query DSL functionality around term matching
+* Testing on larger amounts of data
+* Clean up the very janky code. This is very much a first pass
