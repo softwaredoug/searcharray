@@ -504,35 +504,23 @@ class PostingsArray(ExtensionArray):
         return empties
 
     def take(self, indices, allow_fill=False, fill_value=None):
-        if allow_fill:
-            if fill_value is None or pd.isna(fill_value):
-                fill_value = PostingsRow({})
         # Want to take rows of term freqs
         row_indices = np.arange(len(self.term_freqs.rows))
         # Take within the row indices themselves
         result_indices = take(row_indices, indices, allow_fill=allow_fill, fill_value=-1)
 
-        if len(self) > 0 and result_indices is not None and len(result_indices) > 0 and allow_fill:
+        if allow_fill:
+            if fill_value is None or pd.isna(fill_value):
+                fill_value = PostingsRow({})
+
             to_fill_mask = result_indices == -1
             taken = PostingsArray([fill_value] * len(result_indices))
-            taken[~to_fill_mask] = self[result_indices[~to_fill_mask]]
+            taken[~to_fill_mask] = self[result_indices[~to_fill_mask]].copy()
 
             return taken
-        elif not allow_fill:
+        else:
             taken = self[result_indices].copy()
             return taken
-        else:
-            # Fallback (slow) direct copy for weird cases
-            # Like all fill for an empty array
-            taken_postings = []
-            for result_index in result_indices:
-                if result_index == -1:
-                    taken_postings.append(fill_value)
-                else:
-                    row = self[result_index]
-                    taken_postings.append(row)
-            return PostingsArray(taken_postings, tokenizer=self.tokenizer)
-        return taken
 
     def copy(self):
         postings_arr = PostingsArray([], tokenizer=self.tokenizer)
