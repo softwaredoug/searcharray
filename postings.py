@@ -395,6 +395,7 @@ class PostingsArray(ExtensionArray):
 
         try:
             posns = None
+            term_freqs = np.asarray([])
             if isinstance(value, float):
                 term_freqs = np.asarray([value])
             elif isinstance(value, PostingsRow):
@@ -503,6 +504,9 @@ class PostingsArray(ExtensionArray):
         return empties
 
     def take(self, indices, allow_fill=False, fill_value=None):
+        from time import perf_counter
+        # start = perf_counter()
+        # print("Take Items")
         if allow_fill:
             if fill_value is None or pd.isna(fill_value):
                 fill_value = PostingsRow({})
@@ -511,15 +515,36 @@ class PostingsArray(ExtensionArray):
         # Take within the row indices themselves
         result_indices = take(row_indices, indices, allow_fill=allow_fill, fill_value=-1)
         # Construct postings from each result_indices
-        taken_postings = []
-        for result_index in result_indices:
-            if result_index == -1:
-                taken_postings.append(fill_value)
-            else:
-                row = self[result_index]
-                taken_postings.append(row)
+        # taken_postings = []
+        # print("Took", perf_counter() - start)
+        # print("Copying...")
 
-        return PostingsArray(taken_postings, tokenizer=self.tokenizer)
+        if len(self) > 0 and result_indices is not None and len(result_indices) > 0 and fill_value is not None:
+            to_fill_mask = result_indices == -1
+            # If result_indices are [1, -1] and the size is 2
+            # then we take two identical rows
+            # and this is not a true copy
+            #taken = self[result_indices].copy()
+            #taken[to_fill_mask] = fill_value
+            taken = PostingsArray( [fill_value] * len(result_indices))
+            taken[~to_fill_mask] = self[result_indices[~to_fill_mask]]
+
+            return taken
+        else:
+            # Fallback dumb copying
+            taken_postings = []
+            for result_index in result_indices:
+                if result_index == -1:
+                    taken_postings.append(fill_value)
+                else:
+                    row = self[result_index]
+                    taken_postings.append(row)
+            return PostingsArray(taken_postings, tokenizer=self.tokenizer)
+
+        # print("Took", perf_counter() - start)
+        # print("Done")
+        # return PostingsArray(taken_postings, tokenizer=self.tokenizer)
+        return taken
 
     def copy(self):
         postings_arr = PostingsArray([], tokenizer=self.tokenizer)

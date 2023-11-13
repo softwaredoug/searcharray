@@ -7,13 +7,41 @@ from time import perf_counter
 import json
 
 from postings import PostingsDtype, PostingsArray, PostingsRow
+from test_utils import w_scenarios
 
 
 @pytest.fixture
-def tmdb_data():
+def tmdb_raw_data():
     path = 'fixtures/tmdb.json.gz'
     with gzip.open(path) as f:
         return json.load(f)
+
+
+@pytest.fixture
+def tmdb_data(tmdb_raw_data):
+    ids = tmdb_raw_data.keys()
+    titles = []
+    overviews = []
+    for id in ids:
+        try:
+            titles.append(tmdb_raw_data[id]['title'])
+        except KeyError:
+            titles.append('')
+
+        try:
+            overviews.append(tmdb_raw_data[id]['overview'])
+        except KeyError:
+            overviews.append('')
+
+    assert len(ids) == len(titles) == len(overviews)
+
+    df = pd.DataFrame({'title': titles, 'overview': overviews}, index=ids)
+    indexed = PostingsArray.index(df['title'])
+    df['title_tokens'] = indexed
+
+    indexed = PostingsArray.index(df['overview'])
+    df['overview_tokens'] = indexed
+    return df
 
 
 @pytest.fixture
@@ -238,18 +266,18 @@ def test_phrase_match_three_terms(data):
     assert (matches == [False, False, False, True] * 25).all()
 
 
-def test_tokenize_tmdb(tmdb_data):
-    ids = tmdb_data.keys()
+def test_tokenize_tmdb(tmdb_raw_data):
+    ids = tmdb_raw_data.keys()
     titles = []
     overviews = []
     for id in ids:
         try:
-            titles.append(tmdb_data[id]['title'])
+            titles.append(tmdb_raw_data[id]['title'])
         except KeyError:
             titles.append('')
 
         try:
-            overviews.append(tmdb_data[id]['overview'])
+            overviews.append(tmdb_raw_data[id]['overview'])
         except KeyError:
             overviews.append('')
 
@@ -274,3 +302,15 @@ def test_tokenize_tmdb(tmdb_data):
     print(f"Time: {stop - start}")
 
     assert len(df) == len(ids)
+
+
+tmdb_phrase_matches = [
+    (["Star", "Wars"], ['11', '330459', '76180']),
+]
+
+
+@pytest.mark.parametrize("phrase,expected_matches", tmdb_phrase_matches)
+def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data):
+    mask = tmdb_data['title_tokens'].array.phrase_match(['Star', 'Wars'])
+    matches = tmdb_data[mask].index.sort_values()
+    assert (matches == expected_matches).all()
