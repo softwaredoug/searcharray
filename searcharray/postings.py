@@ -641,13 +641,23 @@ class PostingsArray(ExtensionArray):
         # Compute positional differences
         prior_term = term_posns[0]
         for term in term_posns[1:]:
-            difference_matrices = term[:, :, np.newaxis] - prior_term[:, np.newaxis, :]
-            # Count to get "term freq" or just update a mask
-            per_doc_diffs = np.sum(difference_matrices == 1, axis=1)
+            # doc, term, posn diff matrix
+            posn_diffs = term[:, :, np.newaxis] - prior_term[:, np.newaxis, :]
+            # Count how many times the row term is 1 away from the col term
+            slop = 1
+            per_doc_diffs = np.sum(posn_diffs == slop, axis=1)
 
-            phrase_freqs = np.sum(per_doc_diffs == 1, axis=1)
+            # Pad out any rows in 'term' where posn diff != slop
+            term = np.where(per_doc_diffs == 1, term, 99999999999)
+
+            # Doc-wise sum to get a 'term freq'
+            bigram_freqs = np.sum(per_doc_diffs == slop, axis=1)
+
             # Update mask
-            mask[mask] &= phrase_freqs > 0
+            mask[mask] &= bigram_freqs > 0
+
+            # Should only keep positions of 'prior term' that are adjacent to the
+            # one prior to it...
             prior_term = term
 
         return mask

@@ -270,6 +270,12 @@ def test_phrase_match_three_terms(data):
     assert (matches == [False, False, False, True] * 25).all()
 
 
+def test_phrase_match_three_terms_spread_out_doesnt_match():
+    spread_out = PostingsArray.index(["foo bar EEK foo URG bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25)
+    matches = spread_out.phrase_match(["foo", "bar", "baz"])
+    assert (matches == [False, False, False, False] * 25).all()
+
+
 def test_phrase_match_duplicate_phrases():
     multiple = PostingsArray.index(["foo bar foo bar", "data2", "data3 bar", "bunny funny wunny"] * 25)
     matches = multiple.phrase_match(["foo", "bar"])
