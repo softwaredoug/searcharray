@@ -10,6 +10,8 @@ Imagine the drain to velocity this entails.
 
 This project creates a Pandas-centric way of creating and using a search index as just part of a Pandas array. In a sense, it simulates the functionality of the search engine, to allow anyone to prototype ideas, without external systems
 
+You can see examples at this [colab notebook](https://colab.research.google.com/drive/1w_Ajn5rHzcISKhdCuPhhVFav3zrvKWn1?usp=sharing)
+
 IE, take a dataframe that has a bunch of text, like movie title and overviews:
 
 ```
