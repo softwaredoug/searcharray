@@ -558,10 +558,13 @@ class PostingsArray(ExtensionArray):
         if not isinstance(tokenized_term, str):
             raise TypeError("Expected a string")
 
-        term_id = self.term_dict.get_term_id(tokenized_term)
-        matches = self.term_freqs.copy_col_at(term_id).todense().flatten()
-        matches = np.asarray(matches).flatten()
-        return matches
+        try:
+            term_id = self.term_dict.get_term_id(tokenized_term)
+            matches = self.term_freqs.copy_col_at(term_id).todense().flatten()
+            matches = np.asarray(matches).flatten()
+            return matches
+        except TermMissingError:
+            return np.zeros(len(self), dtype=int)
 
     def doc_freq(self, tokenized_term):
         if not isinstance(tokenized_term, str):
@@ -623,6 +626,9 @@ class PostingsArray(ExtensionArray):
         # For detailed documentation of this algorithm, see this ChatGPT4 discussion
         # https://chat.openai.com/share/31affaad-dc91-4757-b31c-e85bdb5a0eb6
 
+        if np.sum(mask) == 0:
+            return mask
+
         def pad_arrays(arrays, pad_value=99999999999):
             max_len = max(len(arr) for arr in arrays)
             return np.array([np.pad(arr, (0, max_len - len(arr)), constant_values=pad_value) for arr in arrays])
@@ -637,9 +643,11 @@ class PostingsArray(ExtensionArray):
         for term in term_posns[1:]:
             difference_matrices = term[:, :, np.newaxis] - prior_term[:, np.newaxis, :]
             # Count to get "term freq" or just update a mask
-            terms_adjacent = np.sum(difference_matrices == 1, axis=1).flatten()
+            per_doc_diffs = np.sum(difference_matrices == 1, axis=1)
+
+            phrase_freqs = np.sum(per_doc_diffs == 1, axis=1)
             # Update mask
-            mask[mask] &= terms_adjacent == 1
+            mask[mask] &= phrase_freqs > 0
             prior_term = term
 
         return mask

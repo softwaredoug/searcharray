@@ -226,6 +226,11 @@ def test_match(data):
     assert (matches == [True, False, False, False] * 25).all()
 
 
+def test_match_missing_term(data):
+    matches = data.match("not_present")
+    assert (matches == [False, False, False, False] * 25).all()
+
+
 def test_term_freqs(data):
     matches = data.term_freq("bar")
     assert (matches == [2, 0, 1, 0] * 25).all()
@@ -263,6 +268,12 @@ def test_phrase_match(data):
 def test_phrase_match_three_terms(data):
     matches = data.phrase_match(["bunny", "funny", "wunny"])
     assert (matches == [False, False, False, True] * 25).all()
+
+
+def test_phrase_match_duplicate_phrases():
+    multiple = PostingsArray.index(["foo bar foo bar", "data2", "data3 bar", "bunny funny wunny"] * 25)
+    matches = multiple.phrase_match(["foo", "bar"])
+    assert (matches == [True, False, False, False] * 25).all()
 
 
 def test_tokenize_tmdb(tmdb_raw_data):
@@ -305,11 +316,13 @@ def test_tokenize_tmdb(tmdb_raw_data):
 
 tmdb_phrase_matches = [
     (["Star", "Wars"], ['11', '330459', '76180']),
+    (["Black", "Mirror:"], ['374430']),
+    (["this", "doesnt", "match", "anything"], []),
 ]
 
 
 @pytest.mark.parametrize("phrase,expected_matches", tmdb_phrase_matches)
 def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data):
-    mask = tmdb_data['title_tokens'].array.phrase_match(['Star', 'Wars'])
+    mask = tmdb_data['title_tokens'].array.phrase_match(phrase)
     matches = tmdb_data[mask].index.sort_values()
     assert (matches == expected_matches).all()
