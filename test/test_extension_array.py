@@ -6,8 +6,7 @@ import gzip
 from time import perf_counter
 import json
 
-from postings import PostingsDtype, PostingsArray, PostingsRow
-from test_utils import w_scenarios
+from searcharray.postings import PostingsDtype, PostingsArray, PostingsRow
 
 
 @pytest.fixture
@@ -313,5 +312,4 @@ tmdb_phrase_matches = [
 def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data):
     mask = tmdb_data['title_tokens'].array.phrase_match(['Star', 'Wars'])
     matches = tmdb_data[mask].index.sort_values()
-    print(tmdb_data[mask])
     assert (matches == expected_matches).all()

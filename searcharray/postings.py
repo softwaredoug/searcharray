@@ -9,7 +9,7 @@ import json
 import warnings
 
 import numpy as np
-from term_dict import TermDict, TermMissingError
+from searcharray.term_dict import TermDict, TermMissingError
 
 # Doc,Term -> freq
 # Note scipy sparse switching to *_array, which is more numpy like
