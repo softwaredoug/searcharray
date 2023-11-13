@@ -262,16 +262,17 @@ def _build_index_from_dict(tokenized_postings):
 
 
 def _row_to_postings_row(row, term_dict, posns, posns_lookup):
+    tfs = {}
+    non_zeros = row.nonzero()
     labeled_posns = {}
-    for term_id, posn in enumerate(posns):
-        if int(row[0, term_id]) == 0:
-            continue
-        term = term_dict.get_term(term_id)
+    for row_idx, col_idx in zip(non_zeros[0], non_zeros[1]):
+        term = term_dict.get_term(col_idx)
+        tfs[term] = int(row[row_idx, col_idx])
+        posn = posns[col_idx]
         term_posns = posns_lookup[posn]
         labeled_posns[term] = term_posns
-    result = PostingsRow({term_dict.get_term(term_id): int(row[0, term_id])
-                          for term_id in range(row.shape[1]) if row[0, term_id] > 0},
-                         labeled_posns)
+
+    result = PostingsRow(tfs, labeled_posns)
     # TODO add positions
     return result
 
@@ -359,6 +360,7 @@ class PostingsArray(ExtensionArray):
             try:
                 rows = self.term_freqs[key]
                 posn_keys = self.posns[key].toarray().flatten()
+
                 return _row_to_postings_row(rows[0], self.term_dict, posn_keys, self.posns_lookup)
             except IndexError:
                 raise IndexError("index out of bounds")
@@ -509,11 +511,15 @@ class PostingsArray(ExtensionArray):
         # Take within the row indices themselves
         result_indices = take(row_indices, indices, allow_fill=allow_fill, fill_value=-1)
 
-        if allow_fill:
+        if allow_fill and -1 in result_indices:
             if fill_value is None or pd.isna(fill_value):
                 fill_value = PostingsRow({})
 
             to_fill_mask = result_indices == -1
+            # This is slow as it rebuilds all the term dictionaries
+            # on the subsequent assignment lines
+            # However, this case tends to be the exception for
+            # most dataframe operations
             taken = PostingsArray([fill_value] * len(result_indices))
             taken[~to_fill_mask] = self[result_indices[~to_fill_mask]].copy()
 

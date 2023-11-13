@@ -313,4 +313,5 @@ tmdb_phrase_matches = [
 def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data):
     mask = tmdb_data['title_tokens'].array.phrase_match(['Star', 'Wars'])
     matches = tmdb_data[mask].index.sort_values()
+    print(tmdb_data[mask])
     assert (matches == expected_matches).all()
