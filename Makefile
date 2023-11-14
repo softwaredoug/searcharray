@@ -31,7 +31,7 @@ test: deps
 	python -m pytest test
 
 
-build: deps
+build: deps test
 	@echo "Building..."
 	python3 -m build --sdist
 	python3 -m build --wheel
@@ -57,3 +57,5 @@ help:
 	@echo "  clean           Clean build files"
 	@echo "  help            Show this help message"
 	@echo "  publish         Publish package to PyPI"
+
+.DEFAULT_GOAL := build
