@@ -18,6 +18,14 @@ deps: venv
 	fi
 
 
+clean:
+	@echo "Cleaning..."
+	rm -rf dist
+	@echo "Clean deps..."
+	deactivate
+	rm -rf venv
+
+
 test: deps
 	@echo "Running tests..."
 	python -m pytest test
@@ -29,6 +37,16 @@ build: deps
 	python3 -m build --wheel
 
 
+twine:
+	@echo "Installing twine..."
+	pip install twine
+
+
+publish: twine
+	@echo "Publishing..."
+	twine upload --skip-existing dist/*
+
+
 help:
 	@echo "Usage: make <target>"
 	@echo ""
@@ -36,4 +54,6 @@ help:
 	@echo "  deps            Install dependencies"
 	@echo "  test            Run tests"
 	@echo "  build           Build package"
+	@echo "  clean           Clean build files"
 	@echo "  help            Show this help message"
+	@echo "  publish         Publish package to PyPI"
