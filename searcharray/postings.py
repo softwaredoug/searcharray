@@ -619,7 +619,7 @@ class PostingsArray(ExtensionArray):
             mask = mask & curr_mask
         return mask
 
-    def phrase_match(self, tokenized_terms):
+    def phrase_match(self, tokenized_terms, slop=1):
         """Return a boolean numpy array indicating which elements contain the given phrase."""
         # Has both terms
         mask = self.and_query(tokenized_terms)
@@ -641,14 +641,47 @@ class PostingsArray(ExtensionArray):
         # Compute positional differences
         prior_term = term_posns[0]
         for term in term_posns[1:]:
-            # doc, term, posn diff matrix
+            # Each row of posn_diffs is a term posn diff matrix
+            # Where columns are prior_term posns, rows are term posns
+            # This shows every possible term diff
+            #
+            # Example:
+            #   prior_term = array([[0, 4],[0, 4])
+            #         term = array([[1, 2, 3],[1, 2, 3]])
+            #
+            #
+            #   posn_diffs =
+            #
+            #     array([[ term[0] - prior_term[0], term[0] - prior_term[1] ],
+            #            [ term[1] - prior_term[0], ...
+            #            [ term[2] - prior_term[0], ...
+            #
+            #    or in our example
+            #
+            #     array([[ 1, -3],
+            #            [ 2, -2],
+            #            [ 3, -1]])
+            #
+            #  We care about all locations where posn == slop (or perhaps <= slop)
+            #  that is term is slop away from prior_term. Usually slop == 1 (ie 1 posn away)
+            #  for normal phrase matching
+            #
             posn_diffs = term[:, :, np.newaxis] - prior_term[:, np.newaxis, :]
-            # Count how many times the row term is 1 away from the col term
-            slop = 1
-            per_doc_diffs = np.sum(posn_diffs == slop, axis=1)
 
+            # For > 2 terms, we need to connect a third term by making prior_term = term
+            # and repeating
+            #
+            # BUT
+            # we only want those parts of term that are adjacent to prior_term
+            # before continuing, so we don't accidentally get a partial phrase
+            # so we need to make sure to
             # Pad out any rows in 'term' where posn diff != slop
-            term = np.where(per_doc_diffs == 1, term, 99999999999)
+            # so they're not considered on subsequent iterations
+            term_mask = np.any(posn_diffs == 1, axis=2)
+            term[~term_mask] = 99999999999
+
+            # Count how many times the row term is 1 away from the col term
+            per_doc_diffs = np.sum(posn_diffs == slop, axis=1)
 
             # Doc-wise sum to get a 'term freq'
             bigram_freqs = np.sum(per_doc_diffs == slop, axis=1)
