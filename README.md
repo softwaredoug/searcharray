@@ -1,5 +1,7 @@
 # SearchArray 
 
+[![Python package](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml/badge.svg)](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml)
+
 ⛔️ Proceed with caution. Prototype code
 
 Making search experimentation colab-notebook-able
