@@ -2,9 +2,6 @@ import pytest
 import numpy as np
 from pandas.tests.extension import base
 import pandas as pd
-import gzip
-from time import perf_counter
-import json
 
 from searcharray.postings import PostingsDtype, PostingsArray, PostingsRow
 
@@ -213,16 +210,5 @@ def test_bm25(data):
     bm25 = data.bm25("bar")
     assert bm25.shape == (100,)
     assert np.isclose(bm25, [1.60518294, 0.0 , 1.38629436, 0.0] * 25).all()
-
-
-def test_positions(data):
-    positions = data.positions("bar")
-    for idx, posn in enumerate(positions):
-        if idx % 4 == 0:
-            assert posn == [1, 2]
-        elif idx % 4 == 2:
-            assert posn == [1]
-        else:
-            assert posn == []
 
 

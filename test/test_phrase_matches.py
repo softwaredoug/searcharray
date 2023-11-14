@@ -61,3 +61,15 @@ def test_phrase(docs, phrase, expected):
     assert (matches == expected).all()
     if len(docs) < 1000:
         assert (docs == docs_before).all(), "The phrase_match method should not modify the original array"
+
+
+def test_positions():
+    data = PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25)
+    positions = data.positions("bar")
+    for idx, posn in enumerate(positions):
+        if idx % 4 == 0:
+            assert (posn == [1, 2]).all()
+        elif idx % 4 == 2:
+            assert (posn == [1]).all()
+        else:
+            assert (posn == []).all()

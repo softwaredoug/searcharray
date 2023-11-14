@@ -238,7 +238,7 @@ def _build_index_from_dict(tokenized_postings):
     posns_table = lil_matrix((len(tokenized_postings), 0), dtype=np.uint32)
     term_dict = TermDict()
     avg_doc_length = 0
-    positions_lookup = [[]]  # 0th is empty / None due to using a sparse matrix to lookup into this
+    posns_lookup = [np.array([])]  # 0th is empty / None due to using a sparse matrix to lookup into this
     for doc_id, tokenized in enumerate(tokenized_postings):
         avg_doc_length += len(tokenized)
         for token, term_freq in tokenized.terms():
@@ -250,15 +250,15 @@ def _build_index_from_dict(tokenized_postings):
 
             positions = tokenized.positions(token)
             if positions is not None:
-                idx = len(positions_lookup)
-                positions_lookup.append(positions)
+                idx = len(posns_lookup)
+                posns_lookup.append(np.array(positions))
                 posns_table[doc_id, term_id] = idx
 
     if len(tokenized_postings) > 0:
         avg_doc_length /= len(tokenized_postings)
 
     assert freqs_table.shape == posns_table.shape
-    return RowViewableMatrix(csr_matrix(freqs_table)), RowViewableMatrix(csr_matrix(posns_table)), positions_lookup, term_dict, avg_doc_length
+    return RowViewableMatrix(csr_matrix(freqs_table)), RowViewableMatrix(csr_matrix(posns_table)), posns_lookup, term_dict, avg_doc_length
 
 
 def _row_to_postings_row(row, term_dict, posns, posns_lookup):
@@ -596,12 +596,14 @@ class PostingsArray(ExtensionArray):
         """Score each doc using BM25."""
         return self.bm25_idf(tokenized_term) * self.bm25_tf(tokenized_term)
 
-    def positions(self, tokenized_term, doc_ids=None):
+    def positions(self, tokenized_term, key=None):
         """Return a list of lists of positions of the given term."""
+        from time import perf_counter
+        start = perf_counter()
         term_id = self.term_dict.get_term_id(tokenized_term)
 
-        if doc_ids is not None:
-            posns_to_lookup = self.posns[doc_ids].copy_col_at(term_id)
+        if key is not None:
+            posns_to_lookup = self.posns[key].copy_col_at(term_id)
         else:
             posns_to_lookup = self.posns.copy_col_at(term_id)
 
@@ -609,6 +611,7 @@ class PostingsArray(ExtensionArray):
         for idx in range(posns_to_lookup.shape[0]):
             lookup_idx = posns_to_lookup[idx, 0]
             posns[idx] = self.posns_lookup[lookup_idx]
+        print("positions took", perf_counter() - start)
         return posns
 
     def and_query(self, tokenized_terms):
@@ -622,21 +625,32 @@ class PostingsArray(ExtensionArray):
     def phrase_match(self, tokenized_terms, slop=1):
         """Return a boolean numpy array indicating which elements contain the given phrase."""
         # Has both terms
+        from time import perf_counter
+        start = perf_counter()
         mask = self.and_query(tokenized_terms)
+        print(f"phrase_match and_query took {perf_counter() - start}")
         # For detailed documentation of this algorithm, see this ChatGPT4 discussion
         # https://chat.openai.com/share/31affaad-dc91-4757-b31c-e85bdb5a0eb6
 
         if np.sum(mask) == 0:
             return mask
 
-        def pad_arrays(arrays, pad_value=99999999999):
+        def pad_arrays(arrays: np.array, pad_value=99999999999):
             max_len = max(len(arr) for arr in arrays)
-            return np.array([np.pad(arr, (0, max_len - len(arr)), constant_values=pad_value) for arr in arrays])
+            pad_width = ((0, 0), (0, max_len))
+
+            start = perf_counter()
+            padded = np.pad(arrays, pad_width=pad_width, constant_values=pad_value)
+            print(f"phrase_match just padded {perf_counter() - start}")
+            return padded
 
         # Pad for easy difference computation
         term_posns = []
         for term in tokenized_terms:
-            term_posns.append(pad_arrays(self.positions(term, mask)))
+            as_array = self.positions(term, mask)
+            term_posns.append(pad_arrays(as_array))
+
+        print(f"phrase_match padding took {perf_counter() - start}")
 
         # Compute positional differences
         prior_term = term_posns[0]
@@ -692,5 +706,6 @@ class PostingsArray(ExtensionArray):
             # Should only keep positions of 'prior term' that are adjacent to the
             # one prior to it...
             prior_term = term
+            print(f"phrase_match loop took {perf_counter() - start}")
 
         return mask
