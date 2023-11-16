@@ -210,5 +210,3 @@ def test_bm25(data):
     bm25 = data.bm25("bar")
     assert bm25.shape == (100,)
     assert np.isclose(bm25, [1.60518294, 0.0 , 1.38629436, 0.0] * 25).all()
-
-

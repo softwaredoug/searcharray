@@ -234,6 +234,9 @@ class RowViewableMatrix:
 
 def _build_index_from_dict(tokenized_postings):
     """Bulid an index from postings that are already tokenized and point at their term frequencies."""
+    from time import perf_counter
+    start = perf_counter()
+    print("Building index...")
     freqs_table = lil_matrix((len(tokenized_postings), 0), dtype=np.uint8)
     posns_table = lil_matrix((len(tokenized_postings), 0), dtype=np.uint32)
     term_dict = TermDict()
@@ -253,11 +256,14 @@ def _build_index_from_dict(tokenized_postings):
                 idx = len(posns_lookup)
                 posns_lookup.append(np.array(positions))
                 posns_table[doc_id, term_id] = idx
+        if doc_id % 10000 == 0:
+            print(f"Doc {doc_id} done -- {perf_counter() - start} seconds")
 
     if len(tokenized_postings) > 0:
         avg_doc_length /= len(tokenized_postings)
 
     assert freqs_table.shape == posns_table.shape
+    print(f"Built index in {perf_counter() - start} seconds")
     return RowViewableMatrix(csr_matrix(freqs_table)), RowViewableMatrix(csr_matrix(posns_table)), posns_lookup, term_dict, avg_doc_length
 
 
@@ -551,6 +557,10 @@ class PostingsArray(ExtensionArray):
         arr = np.asarray(self[:], dtype=object)
         return arr, PostingsRow({})
 
+
+    # One way to stack
+    #  np.array_split(posns_mat[[1,2]].indices, posns_mat[[1,2]].indptr)
+
     # ***********************************************************
     # Naive implementations of search functions to clean up later
     # ***********************************************************
@@ -596,6 +606,21 @@ class PostingsArray(ExtensionArray):
         """Score each doc using BM25."""
         return self.bm25_idf(tokenized_term) * self.bm25_tf(tokenized_term)
 
+    def _posns_lookup_to_csr(self):
+        """Convert the posns_lookup to a csr_matrix."""
+        from scipy.sparse import csr_matrix
+        # This is a list of lists of positions
+        # We want to convert it to a csr_matrix
+        # where each row is a document and each column is a position
+        mat = csr_matrix((len(self.posns_lookup) + 1, 255), dtype=np.int8)
+        for row in range(len(self.posns_lookup)):
+            for col in self.posns_lookup[row]:
+                if col > mat.shape[1]:
+                    mat.resize((mat.shape[0], col + 1))
+                print(row)
+                mat[row, col] = 1
+        return mat
+
     def positions(self, tokenized_term, key=None):
         """Return a list of lists of positions of the given term."""
         from time import perf_counter
@@ -606,13 +631,18 @@ class PostingsArray(ExtensionArray):
             posns_to_lookup = self.posns[key].copy_col_at(term_id)
         else:
             posns_to_lookup = self.posns.copy_col_at(term_id)
+        print(f"-- -- Positions 1 took {perf_counter() - start} seconds")
 
-        posns = [[]] * posns_to_lookup.shape[0]
-        for idx in range(posns_to_lookup.shape[0]):
-            lookup_idx = posns_to_lookup[idx, 0]
-            posns[idx] = self.posns_lookup[lookup_idx]
-        print("positions took", perf_counter() - start)
-        return posns
+        # This could be faster if posns_lookup was more row slicable
+        posns_to_lookup = posns_to_lookup.toarray().flatten()
+        print(f"-- -- Positions 2 took {perf_counter() - start} seconds")
+        posns2 = [self.posns_lookup[lookup] for lookup in posns_to_lookup]
+        print(f"-- -- Positions took {perf_counter() - start} seconds")
+        # posns_mat = self._posns_lookup_to_csr()
+        # this_mat = posns_mat[posns_to_lookup]
+        # nonzeros = this_mat.nonzero()
+        # this_mat[nonzeros] = (nonzeros[1] + 1)
+        return posns2
 
     def and_query(self, tokenized_terms):
         """Return a mask on the postings array indicating which elements contain all terms."""
@@ -628,33 +658,31 @@ class PostingsArray(ExtensionArray):
         from time import perf_counter
         start = perf_counter()
         mask = self.and_query(tokenized_terms)
-        print(f"phrase_match and_query took {perf_counter() - start}")
         # For detailed documentation of this algorithm, see this ChatGPT4 discussion
         # https://chat.openai.com/share/31affaad-dc91-4757-b31c-e85bdb5a0eb6
 
         if np.sum(mask) == 0:
             return mask
 
-        def pad_arrays(arrays: np.array, pad_value=99999999999):
-            max_len = max(len(arr) for arr in arrays)
-            pad_width = ((0, 0), (0, max_len))
-
+        def vstack_with_pad(arrays, width=5):
             start = perf_counter()
-            padded = np.pad(arrays, pad_width=pad_width, constant_values=pad_value)
-            print(f"phrase_match just padded {perf_counter() - start}")
-            return padded
+            vstacked = -np.ones((len(arrays), width), dtype=arrays[0].dtype)
+            indices = np.array([np.arange(len(array)) for array in arrays])
+            vstacked[np.arange(len(arrays))[:, None], indices] = arrays
+            print(f"-- -- Vstack with pad {perf_counter() - start:.4f} seconds")
+            return vstacked
 
         # Pad for easy difference computation
         term_posns = []
         for term in tokenized_terms:
             as_array = self.positions(term, mask)
-            term_posns.append(pad_arrays(as_array))
+            term_posns.append(vstack_with_pad(as_array, 5))
+        print(f"-- phrase_match - Padding took {perf_counter() - start:.2f} seconds")
 
-        print(f"phrase_match padding took {perf_counter() - start}")
-
-        # Compute positional differences
         prior_term = term_posns[0]
         for term in term_posns[1:]:
+            # Compute positional differences
+            #
             # Each row of posn_diffs is a term posn diff matrix
             # Where columns are prior_term posns, rows are term posns
             # This shows every possible term diff
@@ -692,20 +720,22 @@ class PostingsArray(ExtensionArray):
             # Pad out any rows in 'term' where posn diff != slop
             # so they're not considered on subsequent iterations
             term_mask = np.any(posn_diffs == 1, axis=2)
-            term[~term_mask] = 99999999999
+            term[~term_mask] = -1
 
             # Count how many times the row term is 1 away from the col term
             per_doc_diffs = np.sum(posn_diffs == slop, axis=1)
 
-            # Doc-wise sum to get a 'term freq'
+            # Doc-wise sum to get a 'term freq' for the prior_term - term bigram
             bigram_freqs = np.sum(per_doc_diffs == slop, axis=1)
 
-            # Update mask
+            # I _think_ last loop, bigram_freqs is the full phrase term freq
+
+            # Update mask to eliminate any non-matches
             mask[mask] &= bigram_freqs > 0
 
             # Should only keep positions of 'prior term' that are adjacent to the
             # one prior to it...
             prior_term = term
-            print(f"phrase_match loop took {perf_counter() - start}")
 
+        print(f"-- phrase_match - Search took {perf_counter() - start:.2f} seconds")
         return mask
