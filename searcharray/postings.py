@@ -648,6 +648,10 @@ class PostingsArray(ExtensionArray):
 
     def phrase_match(self, tokenized_terms, slop=1):
         """Return a boolean numpy array indicating which elements contain the given phrase."""
+        return self.phrase_freq(tokenized_terms, slop) > 0
+
+    def phrase_freq(self, tokenized_terms, slop=1, pad=-100):
+        """Return number of occurences of a phrase."""
         # Start with docs with all terms
         mask = self.and_query(tokenized_terms)
         # For detailed documentation of this algorithm, see this ChatGPT4 discussion
@@ -657,8 +661,12 @@ class PostingsArray(ExtensionArray):
             return mask
 
         def vstack_with_pad(arrays, width=10):
-            vstacked = -np.ones((len(arrays), width), dtype=arrays[0].dtype)
+            vstacked = np.zeros((len(arrays), width), dtype=arrays[0].dtype) + pad
             for idx, array in enumerate(arrays):
+                # Resize if needed, padding with pad
+                if len(array) > width:
+                    vstack_padded = np.pad(vstacked, ((0, 0), (0, len(array) - width)), constant_values=pad)
+                    vstacked = vstack_padded
                 vstacked[idx, :len(array)] = array
             return vstacked
 
@@ -668,8 +676,13 @@ class PostingsArray(ExtensionArray):
             as_array = self.positions(term, mask)
             term_posns.append(vstack_with_pad(as_array, 5))
 
+        phrase_freqs = np.zeros(len(self))
+        bigram_freqs = None
+
         prior_term = term_posns[0]
         for term in term_posns[1:]:
+            is_same_term = (term == prior_term).all()
+
             # Compute positional differences
             #
             # Each row of posn_diffs is a term posn diff matrix
@@ -709,13 +722,23 @@ class PostingsArray(ExtensionArray):
             # Pad out any rows in 'term' where posn diff != slop
             # so they're not considered on subsequent iterations
             term_mask = np.any(posn_diffs == 1, axis=2)
-            term[~term_mask] = -1
+            term[~term_mask] = -100
 
             # Count how many times the row term is 1 away from the col term
-            per_doc_diffs = np.sum(posn_diffs == slop, axis=1)
+            per_doc_diffs = np.sum(posn_diffs == slop, axis=1, dtype=np.int8)
 
             # Doc-wise sum to get a 'term freq' for the prior_term - term bigram
             bigram_freqs = np.sum(per_doc_diffs == slop, axis=1)
+            if is_same_term:
+                satisfies_slop = per_doc_diffs == slop
+                consecutive_ones = satisfies_slop[:, 1:] & satisfies_slop[:, :-1]
+                consecutive_ones = np.sum(consecutive_ones, axis=1)
+                # ceiling divide?
+                # Really these show up as
+                # 1 1 1 0 1
+                # we need to treat the 2nd consecutive 1 as 'not a match'
+                # and also update 'term' to not include it
+                bigram_freqs -= -np.floor_divide(consecutive_ones, -2)
 
             # I _think_ last loop, bigram_freqs is the full phrase term freq
 
@@ -726,4 +749,5 @@ class PostingsArray(ExtensionArray):
             # one prior to it...
             prior_term = term
 
-        return mask
+        phrase_freqs[mask] = bigram_freqs[bigram_freqs > 0]
+        return phrase_freqs

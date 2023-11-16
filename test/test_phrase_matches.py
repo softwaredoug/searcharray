@@ -1,5 +1,4 @@
 from searcharray.postings import PostingsArray
-from scipy.sparse import csr_matrix
 from test_utils import w_scenarios
 from time import perf_counter
 import pytest
@@ -22,9 +21,9 @@ perf_scenarios = {
         "expected": [True, False, False, False] * 1000000,
     },
     "10m_docs": {
-       "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 10000000),
-       "phrase": ["foo", "bar"],
-       "expected": [True, False, False, False] * 10000000,
+        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 10000000),
+        "phrase": ["foo", "bar"],
+        "expected": [True, False, False, False] * 10000000,
     },
     "many_docs_long_doc": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny",
@@ -46,57 +45,72 @@ scenarios = {
     "base": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "bar"],
-        "expected": [True, False, False, False] * 25,
+        "expected": [1, 0, 0, 0] * 25,
     },
     "multi_term_one_doc": {
         "docs": lambda: PostingsArray.index(["foo bar bar bar foo", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "bar"],
-        "expected": [True, False, False, False] * 25,
+        "expected": [1, 0, 0, 0] * 25,
     },
     "three_terms_match": {
         "docs": lambda: PostingsArray.index(["foo bar baz baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "bar", "baz"],
-        "expected": [True, False, False, False] * 25,
+        "expected": [1, 0, 0, 0] * 25,
     },
     "three_terms_no_match": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "bar", "baz"],
-        "expected": [False, False, False, False] * 25,
-    },
-    "100k_docs": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 100000),
-        "phrase": ["foo", "bar"],
-        "expected": [True, False, False, False] * 100000,
+        "expected": [0, 0, 0, 0] * 25,
     },
     "three_terms_spread_out": {
         "docs": lambda: PostingsArray.index(["foo bar EEK foo URG bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "bar", "baz"],
-        "expected": [False, False, False, False] * 25,
+        "expected": [0, 0, 0, 0] * 25,
     },
     "same_term_matches": {
         "docs": lambda: PostingsArray.index(["foo foo foo", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "foo"],
-        "expected": [True, False, False, False] * 25,
+        "expected": [1, 0, 0, 0] * 25,
     },
     "same_term_matches_3": {
         "docs": lambda: PostingsArray.index(["foo foo foo", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "foo", "foo"],
-        "expected": [True, False, False, False] * 25,
+        "expected": [1, 0, 0, 0] * 25,
+    },
+    "same_term_matches_4": {
+        "docs": lambda: PostingsArray.index(["foo foo foo foo", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "phrase": ["foo", "foo", "foo", "foo"],
+        "expected": [1, 0, 0, 0] * 25,
+    },
+    "same_term_phrase_repeats": {
+        "docs": lambda: PostingsArray.index(["foo foo foo foo", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "phrase": ["foo", "foo"],
+        "expected": [2, 0, 0, 0] * 25,
+    },
+    "same_term_phrase_repeats_with_break": {
+        "docs": lambda: PostingsArray.index(["foo foo foo foo baz foo foo", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "phrase": ["foo", "foo"],
+        "expected": [3, 0, 0, 0] * 25,
     },
     "duplicate_phrases": {
         "docs": lambda: PostingsArray.index(["foo bar foo bar", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "bar"],
-        "expected": [True, False, False, False] * 25,
+        "expected": [2, 0, 0, 0] * 25,
     },
     "duplicate_three_term_phrases": {
         "docs": lambda: PostingsArray.index(["foo bar baz foo bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "bar", "baz"],
-        "expected": [True, False, False, False] * 25,
+        "expected": [2, 0, 0, 0] * 25,
     },
     "duplicate_three_term_phrases_last_disconnects": {
         "docs": lambda: PostingsArray.index(["foo bar baz foo bar buzz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "bar", "baz"],
-        "expected": [True, False, False, False] * 25,
+        "expected": [1, 0, 0, 0] * 25,
+    },
+    "10k_docs": {
+        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 10000),
+        "phrase": ["foo", "bar"],
+        "expected": [1, 0, 0, 0] * 10000,
     },
 }
 
@@ -105,8 +119,11 @@ scenarios = {
 def test_phrase(docs, phrase, expected):
     docs = docs()
     docs_before = docs.copy()
+    term_freqs = docs.phrase_freq(phrase)
+    expected_matches = np.array(expected) > 0
     matches = docs.phrase_match(phrase)
-    assert (matches == expected).all()
+    assert (term_freqs == expected).all()
+    assert (matches == expected_matches).all()
     assert (docs == docs_before).all(), "The phrase_match method should not modify the original array"
 
 
