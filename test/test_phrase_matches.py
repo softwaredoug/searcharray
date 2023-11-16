@@ -72,6 +72,21 @@ scenarios = {
         "phrase": ["foo", "foo"],
         "expected": [1, 0, 0, 0] * 25,
     },
+    "partial_same_term_matches": {
+        "docs": lambda: PostingsArray.index(["foo foo bar", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "phrase": ["foo", "foo", "bar"],
+        "expected": [1, 0, 0, 0] * 25,
+    },
+    "partial_same_term_matches_tail": {
+        "docs": lambda: PostingsArray.index(["foo bar bar", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "phrase": ["foo", "bar", "bar"],
+        "expected": [1, 0, 0, 0] * 25,
+    },
+    "partial_same_term_matches_multiple": {
+        "docs": lambda: PostingsArray.index(["foo bar bar foo bar bar", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "phrase": ["foo", "bar", "bar"],
+        "expected": [2, 0, 0, 0] * 25,
+    },
     "same_term_matches_3": {
         "docs": lambda: PostingsArray.index(["foo foo foo", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "foo", "foo"],
