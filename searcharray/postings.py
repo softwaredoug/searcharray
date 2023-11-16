@@ -557,7 +557,6 @@ class PostingsArray(ExtensionArray):
         arr = np.asarray(self[:], dtype=object)
         return arr, PostingsRow({})
 
-
     # One way to stack
     #  np.array_split(posns_mat[[1,2]].indices, posns_mat[[1,2]].indptr)
 
@@ -623,26 +622,21 @@ class PostingsArray(ExtensionArray):
 
     def positions(self, tokenized_term, key=None):
         """Return a list of lists of positions of the given term."""
-        from time import perf_counter
-        start = perf_counter()
         term_id = self.term_dict.get_term_id(tokenized_term)
 
         if key is not None:
             posns_to_lookup = self.posns[key].copy_col_at(term_id)
         else:
             posns_to_lookup = self.posns.copy_col_at(term_id)
-        print(f"-- -- Positions 1 took {perf_counter() - start} seconds")
 
         # This could be faster if posns_lookup was more row slicable
         posns_to_lookup = posns_to_lookup.toarray().flatten()
-        print(f"-- -- Positions 2 took {perf_counter() - start} seconds")
-        posns2 = [self.posns_lookup[lookup] for lookup in posns_to_lookup]
-        print(f"-- -- Positions took {perf_counter() - start} seconds")
+        posns = [self.posns_lookup[lookup] for lookup in posns_to_lookup]
         # posns_mat = self._posns_lookup_to_csr()
         # this_mat = posns_mat[posns_to_lookup]
         # nonzeros = this_mat.nonzero()
         # this_mat[nonzeros] = (nonzeros[1] + 1)
-        return posns2
+        return posns
 
     def and_query(self, tokenized_terms):
         """Return a mask on the postings array indicating which elements contain all terms."""
@@ -654,9 +648,7 @@ class PostingsArray(ExtensionArray):
 
     def phrase_match(self, tokenized_terms, slop=1):
         """Return a boolean numpy array indicating which elements contain the given phrase."""
-        # Has both terms
-        from time import perf_counter
-        start = perf_counter()
+        # Start with docs with all terms
         mask = self.and_query(tokenized_terms)
         # For detailed documentation of this algorithm, see this ChatGPT4 discussion
         # https://chat.openai.com/share/31affaad-dc91-4757-b31c-e85bdb5a0eb6
@@ -664,12 +656,10 @@ class PostingsArray(ExtensionArray):
         if np.sum(mask) == 0:
             return mask
 
-        def vstack_with_pad(arrays, width=5):
-            start = perf_counter()
+        def vstack_with_pad(arrays, width=10):
             vstacked = -np.ones((len(arrays), width), dtype=arrays[0].dtype)
-            indices = np.array([np.arange(len(array)) for array in arrays])
-            vstacked[np.arange(len(arrays))[:, None], indices] = arrays
-            print(f"-- -- Vstack with pad {perf_counter() - start:.4f} seconds")
+            for idx, array in enumerate(arrays):
+                vstacked[idx, :len(array)] = array
             return vstacked
 
         # Pad for easy difference computation
@@ -677,7 +667,6 @@ class PostingsArray(ExtensionArray):
         for term in tokenized_terms:
             as_array = self.positions(term, mask)
             term_posns.append(vstack_with_pad(as_array, 5))
-        print(f"-- phrase_match - Padding took {perf_counter() - start:.2f} seconds")
 
         prior_term = term_posns[0]
         for term in term_posns[1:]:
@@ -737,5 +726,4 @@ class PostingsArray(ExtensionArray):
             # one prior to it...
             prior_term = term
 
-        print(f"-- phrase_match - Search took {perf_counter() - start:.2f} seconds")
         return mask

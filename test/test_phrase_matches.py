@@ -46,6 +46,11 @@ scenarios = {
         "phrase": ["foo", "bar"],
         "expected": [True, False, False, False] * 1000000,
     },
+    # "10m_docs": {
+    #    "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 10000000),
+    #    "phrase": ["foo", "bar"],
+    #    "expected": [True, False, False, False] * 10000000,
+    # },
     "many_docs_long_doc": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny",
                                              "la ma ta wa ga ao a b c d e f g a be ae i foo bar foo bar"] * 100000),
