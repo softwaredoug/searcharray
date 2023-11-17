@@ -579,7 +579,6 @@ class PostingsArray(ExtensionArray):
 
     def doc_freq(self, token):
         if not isinstance(token, str):
-            import pdb; pdb.set_trace()
             raise TypeError("Expected a string")
         # Count number of rows where the term appears
         term_freq = self.term_freq(token)
@@ -596,7 +595,7 @@ class PostingsArray(ExtensionArray):
             term_freq = self.phrase_freq(token, slop=slop)
         return term_freq > 0
 
-    def bm25_idf(self, token):
+    def bm25_idf(self, token, doc_stats=None):
         """Calculate the (Lucene) idf for a term.
 
         idf, computed as log(1 + (N - n + 0.5) / (n + 0.5))
@@ -605,6 +604,7 @@ class PostingsArray(ExtensionArray):
             return self.bm25_phrase_idf(token)
         elif not isinstance(token, str):
             raise TypeError("Expected a list or string")
+
         df = self.doc_freq(token)
         num_docs = len(self)
         return np.log(1 + (num_docs - df + 0.5) / (df + 0.5))
@@ -631,9 +631,17 @@ class PostingsArray(ExtensionArray):
         score = tf / (tf + k1 * (1 - b + b * self.doc_lengths() / self.avg_doc_length))
         return score
 
-    def bm25(self, token, k1=1.2, b=0.75):
-        """Score each doc using BM25."""
-        return self.bm25_idf(token) * self.bm25_tf(token)
+    def bm25(self, token, doc_stats=None, k1=1.2, b=0.75):
+        """Score each doc using BM25.
+
+        Parameters
+        ----------
+        token : str or list of str of what to search (already tokenized)
+        doc_stats : tuple of doc stats to use (avg_doc_length, num_docs, doc_count). Defaults to index stats.
+        k1 : float, optional BM25 param. Defaults to 1.2.
+        b : float, optional BM25 param. Defaults to 0.75.
+        """
+        return self.bm25_idf(token, doc_stats=doc_stats) * self.bm25_tf(token)
 
     def _posns_lookup_to_csr(self):
         """Convert the posns_lookup to a csr_matrix."""

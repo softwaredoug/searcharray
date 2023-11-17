@@ -137,11 +137,11 @@ def test_phrase(docs, phrase, expected):
     term_freqs = docs.phrase_freq(phrase)
     expected_matches = np.array(expected) > 0
     matches = docs.match(phrase)
-    bm25 = docs.bm25(phrase)
-    import pdb; pdb.set_trace()
     assert (term_freqs == expected).all()
     assert (matches == expected_matches).all()
     assert (docs == docs_before).all(), "The phrase_match method should not modify the original array"
+    bm25 = docs.bm25(phrase)
+    assert (np.argsort(bm25) == np.argsort(expected)).all()
 
 
 @pytest.mark.skip

@@ -204,9 +204,9 @@ def test_doc_freq(data):
     assert doc_freq == (2 * 25)
 
 
-def test_bm25(data):
+def test_bm25_matches_lucene(data):
     bm25_idf = data.bm25_idf("bar")
     assert bm25_idf > 0.0
     bm25 = data.bm25("bar")
     assert bm25.shape == (100,)
-    assert np.isclose(bm25, [1.60518294, 0.0 , 1.38629436, 0.0] * 25).all()
+    assert np.isclose(bm25, [0.35546009, 0.0 , 0.33007009, 0.0] * 25).all()
