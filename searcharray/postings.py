@@ -234,9 +234,6 @@ class RowViewableMatrix:
 
 def _build_index_from_dict(tokenized_postings):
     """Bulid an index from postings that are already tokenized and point at their term frequencies."""
-    from time import perf_counter
-    start = perf_counter()
-    print("Building index...")
     freqs_table = lil_matrix((len(tokenized_postings), 0), dtype=np.uint8)
     posns_table = lil_matrix((len(tokenized_postings), 0), dtype=np.uint32)
     term_dict = TermDict()
@@ -256,14 +253,11 @@ def _build_index_from_dict(tokenized_postings):
                 idx = len(posns_lookup)
                 posns_lookup.append(np.array(positions))
                 posns_table[doc_id, term_id] = idx
-        if doc_id % 10000 == 0:
-            print(f"Doc {doc_id} done -- {perf_counter() - start} seconds")
 
     if len(tokenized_postings) > 0:
         avg_doc_length /= len(tokenized_postings)
 
     assert freqs_table.shape == posns_table.shape
-    print(f"Built index in {perf_counter() - start} seconds")
     return RowViewableMatrix(csr_matrix(freqs_table)), RowViewableMatrix(csr_matrix(posns_table)), posns_lookup, term_dict, avg_doc_length
 
 
@@ -654,7 +648,6 @@ class PostingsArray(ExtensionArray):
             for col in self.posns_lookup[row]:
                 if col > mat.shape[1]:
                     mat.resize((mat.shape[0], col + 1))
-                print(row)
                 mat[row, col] = 1
         return mat
 
