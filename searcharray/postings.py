@@ -43,8 +43,8 @@ class PostingsRow:
             if term not in self.postings:
                 raise ValueError(f"Term {term} in positions but not in postings. ")
 
-    def termfreq(self, term):
-        return self.postings[term]
+    def termfreq(self, token):
+        return self.postings[token]
 
     def terms(self):
         return self.postings.items()
@@ -563,47 +563,77 @@ class PostingsArray(ExtensionArray):
     # ***********************************************************
     # Naive implementations of search functions to clean up later
     # ***********************************************************
-    def term_freq(self, tokenized_term):
-        if not isinstance(tokenized_term, str):
-            raise TypeError("Expected a string")
+    def term_freq(self, token):
+        if isinstance(token, list):
+            return self.phrase_freq(token)
+        elif not isinstance(token, str):
+            raise TypeError("Expected a list or string")
 
         try:
-            term_id = self.term_dict.get_term_id(tokenized_term)
+            term_id = self.term_dict.get_term_id(token)
             matches = self.term_freqs.copy_col_at(term_id).todense().flatten()
             matches = np.asarray(matches).flatten()
             return matches
         except TermMissingError:
             return np.zeros(len(self), dtype=int)
 
-    def doc_freq(self, tokenized_term):
-        if not isinstance(tokenized_term, str):
+    def doc_freq(self, token):
+        if not isinstance(token, str):
+            import pdb; pdb.set_trace()
             raise TypeError("Expected a string")
         # Count number of rows where the term appears
-        term_freq = self.term_freq(tokenized_term)
+        term_freq = self.term_freq(token)
         return np.sum(term_freq > 0)
 
     def doc_lengths(self):
         return np.array(self.term_freqs.sum(axis=1).flatten())[0]
 
-    def match(self, tokenized_term):
+    def match(self, token, slop=1):
         """Return a boolean numpy array indicating which elements contain the given term."""
-        term_freq = self.term_freq(tokenized_term)
+        if isinstance(token, str):
+            term_freq = self.term_freq(token)
+        elif isinstance(token, list):
+            term_freq = self.phrase_freq(token, slop=slop)
         return term_freq > 0
 
-    def bm25_idf(self, tokenized_term):
-        df = self.doc_freq(tokenized_term)
+    def bm25_idf(self, token):
+        """Calculate the (Lucene) idf for a term.
+
+        idf, computed as log(1 + (N - n + 0.5) / (n + 0.5))
+        """
+        if isinstance(token, list):
+            return self.bm25_phrase_idf(token)
+        elif not isinstance(token, str):
+            raise TypeError("Expected a list or string")
+        df = self.doc_freq(token)
         num_docs = len(self)
         return np.log(1 + (num_docs - df + 0.5) / (df + 0.5))
 
-    def bm25_tf(self, tokenized_term, k1=1.2, b=0.75):
-        tf = self.term_freq(tokenized_term)
-        numer = (k1 + 1) * tf
-        denom = k1 * (1 - b + b * (self.doc_lengths() / self.avg_doc_length))
-        return numer / denom
+    def bm25_phrase_idf(self, tokens):
+        """Calculate the idf for a phrase.
 
-    def bm25(self, tokenized_term, k1=1.2, b=0.75):
+        This is the sum of the idfs of the individual terms.
+        """
+        idfs = [self.bm25_idf(term) for term in tokens]
+        return np.sum(idfs)
+
+    def bm25_tf(self, token, k1=1.2, b=0.75, slop=1):
+        """Calculate the (Lucene) BM25 tf for a term.
+
+        tf, computed as freq / (freq + k1 * (1 - b + b * dl / avgdl))
+        """
+        if isinstance(token, str):
+            tf = self.term_freq(token)
+        elif isinstance(token, list):
+            tf = self.phrase_freq(token, slop)
+        else:
+            raise TypeError("Expected a string or list of strings")
+        score = tf / (tf + k1 * (1 - b + b * self.doc_lengths() / self.avg_doc_length))
+        return score
+
+    def bm25(self, token, k1=1.2, b=0.75):
         """Score each doc using BM25."""
-        return self.bm25_idf(tokenized_term) * self.bm25_tf(tokenized_term)
+        return self.bm25_idf(token) * self.bm25_tf(token)
 
     def _posns_lookup_to_csr(self):
         """Convert the posns_lookup to a csr_matrix."""
@@ -620,9 +650,9 @@ class PostingsArray(ExtensionArray):
                 mat[row, col] = 1
         return mat
 
-    def positions(self, tokenized_term, key=None):
+    def positions(self, token, key=None):
         """Return a list of lists of positions of the given term."""
-        term_id = self.term_dict.get_term_id(tokenized_term)
+        term_id = self.term_dict.get_term_id(token)
 
         if key is not None:
             posns_to_lookup = self.posns[key].copy_col_at(term_id)
@@ -638,22 +668,19 @@ class PostingsArray(ExtensionArray):
         # this_mat[nonzeros] = (nonzeros[1] + 1)
         return posns
 
-    def and_query(self, tokenized_terms):
+    def and_query(self, tokens):
         """Return a mask on the postings array indicating which elements contain all terms."""
-        masks = [self.match(term) for term in tokenized_terms]
+        masks = [self.match(term) for term in tokens]
         mask = np.array([True] * len(self))
         for curr_mask in masks:
             mask = mask & curr_mask
         return mask
 
-    def phrase_match(self, tokenized_terms, slop=1):
-        """Return a boolean numpy array indicating which elements contain the given phrase."""
-        return self.phrase_freq(tokenized_terms, slop) > 0
-
-    def phrase_freq(self, tokenized_terms, slop=1, pad=-100):
+    def phrase_freq(self, tokens, slop=1):
         """Return number of occurences of a phrase."""
         # Start with docs with all terms
-        mask = self.and_query(tokenized_terms)
+        pad = -1000
+        mask = self.and_query(tokens)
         # For detailed documentation of this algorithm, see this ChatGPT4 discussion
         # https://chat.openai.com/share/31affaad-dc91-4757-b31c-e85bdb5a0eb6
 
@@ -672,7 +699,7 @@ class PostingsArray(ExtensionArray):
 
         # Pad for easy difference computation
         term_posns = []
-        for term in tokenized_terms:
+        for term in tokens:
             as_array = self.positions(term, mask)
             term_posns.append(vstack_with_pad(as_array, 5))
 

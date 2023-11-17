@@ -136,7 +136,9 @@ def test_phrase(docs, phrase, expected):
     docs_before = docs.copy()
     term_freqs = docs.phrase_freq(phrase)
     expected_matches = np.array(expected) > 0
-    matches = docs.phrase_match(phrase)
+    matches = docs.match(phrase)
+    bm25 = docs.bm25(phrase)
+    import pdb; pdb.set_trace()
     assert (term_freqs == expected).all()
     assert (matches == expected_matches).all()
     assert (docs == docs_before).all(), "The phrase_match method should not modify the original array"
@@ -147,7 +149,7 @@ def test_phrase(docs, phrase, expected):
 def test_phrase_performance(docs, phrase, expected):
     start = perf_counter()
     docs = docs()
-    matches = docs.phrase_match(phrase)
+    matches = docs.match(phrase)
     print(f"phrase_match took {perf_counter() - start} seconds | {len(docs)} docs")
     assert (matches == expected).all()
 
