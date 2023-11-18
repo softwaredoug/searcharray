@@ -143,7 +143,7 @@ def ws_lowercase_tokenizer(string):
 
 df['title_indexed'] = PostingsArray.index(df['title'], tokenizer=ws_lowercase_tokenizer)
 
-## Use Pandas instead of function queries
+### Use Pandas instead of function queries
 
 Solr has its [own unique function query syntax]()https://solr.apache.org/guide/7_7/function-queries.html. Elasticsearch has [Painless](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-painless.html).
 
