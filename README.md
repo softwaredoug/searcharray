@@ -167,4 +167,5 @@ df['score'] = df['title_indexed'].bm25('Cat') * df['hrs_into_past']
 
 * Always more efficient
 * Support tokenizers with overlapping positions (ie synonyms, etc)
+* Add support for loading global term stats (ie doc freq) from external sources for more accurate representation
 * Dumb vector search? Maybe
