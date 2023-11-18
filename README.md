@@ -2,9 +2,9 @@
 
 [![Python package](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml/badge.svg)](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml)
 
-⛔️ Proceed with caution. Prototype code
+SearchArray is a lexical matching Pandas Extension array. It indexes text using a specified tokenizer, and allows TFIDF family scoring of phrases and individual tokens.
 
-Making search experimentation colab-notebook-able
+## Motivation - experimentation
 
 Anytime I run an offline search relevance experiment, I have to standup a lot of systems. Something like Solr or Elasticsearch, maybe other services, components, vector databases, whatever.
 
@@ -88,17 +88,64 @@ More use cases, like phrase search, can be seen [in the tests](https://github.co
 
 ## Goals 
 
-This project is very much in prototype stage. 
+The overall goals are to recreate a lot of the lexical features (term / phrase search) of a search engine like Solr or Elasticsearch, but in a Pandas dataframe. 
 
-The overall goals are to recreate a lot of the lexical features (term / phrase search) of a search engine like Solr or Elasticsearch, but in a dataframe. This includes more tokenization / text analysis features. As well as some wrappers that emulate the lexical query DSL of these search engines.
+### Memory efficient and fast text index
 
-In the future, however, naive vector search likely will be added to assist in prototyping.
+We want the index to be as memory efficient and fast at searching as possible. We want using it to have a minimal overhead.
 
-We care right now about relatively small scale "local" (or in colab environnment) prototyping of search ideas that could be promising for deeper investigation 100k-1m docs. We want to prioritize the offline / testing use case right now.
+### Experimentation, reranking, and "small data" problems over scalability
+
+Instead of building for 'big data' our goal is to build for for *small-data*. That is, focus on capabilities and expressiveness of Pandas, over limiting functionality in favor of scalability.
+
+To this end, the applications of searcharray will tend to be focused on experimentation and offline reranking. For experimentation, we want any ideas expressed in Pandas to have a somewhat clear path / "contract" in how they'd be implemented in a classical lexical search engine.
+
+### Make lexical search not a special snowflake
+
+We know in search systems [hybrid search](https://www.pinecone.io/learn/hybrid-search-intro/) techniques dominate. Yet often its cast in terms of a giant, weird, big data lexical search engine that looks odd to most data scientists being joined with a vector database. We want lexical search to be more approachable to data scientists and ML engineers building these systems.
+
+## Non-goals
+
+### You need to bring your own tokenization
+
+Currently tokenization (ie text analysis) is out of scope. There's enough Python libraries [that do this really well](https://github.com/snowballstem). Even exceeding what Lucene can do.
+
+In SearchArray, a tokenizer is a function takes a string and emits a series of tokens. IE dumb, default whitespace tokenization:
+
+```python
+def ws_tokenizer(string):
+    return string.split()
+```
+
+And you can pass any tokenizer that matches this signature to index:
+
+
+```python
+def ws_lowercase_tokenizer(string):
+    return string.lower().split()
+``````
+
+df['title_indexed'] = PostingsArray.index(df['title'], tokenizer=ws_lowercase_tokenizer)
+
+## Use Pandas instead of function queries
+
+Solr has its [own unique function query syntax]()https://solr.apache.org/guide/7_7/function-queries.html. Elasticsearch has [Painless](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-painless.html).
+
+Instead of recreating these, simply use Pandas on existing Pandas columns. Then later, if you need to implement this in Solr or Elasticsearch, attempt to recreate the functionality. Arguably what's in Solr / ES would be a subset of what you could do in Pandas.
+
+```
+# Calculate the number of hours into the past
+df['hrs_into_past'] = (now - df['timestamp']).dt.total_seconds() / 3600
+```
+
+Then multiply by BM25 if you want:
+
+```
+df['score'] = df['title_indexed'].bm25('Cat') * df['hrs_into_past']
+```
+
 
 ## TODOs / Future Work
 
-* Make more memory efficient - underlying we use a Scipy sparse matrix, one for term freqs, another for positions. This can be cleaned up further.
-* Flesh out wrapper functions that recreate most Solr / Elasticsearch query DSL functionality around term matching
-* Testing on larger amounts of data
-* Clean up the very janky code. This is very much a first pass
+* Always more efficient
+* Support tokenizers with overlapping positions (ie synonyms, etc)
