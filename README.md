@@ -2,7 +2,9 @@
 
 [![Python package](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml/badge.svg)](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml)
 
-SearchArray is a lexical matching Pandas Extension array. It indexes text using a specified tokenizer, and allows TFIDF family scoring of phrases and individual tokens.
+SearchArray is a lexical, term-based search matching Pandas Extension array. It indexes text using a specified tokenizer, and allows TFIDF family scoring of phrases and individual tokens.
+
+Think Lucene, but as a Pandas column.
 
 ## Motivation - experimentation
 
@@ -94,13 +96,13 @@ The overall goals are to recreate a lot of the lexical features (term / phrase s
 
 We want the index to be as memory efficient and fast at searching as possible. We want using it to have a minimal overhead.
 
-### Experimentation, reranking, and "small data" problems over scalability
+### Experimentation, reranking, functionality over scalability
 
 Instead of building for 'big data' our goal is to build for for *small-data*. That is, focus on capabilities and expressiveness of Pandas, over limiting functionality in favor of scalability.
 
 To this end, the applications of searcharray will tend to be focused on experimentation and offline reranking. For experimentation, we want any ideas expressed in Pandas to have a somewhat clear path / "contract" in how they'd be implemented in a classical lexical search engine.
 
-### Make lexical search not a special snowflake
+### Make lexical search not a special snowflake in the ML stack
 
 We know in search systems [hybrid search](https://www.pinecone.io/learn/hybrid-search-intro/) techniques dominate. Yet often its cast in terms of a giant, weird, big data lexical search engine that looks odd to most data scientists being joined with a vector database. We want lexical search to be more approachable to data scientists and ML engineers building these systems.
 
@@ -144,8 +146,7 @@ Then multiply by BM25 if you want:
 df['score'] = df['title_indexed'].bm25('Cat') * df['hrs_into_past']
 ```
 
-
-## TODOs / Future Work
+## TODOs / Future Work / Known issues
 
 * Always more efficient
 * Support tokenizers with overlapping positions (ie synonyms, etc)
