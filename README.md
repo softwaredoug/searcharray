@@ -6,6 +6,12 @@ SearchArray is a lexical, term-based search matching Pandas Extension array. It 
 
 Think Lucene, but as a Pandas column.
 
+```python
+In[3]: np.sort(df['title_indexed'].array.bm25('Cat'))
+Out[3]: array([ 0.        ,  0.        ,  0.        , ..., 15.84568033,
+                15.84568033, 15.84568033])
+```
+
 ## Motivation - experimentation
 
 Anytime I run an offline search relevance experiment, I have to standup a lot of systems. Something like Solr or Elasticsearch, maybe other services, components, vector databases, whatever.
