@@ -140,9 +140,11 @@ And you can pass any tokenizer that matches this signature to index:
 ```python
 def ws_lowercase_tokenizer(string):
     return string.lower().split()
-``````
 
 df['title_indexed'] = PostingsArray.index(df['title'], tokenizer=ws_lowercase_tokenizer)
+```
+
+Create your own using stemming libraries, or whatever Python functionality you want.
 
 ### Use Pandas instead of function queries
 
