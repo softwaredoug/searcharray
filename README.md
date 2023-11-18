@@ -2,7 +2,7 @@
 
 [![Python package](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml/badge.svg)](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml)
 
-SearchArray is a lexical, term-based search matching Pandas Extension array. It indexes text using a specified tokenizer, and allows TFIDF family scoring of phrases and individual tokens.
+SearchArray is a lexical, term-based search matching Pandas Extension array. It indexes text using a specified tokenizer, and allows TFIDF (BM25, etc) family scoring of phrases and individual tokens.
 
 Think Lucene, but as a Pandas column.
 
@@ -150,3 +150,4 @@ df['score'] = df['title_indexed'].bm25('Cat') * df['hrs_into_past']
 
 * Always more efficient
 * Support tokenizers with overlapping positions (ie synonyms, etc)
+* Dumb vector search? Maybe
