@@ -12,6 +12,12 @@ Out[3]: array([ 0.        ,  0.        ,  0.        , ..., 15.84568033,
                 15.84568033, 15.84568033])
 ```
 
+## Installation
+
+```
+pip install searcharray
+```
+
 ## Motivation - experimentation
 
 Anytime I run an offline search relevance experiment, I have to standup a lot of systems. Something like Solr or Elasticsearch, maybe other services, components, vector databases, whatever.
