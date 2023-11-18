@@ -108,11 +108,13 @@ The overall goals are to recreate a lot of the lexical features (term / phrase s
 
 We want the index to be as memory efficient and fast at searching as possible. We want using it to have a minimal overhead.
 
+We want you to be able to work with a reasonable dataset (1M-10M docs) relatively efficiently.
+
 ### Experimentation, reranking, functionality over scalability
 
 Instead of building for 'big data' our goal is to build for for *small-data*. That is, focus on capabilities and expressiveness of Pandas, over limiting functionality in favor of scalability.
 
-To this end, the applications of searcharray will tend to be focused on experimentation and offline reranking. For experimentation, we want any ideas expressed in Pandas to have a somewhat clear path / "contract" in how they'd be implemented in a classical lexical search engine.
+To this end, the applications of searcharray will tend to be focused on experimentation and top N candidate reranking. For experimentation, we want any ideas expressed in Pandas to have a somewhat clear path / "contract" in how they'd be implemented in a classical lexical search engine. For reranking, we want to load some top N results from a base system and be able to modify them.
 
 ### Make lexical search not a special snowflake in the ML stack
 
