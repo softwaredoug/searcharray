@@ -2,12 +2,13 @@
 
 [![Python package](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml/badge.svg)](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml)
 
-SearchArray is a lexical, term-based search matching Pandas Extension array. It indexes text using a specified tokenizer, and allows TFIDF (BM25, etc) family scoring of phrases and individual tokens.
+SearchArray turns Pandas string columns into a term index. It alows efficient BM25 scoring of phrases and individual tokens.
 
 Think Lucene, but as a Pandas column.
 
 ```python
-In[3]: np.sort(df['title_indexed'].array.bm25('Cat'))
+In[3]:  df['title_indexed'] = PostingsArray.index(df['title'])
+        np.sort(df['title_indexed'].array.bm25('Cat'))
 Out[3]: array([ 0.        ,  0.        ,  0.        , ..., 15.84568033,
                 15.84568033, 15.84568033])
 ```
