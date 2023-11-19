@@ -21,13 +21,13 @@ pip install searcharray
 
 ## Motivation
 
-Anytime I run an offline search relevance experiment, I have to standup a lot of systems. Something like Solr or Elasticsearch, maybe other services, components, vector databases, whatever.
+Why do we treat Lucene-based, and other lexical search systems, like a special snowflake in the data stack? Many ML practitioners reach for a vector search solution, then realize they need to sprinkle in some degree of traditional lexical matching for the best solution. Indeed, in search, [hybrid search] of different solutions has shown to be most performant.
 
-Imagine the drain to velocity this entails.
+Let's break down the esoteric mystique of these systems, and tame them, so they just behave like other parts of the data stack.
 
-This project creates a Pandas-centric way of creating and using a search index as just part of a Pandas array. In a sense, it simulates the functionality of the search engine, to allow anyone to prototype ideas, without external systems
+SearchArray creates a Pandas-centric way of creating and using a search index as just part of a Pandas array. In a sense, it builds a search engine in Pandas - to allow anyone to prototype ideas, without external systems. 
 
-You can see examples at this [colab notebook](https://colab.research.google.com/drive/1w_Ajn5rHzcISKhdCuPhhVFav3zrvKWn1?usp=sharing)
+You can see a full end-to-end search relevance experiment in this [colab notebook](https://colab.research.google.com/drive/1w_Ajn5rHzcISKhdCuPhhVFav3zrvKWn1?usp=sharing)
 
 IE, take a dataframe that has a bunch of text, like movie title and overviews:
 
@@ -99,7 +99,7 @@ Out[5]:
 6217         Cat People  After years of separation, Irina (Nastassja Ki...  PostingsRow({'Cat': 1, 'People': 1}, {'Cat': [...
 ```
 
-More use cases, like phrase search, can be seen [in the tests](https://github.com/softwaredoug/searcharray/blob/main/test/test_extension_array.py#L197)
+More use cases can be seen [in the colab notebook](https://colab.research.google.com/drive/1w_Ajn5rHzcISKhdCuPhhVFav3zrvKWn1)
 
 ## Goals 
 
@@ -168,4 +168,5 @@ df['score'] = df['title_indexed'].bm25('Cat') * df['hrs_into_past']
 * Always more efficient
 * Support tokenizers with overlapping positions (ie synonyms, etc)
 * Add support for loading global term stats (ie doc freq) from external sources for more accurate representation
-* Dumb vector search? Maybe
+* Add minimum should match to each function
+* Dumb vector search? Guessing other tools do this at small scale well enough.
