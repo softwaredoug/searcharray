@@ -21,7 +21,7 @@ pip install searcharray
 
 ## Motivation
 
-Why do we treat Lucene-based, and other lexical search systems, like a special snowflake in the data stack? Many ML practitioners reach for a vector search solution, then realize they need to sprinkle in some degree of traditional lexical matching for the best solution. Indeed, in search, [hybrid search] of different solutions has shown to be most performant.
+Why do we treat Lucene-based, and other lexical search systems, like a special snowflake in the data stack? Many ML practitioners reach for a vector search solution, then realize they need to sprinkle in some degree of traditional lexical matching for the best solution. Indeed, in search, [hybrid search](https://www.pinecone.io/learn/hybrid-search-intro/) of vector+lexical solutions has shown to be most performant.
 
 Let's break down the esoteric mystique of these systems, and tame them, so they just behave like other parts of the data stack.
 
