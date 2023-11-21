@@ -14,7 +14,7 @@ from searcharray.term_dict import TermDict, TermMissingError
 # Doc,Term -> freq
 # Note scipy sparse switching to *_array, which is more numpy like
 # However, as of now, these don't seem fully baked
-from scipy.sparse import lil_matrix, csr_matrix
+from scipy.sparse import dok_matrix, csr_matrix
 
 
 class PostingsRow:
@@ -232,33 +232,60 @@ class RowViewableMatrix:
 # Must be slicable
 
 
-def _build_index_from_dict(tokenized_postings):
+def _build_index_from_dict(postings):
     """Bulid an index from postings that are already tokenized and point at their term frequencies."""
-    freqs_table = lil_matrix((len(tokenized_postings), 0), dtype=np.uint8)
-    posns_table = lil_matrix((len(tokenized_postings), 0), dtype=np.uint32)
+    from time import perf_counter
+    start = perf_counter()
     term_dict = TermDict()
+    freqs_table = defaultdict(int)
+    posns_table = defaultdict(int)
     avg_doc_length = 0
     posns_lookup = [np.array([])]  # 0th is empty / None due to using a sparse matrix to lookup into this
-    for doc_id, tokenized in enumerate(tokenized_postings):
+    num_postings = 0
+
+    # COPY 1
+    # Consume generator (tokenized postings) into list
+    # its faster this way?
+    postings = list(postings)
+
+    # COPY 2
+    # Build dict for sparse matrix
+    # this is faster that directly using the matrix
+    # https://www.austintripp.ca/blog/2018/09/12/sparse-matrices-tips1
+    for doc_id, tokenized in enumerate(postings):
+        if isinstance(tokenized, dict):
+            tokenized = PostingsRow(tokenized)
+        elif not isinstance(tokenized, PostingsRow):
+            raise TypeError("Expected a PostingsRow or a dict")
         avg_doc_length += len(tokenized)
         for token, term_freq in tokenized.terms():
             term_id = term_dict.add_term(token)
-            if term_id >= freqs_table.shape[1]:
-                freqs_table.resize((freqs_table.shape[0], term_id + 1))
-                posns_table.resize((posns_table.shape[0], term_id + 1))
-            freqs_table[doc_id, term_id] = term_freq
+
+            freqs_table[doc_id, term_id] += term_freq
 
             positions = tokenized.positions(token)
             if positions is not None:
                 idx = len(posns_lookup)
                 posns_lookup.append(np.array(positions))
-                posns_table[doc_id, term_id] = idx
+                posns_table[doc_id, term_id] += idx
 
-    if len(tokenized_postings) > 0:
-        avg_doc_length /= len(tokenized_postings)
+        num_postings += 1
 
-    assert freqs_table.shape == posns_table.shape
-    return RowViewableMatrix(csr_matrix(freqs_table)), RowViewableMatrix(csr_matrix(posns_table)), posns_lookup, term_dict, avg_doc_length
+    if num_postings > 0:
+        avg_doc_length /= num_postings
+
+    # COPY 3 & 4 -> to dok -> to csr :(
+    freqs_dok = dok_matrix((num_postings, len(term_dict)), dtype=np.uint32)
+    dict.update(freqs_dok, freqs_table)
+
+    freqs_csr = freqs_dok.tocsr()
+
+    posns_dok = dok_matrix((num_postings, len(term_dict)), dtype=np.uint32)
+    dict.update(posns_dok, posns_table)
+    posns_csr = posns_dok.tocsr()
+
+    assert freqs_dok.shape == posns_dok.shape
+    return RowViewableMatrix(freqs_csr), RowViewableMatrix(posns_csr), posns_lookup, term_dict, avg_doc_length
 
 
 def _row_to_postings_row(row, term_dict, posns, posns_lookup):
@@ -293,15 +320,10 @@ class PostingsArray(ExtensionArray):
         # Check dtype, raise TypeError
         if not is_list_like(postings):
             raise TypeError("Expected list-like object, got {}".format(type(postings)))
-        if not all(isinstance(x, PostingsRow) or isinstance(x, dict) or pd.isna(x) for x in postings):
-            raise TypeError("Expected a list of PostingsRow or dicts")
-
-        # Convert all to postings rows
-        as_postings = [PostingsRow(x) if isinstance(x, dict) else x for x in postings]
 
         self.tokenizer = tokenizer
         self.term_freqs, self.posns, self.posns_lookup, \
-            self.term_dict, self.avg_doc_length = _build_index_from_dict(as_postings)
+            self.term_dict, self.avg_doc_length = _build_index_from_dict(postings)
         if self.posns is not None and len(self.posns) > 0 and self.posns.shape[1] > 0:
             max_lookup = self.posns.mat.max()
             if max_lookup > len(self.posns_lookup):
@@ -317,7 +339,7 @@ class PostingsArray(ExtensionArray):
             raise TypeError("Expected a list of strings to tokenize")
 
         def tokenized_docs(docs):
-            for doc in docs:
+            for doc_id, doc in enumerate(docs):
                 if pd.isna(doc):
                     yield PostingsRow({})
                 else:
@@ -328,7 +350,7 @@ class PostingsArray(ExtensionArray):
                         positions[token_stream[posn]].append(posn)
                     yield PostingsRow(term_freqs, positions)
 
-        return cls([a for a in tokenized_docs(array)], tokenizer)
+        return cls(tokenized_docs(array), tokenizer)
 
     @classmethod
     def _from_sequence(cls, scalars, dtype=None, copy=False):
