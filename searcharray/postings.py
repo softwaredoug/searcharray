@@ -9,6 +9,7 @@ import json
 import warnings
 import logging
 
+
 import numpy as np
 from searcharray.term_dict import TermDict, TermMissingError
 
@@ -16,6 +17,16 @@ from searcharray.term_dict import TermDict, TermMissingError
 # Note scipy sparse switching to *_array, which is more numpy like
 # However, as of now, these don't seem fully baked
 from scipy.sparse import dok_matrix, csr_matrix
+
+root = logging.getLogger()
+root.setLevel(logging.INFO)
+
+# import sys
+# handler = logging.StreamHandler(sys.stdout)
+# handler.setLevel(logging.INFO)
+# formatter = logging.Formatter('%(message)s')
+# handler.setFormatter(formatter)
+# root.addHandler(handler)
 
 
 class PostingsRow:
@@ -252,7 +263,7 @@ def _build_index_from_dict(postings):
     # Consume generator (tokenized postings) into list
     # its faster this way?
     postings = list(postings)
-    logging.info(f"Tokenized {len(postings)} documents in {perf_counter() - start} seconds")
+    logging.debug(f"Tokenized {len(postings)} documents in {perf_counter() - start} seconds")
 
     # COPY 2
     # Build dict for sparse matrix
@@ -285,31 +296,31 @@ def _build_index_from_dict(postings):
             set_posns_time += perf_counter() - set_posns_start
 
         if doc_id % 1000 == 0:
-            logging.info(f"Indexed {doc_id} documents in {perf_counter() - start} seconds")
-            logging.info(f"   add time: {add_term_time}")
-            logging.info(f"   set time: {set_time}")
-            logging.info(f"   get posns time: {get_posns_time}")
-            logging.info(f"   set posns time: {set_posns_time}")
+            logging.debug(f"Indexed {doc_id} documents in {perf_counter() - start} seconds")
+            logging.debug(f"   add time: {add_term_time}")
+            logging.debug(f"   set time: {set_time}")
+            logging.debug(f"   get posns time: {get_posns_time}")
+            logging.debug(f"   set posns time: {set_posns_time}")
         num_postings += 1
 
     if num_postings > 0:
         avg_doc_length /= num_postings
 
-    logging.info(f"Indexed {num_postings} documents in {perf_counter() - start} seconds")
+    logging.debug(f"Indexed {num_postings} documents in {perf_counter() - start} seconds")
 
     # COPY 2
     freqs_dok = dok_matrix((num_postings, len(term_dict)), dtype=np.uint32)
     dict.update(freqs_dok, freqs_table)
-    logging.info(f"DOK 1 took {perf_counter() - start} seconds to build")
+    logging.debug(f"DOK 1 took {perf_counter() - start} seconds to build")
 
     freqs_csr = freqs_dok.tocsr()
-    logging.info(f"CSR 1 took {perf_counter() - start} seconds to build")
+    logging.debug(f"CSR 1 took {perf_counter() - start} seconds to build")
 
     posns_dok = dok_matrix((num_postings, len(term_dict)), dtype=np.uint32)
     dict.update(posns_dok, posns_table)
-    logging.info(f"DOK 2 took {perf_counter() - start} seconds to build")
+    logging.debug(f"DOK 2 took {perf_counter() - start} seconds to build")
     posns_csr = posns_dok.tocsr()
-    logging.info(f"CSR 2 took {perf_counter() - start} seconds to build")
+    logging.debug(f"CSR 2 took {perf_counter() - start} seconds to build")
 
     assert freqs_dok.shape == posns_dok.shape
     return RowViewableMatrix(freqs_csr), RowViewableMatrix(posns_csr), posns_lookup, term_dict, avg_doc_length
@@ -801,7 +812,9 @@ class PostingsArray(ExtensionArray):
             #  that is term is slop away from prior_term. Usually slop == 1 (ie 1 posn away)
             #  for normal phrase matching
             #
+            logging.info(f"term shape: {term.shape} | prior_term shape: {prior_term.shape}")
             posn_diffs = term[:, :, np.newaxis] - prior_term[:, np.newaxis, :]
+            logging.info(f"PosnsDiff Time: {perf_counter() - start:.2f}s")
 
             # For > 2 terms, we need to connect a third term by making prior_term = term
             # and repeating
@@ -814,12 +827,15 @@ class PostingsArray(ExtensionArray):
             # so they're not considered on subsequent iterations
             term_mask = np.any(posn_diffs == 1, axis=2)
             term[~term_mask] = -100
+            logging.info(f"Term Mask Time: {perf_counter() - start:.2f}s")
 
             # Count how many times the row term is 1 away from the col term
             per_doc_diffs = np.sum(posn_diffs == slop, axis=1, dtype=np.int8)
+            logging.info(f"Per Doc Diffs Time: {perf_counter() - start:.2f}s")
 
             # Doc-wise sum to get a 'term freq' for the prior_term - term bigram
             bigram_freqs = np.sum(per_doc_diffs == slop, axis=1)
+            logging.info(f"BigramFreqs Time: {perf_counter() - start:.2f}s")
             if is_same_term:
                 satisfies_slop = per_doc_diffs == slop
                 consecutive_ones = satisfies_slop[:, 1:] & satisfies_slop[:, :-1]
@@ -839,6 +855,7 @@ class PostingsArray(ExtensionArray):
             # Should only keep positions of 'prior term' that are adjacent to the
             # one prior to it...
             prior_term = term
+            logging.info(f"Loop Time: {perf_counter() - start:.2f}s")
 
         phrase_freqs[mask] = bigram_freqs[bigram_freqs > 0]
         return phrase_freqs
