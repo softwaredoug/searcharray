@@ -21,12 +21,25 @@ from scipy.sparse import dok_matrix, csr_matrix
 root = logging.getLogger()
 root.setLevel(logging.INFO)
 
-# import sys
-# handler = logging.StreamHandler(sys.stdout)
-# handler.setLevel(logging.INFO)
-# formatter = logging.Formatter('%(message)s')
-# handler.setFormatter(formatter)
-# root.addHandler(handler)
+import sys
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(message)s')
+handler.setFormatter(formatter)
+root.addHandler(handler)
+
+
+def vstack_with_pad(arrays, width=10, pad=-100):
+    vstacked = np.zeros((len(arrays), width), dtype=arrays[0].dtype) + pad
+    for idx, array in enumerate(arrays):
+        # Resize if needed, padding with pad
+        if len(array) > width:
+            logging.info(f"Resizing from {width} to {len(array)}")
+            vstack_padded = np.pad(vstacked, ((0, 0), (0, len(array) - width)), constant_values=pad)
+            width = len(array)
+            vstacked = vstack_padded
+        vstacked[idx, :len(array)] = array
+    return vstacked
 
 
 class PostingsRow:
@@ -742,29 +755,62 @@ class PostingsArray(ExtensionArray):
         return mask
 
     def phrase_freq(self, tokens, slop=1):
+        from time import perf_counter
+        start = perf_counter()
+
+        mask = self.and_query(tokens)
+
+        if np.sum(mask) == 0:
+            return mask
+
+        # Any identical terms, default to shitty algo for now
+        if len(tokens) != len(set(tokens)):
+            return self.phrase_freq_shitty(tokens, slop=slop)
+
+        # Iterate each phrase with its next term
+        prior_term = tokens[0]
+        prior_posns = self.positions(prior_term, mask)
+        phrase_freqs = np.zeros(len(self))
+        for term in tokens[1:]:
+            term_posns = self.positions(term, mask)
+
+            assert len(prior_posns) == len(term_posns)
+            # RIPE for optimization -> vectorize in C
+            bigram_freqs = np.zeros(len(term_posns))
+            cont_posns = []
+            term_start = perf_counter()
+            for idx in range(len(term_posns)):
+                # Find insert position of every next term in prior term's positions
+                # Intuition:
+                # https://colab.research.google.com/drive/1EeqHYuCiqyptd-awS67Re78pqVdTfH4A
+                ins_posns = np.searchsorted(prior_posns[idx], term_posns[idx], side='right')
+                prior_adjacents = prior_posns[idx][ins_posns - 1]
+                adjacents = term_posns[idx] - prior_adjacents
+                bigram_freqs[idx] = np.sum(adjacents <= slop)
+
+                cont_indices = np.argwhere(adjacents <= slop).flatten()
+                cont_posn = term_posns[idx][cont_indices]
+                cont_posns.append(cont_posn)
+            phrase_freqs[mask] = bigram_freqs
+            prior_term = term
+            prior_posns = cont_posns
+            logging.info(f"Term Time: {perf_counter() - term_start:.4f}s")
+
+        logging.info(f"Phrase Search Time: {perf_counter() - start:.4f}s")
+
+        return phrase_freqs
+
+    def phrase_freq_shitty(self, tokens, slop=1):
         """Return number of occurences of a phrase."""
         from time import perf_counter
         # Start with docs with all terms
         start = perf_counter()
-        pad = -1000
         mask = self.and_query(tokens)
         # For detailed documentation of this algorithm, see this ChatGPT4 discussion
         # https://chat.openai.com/share/31affaad-dc91-4757-b31c-e85bdb5a0eb6
 
         if np.sum(mask) == 0:
             return mask
-
-        def vstack_with_pad(arrays, width=10):
-            vstacked = np.zeros((len(arrays), width), dtype=arrays[0].dtype) + pad
-            for idx, array in enumerate(arrays):
-                # Resize if needed, padding with pad
-                if len(array) > width:
-                    logging.info(f"Resizing from {width} to {len(array)}")
-                    vstack_padded = np.pad(vstacked, ((0, 0), (0, len(array) - width)), constant_values=pad)
-                    width = len(array)
-                    vstacked = vstack_padded
-                vstacked[idx, :len(array)] = array
-            return vstacked
 
         # Pad for easy difference computation
         term_posns = []

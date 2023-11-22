@@ -92,7 +92,6 @@ def msmarco():
     return msmarco
 
 
-@pytest.mark.skip
 def test_msmarco(msmarco100k):
     phrase_search = ["what", "is"]
     start = perf_counter()

@@ -38,6 +38,13 @@ perf_scenarios = {
         "phrase": ["foo", "bar"],
         "expected": [True, False, False, False, False, True] * 100000,
     },
+    "many_docs_and_positions": {
+        "docs": lambda: PostingsArray.index([" ".join(["foo bar bar baz foo foo bar foo"] * 100),
+                                             " ".join(["what is the foo bar doing in the bar foo?"] * 100)] * 100000),
+        "phrase": ["foo", "bar"],
+        "expected": [True, True] * 100000
+    }
+
 }
 
 
@@ -49,6 +56,11 @@ scenarios = {
     },
     "base": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "phrase": ["foo", "bar"],
+        "expected": [1, 0, 0, 0] * 25,
+    },
+    "term_repeats": {
+        "docs": lambda: PostingsArray.index(["foo foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "bar"],
         "expected": [1, 0, 0, 0] * 25,
     },
@@ -150,6 +162,9 @@ def test_phrase(docs, phrase, expected):
     matches = docs.match(phrase)
     assert (term_freqs == expected).all()
     assert (matches == expected_matches).all()
+    if len(phrase) > 1:
+        phrase_matches = docs.phrase_freq(phrase)
+        assert (expected == phrase_matches).all()
     assert (docs == docs_before).all(), "The phrase_match method should not modify the original array"
     bm25 = docs.bm25(phrase)
     assert (np.argsort(bm25) == np.argsort(expected)).all()
@@ -161,7 +176,7 @@ def test_phrase_performance(docs, phrase, expected):
     start = perf_counter()
     docs = docs()
     matches = docs.match(phrase)
-    print(f"phrase_match took {perf_counter() - start} seconds | {len(docs)} docs")
+    print(f"phrase_match 1 took {perf_counter() - start} seconds | {len(docs)} docs")
     assert (matches == expected).all()
 
 
