@@ -40,26 +40,34 @@ def download_msmarco():
 
 @pytest.fixture(scope="session")
 def msmarco100k():
-    start = perf_counter()
-    if not msmarco_exists():
-        download_msmarco()
-    print("Loading docs...")
-    msmarco = pd.read_csv("data/msmarco-docs.tsv.gz", sep="\t",
-                          nrows=100000,
-                          header=None, names=["id", "url", "title", "body"])
-    print(f"Loaded {len(msmarco)} docs in {perf_counter() - start:.4f}s")
+    msmarco100k_path = pathlib.Path("data/msmarco100k.pkl")
 
-    def ws_punc_tokenizer(text):
-        split = text.lower().split()
-        return [token.translate(str.maketrans('', '', string.punctuation))
-                for token in split]
+    if not msmarco100k_path.exists():
+        start = perf_counter()
+        if not msmarco_exists():
+            download_msmarco()
+        print("Loading docs...")
+        msmarco = pd.read_csv("data/msmarco-docs.tsv.gz", sep="\t",
+                              nrows=100000,
+                              header=None, names=["id", "url", "title", "body"])
+        print(f"Loaded {len(msmarco)} docs in {perf_counter() - start:.4f}s")
 
-    print("Indexing...")
-    # msmarco["title_ws"] = PostingsArray.index(msmarco["title"])
-    msmarco["body_ws"] = PostingsArray.index(msmarco["body"])
-    print(f"Indexed in {perf_counter() - start:.4f}s")
+        def ws_punc_tokenizer(text):
+            split = text.lower().split()
+            return [token.translate(str.maketrans('', '', string.punctuation))
+                    for token in split]
 
-    return msmarco
+        print("Indexing...")
+        msmarco["title_ws"] = PostingsArray.index(msmarco["title"])
+        print(f"Indexed in {perf_counter() - start:.4f}s")
+        msmarco["body_ws"] = PostingsArray.index(msmarco["body"])
+        print(f"Indexed in {perf_counter() - start:.4f}s")
+
+        # Save as pickle
+        msmarco.to_pickle("data/msmarco100k.pkl")
+        return msmarco
+    else:
+        return pd.read_pickle("data/msmarco100k.pkl")
 
 
 @pytest.fixture(scope="session")
@@ -84,7 +92,6 @@ def msmarco():
     return msmarco
 
 
-@pytest.mark.skip(reason="For performance testing only")
 def test_msmarco(msmarco100k):
     phrase_search = ["what", "is"]
     start = perf_counter()

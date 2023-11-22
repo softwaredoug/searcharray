@@ -122,6 +122,12 @@ scenarios = {
         "phrase": ["foo", "bar", "baz"],
         "expected": [1, 0, 0, 0] * 25,
     },
+    "different_num_posns": {
+        "docs": lambda: PostingsArray.index(["foo " + " ".join(["bar"] * 50),
+                                             "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "phrase": ["foo", "bar"],
+        "expected": [1, 0, 0, 0] * 25,
+    },
     "10k_docs": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 10000),
         "phrase": ["foo", "bar"],

@@ -7,6 +7,7 @@ from pandas.api.types import is_list_like
 from pandas.api.extensions import take
 import json
 import warnings
+import logging
 
 import numpy as np
 from searcharray.term_dict import TermDict, TermMissingError
@@ -55,7 +56,7 @@ class PostingsRow:
         if term is None:
             return self.posns.items()
         else:
-            return self.posns[term]
+            return np.array(self.posns[term])
 
     def tf_to_dense(self, term_dict):
         """Convert to a dense vector of term frequencies."""
@@ -242,11 +243,16 @@ def _build_index_from_dict(postings):
     avg_doc_length = 0
     posns_lookup = [np.array([])]  # 0th is empty / None due to using a sparse matrix to lookup into this
     num_postings = 0
+    add_term_time = 0
+    set_time = 0
+    get_posns_time = 0
+    set_posns_time = 0
 
     # COPY 1
     # Consume generator (tokenized postings) into list
     # its faster this way?
     postings = list(postings)
+    logging.info(f"Tokenized {len(postings)} documents in {perf_counter() - start} seconds")
 
     # COPY 2
     # Build dict for sparse matrix
@@ -259,30 +265,51 @@ def _build_index_from_dict(postings):
             raise TypeError("Expected a PostingsRow or a dict")
         avg_doc_length += len(tokenized)
         for token, term_freq in tokenized.terms():
+            add_term_start = perf_counter()
             term_id = term_dict.add_term(token)
+            add_term_time += perf_counter() - add_term_start
 
+            set_time_start = perf_counter()
             freqs_table[doc_id, term_id] += term_freq
+            set_time += perf_counter() - set_time_start
 
+            get_posns_start = perf_counter()
             positions = tokenized.positions(token)
+            get_posns_time += perf_counter() - get_posns_start
+
+            set_posns_start = perf_counter()
             if positions is not None:
                 idx = len(posns_lookup)
                 posns_lookup.append(np.array(positions))
                 posns_table[doc_id, term_id] += idx
+            set_posns_time += perf_counter() - set_posns_start
 
+        if doc_id % 1000 == 0:
+            logging.info(f"Indexed {doc_id} documents in {perf_counter() - start} seconds")
+            logging.info(f"   add time: {add_term_time}")
+            logging.info(f"   set time: {set_time}")
+            logging.info(f"   get posns time: {get_posns_time}")
+            logging.info(f"   set posns time: {set_posns_time}")
         num_postings += 1
 
     if num_postings > 0:
         avg_doc_length /= num_postings
 
-    # COPY 3 & 4 -> to dok -> to csr :(
+    logging.info(f"Indexed {num_postings} documents in {perf_counter() - start} seconds")
+
+    # COPY 2
     freqs_dok = dok_matrix((num_postings, len(term_dict)), dtype=np.uint32)
     dict.update(freqs_dok, freqs_table)
+    logging.info(f"DOK 1 took {perf_counter() - start} seconds to build")
 
     freqs_csr = freqs_dok.tocsr()
+    logging.info(f"CSR 1 took {perf_counter() - start} seconds to build")
 
     posns_dok = dok_matrix((num_postings, len(term_dict)), dtype=np.uint32)
     dict.update(posns_dok, posns_table)
+    logging.info(f"DOK 2 took {perf_counter() - start} seconds to build")
     posns_csr = posns_dok.tocsr()
+    logging.info(f"CSR 2 took {perf_counter() - start} seconds to build")
 
     assert freqs_dok.shape == posns_dok.shape
     return RowViewableMatrix(freqs_csr), RowViewableMatrix(posns_csr), posns_lookup, term_dict, avg_doc_length
@@ -701,7 +728,9 @@ class PostingsArray(ExtensionArray):
 
     def phrase_freq(self, tokens, slop=1):
         """Return number of occurences of a phrase."""
+        from time import perf_counter
         # Start with docs with all terms
+        start = perf_counter()
         pad = -1000
         mask = self.and_query(tokens)
         # For detailed documentation of this algorithm, see this ChatGPT4 discussion
@@ -715,7 +744,9 @@ class PostingsArray(ExtensionArray):
             for idx, array in enumerate(arrays):
                 # Resize if needed, padding with pad
                 if len(array) > width:
+                    logging.info(f"Resizing from {width} to {len(array)}")
                     vstack_padded = np.pad(vstacked, ((0, 0), (0, len(array) - width)), constant_values=pad)
+                    width = len(array)
                     vstacked = vstack_padded
                 vstacked[idx, :len(array)] = array
             return vstacked
@@ -724,14 +755,20 @@ class PostingsArray(ExtensionArray):
         term_posns = []
         for term in tokens:
             as_array = self.positions(term, mask)
+            as_array_time = perf_counter() - start
+            logging.info(f"Arr Posns 1: {as_array_time:.2f}s")
             term_posns.append(vstack_with_pad(as_array, 5))
+            vstack_with_pad_time = perf_counter() - start
+            logging.info(f"Arr Posns 2: {vstack_with_pad_time:.2f}s")
+        pad_time = perf_counter() - start
+        logging.info(f"Pad time: {pad_time:.2f}s")
 
         phrase_freqs = np.zeros(len(self))
         bigram_freqs = None
 
         prior_term = term_posns[0]
         for term in term_posns[1:]:
-            is_same_term = (term == prior_term).all()
+            is_same_term = (term.shape == prior_term.shape) and np.all(term == prior_term)
 
             # Compute positional differences
             #
