@@ -21,12 +21,12 @@ from scipy.sparse import dok_matrix, csr_matrix
 root = logging.getLogger()
 root.setLevel(logging.INFO)
 
-import sys
-handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.INFO)
-formatter = logging.Formatter('%(message)s')
-handler.setFormatter(formatter)
-root.addHandler(handler)
+# import sys
+# handler = logging.StreamHandler(sys.stdout)
+# handler.setLevel(logging.INFO)
+# formatter = logging.Formatter('%(message)s')
+# handler.setFormatter(formatter)
+# root.addHandler(handler)
 
 
 def vstack_with_pad(arrays, width=10, pad=-100):
