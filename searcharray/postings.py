@@ -19,7 +19,7 @@ from searcharray.term_dict import TermDict, TermMissingError
 from scipy.sparse import dok_matrix, csr_matrix
 
 root = logging.getLogger()
-root.setLevel(logging.INFO)
+root.setLevel(logging.WARNING)
 
 # import sys
 # handler = logging.StreamHandler(sys.stdout)
