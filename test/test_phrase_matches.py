@@ -42,6 +42,11 @@ perf_scenarios = {
 
 
 scenarios = {
+    "length_one": {
+        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "phrase": ["foo"],
+        "expected": [1, 0, 0, 0] * 25,
+    },
     "base": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "bar"],
@@ -140,7 +145,7 @@ scenarios = {
 def test_phrase(docs, phrase, expected):
     docs = docs()
     docs_before = docs.copy()
-    term_freqs = docs.phrase_freq(phrase)
+    term_freqs = docs.term_freq(phrase)
     expected_matches = np.array(expected) > 0
     matches = docs.match(phrase)
     assert (term_freqs == expected).all()

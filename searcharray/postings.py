@@ -603,14 +603,23 @@ class PostingsArray(ExtensionArray):
     # One way to stack
     #  np.array_split(posns_mat[[1,2]].indices, posns_mat[[1,2]].indptr)
 
+    def _check_token_arg(self, token):
+        if isinstance(token, str):
+            return token
+        elif isinstance(token, list) and len(token) == 1:
+            return token[0]
+        elif isinstance(token, list):
+            return token
+        else:
+            raise TypeError("Expected a string or list of strings for phrases")
+
     # ***********************************************************
     # Naive implementations of search functions to clean up later
     # ***********************************************************
     def term_freq(self, token):
+        token = self._check_token_arg(token)
         if isinstance(token, list):
             return self.phrase_freq(token)
-        elif not isinstance(token, str):
-            raise TypeError("Expected a list or string")
 
         try:
             term_id = self.term_dict.get_term_id(token)
@@ -632,10 +641,11 @@ class PostingsArray(ExtensionArray):
 
     def match(self, token, slop=1):
         """Return a boolean numpy array indicating which elements contain the given term."""
-        if isinstance(token, str):
+        token = self._check_token_arg(token)
+        if isinstance(token, list):
+            term_freq = self.phrase_freq(token)
+        else:
             term_freq = self.term_freq(token)
-        elif isinstance(token, list):
-            term_freq = self.phrase_freq(token, slop=slop)
         return term_freq > 0
 
     def bm25_idf(self, token, doc_stats=None):
@@ -643,10 +653,9 @@ class PostingsArray(ExtensionArray):
 
         idf, computed as log(1 + (N - n + 0.5) / (n + 0.5))
         """
+        token = self._check_token_arg(token)
         if isinstance(token, list):
             return self.bm25_phrase_idf(token)
-        elif not isinstance(token, str):
-            raise TypeError("Expected a list or string")
 
         df = self.doc_freq(token)
         num_docs = len(self)
@@ -665,12 +674,7 @@ class PostingsArray(ExtensionArray):
 
         tf, computed as freq / (freq + k1 * (1 - b + b * dl / avgdl))
         """
-        if isinstance(token, str):
-            tf = self.term_freq(token)
-        elif isinstance(token, list):
-            tf = self.phrase_freq(token, slop)
-        else:
-            raise TypeError("Expected a string or list of strings")
+        tf = self.term_freq(token)
         score = tf / (tf + k1 * (1 - b + b * self.doc_lengths() / self.avg_doc_length))
         return score
 
