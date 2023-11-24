@@ -12,7 +12,7 @@ import logging
 
 import numpy as np
 from searcharray.term_dict import TermDict, TermMissingError
-from searcharray.phrase import scan_merge_all
+from searcharray.phrase import scan_merge_all, scan_merge_inplace
 
 # Doc,Term -> freq
 # Note scipy sparse switching to *_array, which is more numpy like
@@ -779,6 +779,33 @@ class PostingsArray(ExtensionArray):
 
     def phrase_freq(self, tokens, slop=1):
         return self.phrase_freq_every_diff(tokens, slop=slop)
+
+    def phrase_freq_scan_inplace(self, tokens, slop=1):
+        mask = self.and_query(tokens)
+
+        if np.sum(mask) == 0:
+            return mask
+
+        prior_term = tokens[0]
+
+        prior_posns = self.positions(prior_term, mask)
+        prior_starts = np.cumsum([lst.shape[0] for lst in prior_posns])
+        prior_posns = np.concatenate(prior_posns)
+
+        bigram_freqs = None
+
+        phrase_freqs = np.zeros(len(self))
+
+        for term_cnt, term in enumerate(tokens[1:]):
+            term_posns = self.positions(term, mask)
+            term_starts = np.cumsum([lst.shape[0] for lst in term_posns])
+            term_posns = np.concatenate(term_posns)
+            bigram_freqs, prior_posns, prior_starts =\
+                scan_merge_inplace(
+                    prior_posns, prior_starts, term_posns, term_starts, slop=slop)
+
+        phrase_freqs[mask] = bigram_freqs
+        return phrase_freqs
 
     def phrase_freq_scan(self, tokens, slop=1):
         mask = self.and_query(tokens)

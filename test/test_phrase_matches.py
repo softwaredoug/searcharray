@@ -14,7 +14,6 @@ def random_strings(num_strings, min_length, max_length):
     return strings
 
 
-
 scenarios = {
     "length_one": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
@@ -134,6 +133,8 @@ def test_phrase(docs, phrase, expected):
         assert (expected == phrase_matches).all()
         phrase_matches = docs.phrase_freq_scan(phrase)
         assert (expected == phrase_matches).all()
+        phrase_matches = docs.phrase_freq_scan_inplace(phrase)
+        assert (expected == phrase_matches).all()
         phrase_matches = docs.phrase_freq(phrase)
         assert (expected == phrase_matches).all()
     assert (docs == docs_before).all(), "The phrase_match method should not modify the original array"
@@ -170,10 +171,24 @@ perf_scenarios = {
 }
 
 
-@pytest.mark.skip(reason="Performance test")
+# phrase_match_every_diff  took 17.07792454198352 seconds | 200000 docs
+# phrase_match_scan old    took 16.765271917014616 seconds | 200000 docs
+# phrase_match_scan        took 81.19630783301545 seconds | 200000 docs
+# phrase_match_scan        took 70.4959268750099 seconds | 200000 docs
+#
+# phrase_match_every_diff  took 2.214169082988519 seconds | 4000000 docs
+# phrase_match_scan old    took 69.71960766700795 seconds | 4000000 docs
+# phrase_match_scan        took 4.758700999984285 seconds | 4000000 docs
+# phrase_match_scan        took 4.029075291007757 seconds | 4000000 docs
+
 @w_scenarios(perf_scenarios)
 def test_phrase_performance(docs, phrase, expected):
     docs = docs()
+
+    start = perf_counter()
+    matches = docs.phrase_freq(phrase)
+    print(f"phrase_freq API took {perf_counter() - start} seconds | {len(docs)} docs")
+    assert (matches == expected).all()
 
     start = perf_counter()
     # Very slow for large sets of positions
@@ -192,6 +207,11 @@ def test_phrase_performance(docs, phrase, expected):
     matches_scan = docs.phrase_freq_scan(phrase)
     print(f"phrase_match_scan        took {perf_counter() - start} seconds | {len(docs)} docs")
     assert (matches_scan == expected).all()
+
+    start = perf_counter()
+    matches_scan_inplace = docs.phrase_freq_scan_inplace(phrase)
+    print(f"phrase_match_scan        took {perf_counter() - start} seconds | {len(docs)} docs")
+    assert (matches_scan_inplace == expected).all()
 
 
 def test_positions():
