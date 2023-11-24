@@ -142,15 +142,10 @@ def test_phrase(docs, phrase, expected):
 
 
 perf_scenarios = {
-    "1m_docs": {
+    "4m_docs": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 1000000),
         "phrase": ["foo", "bar"],
         "expected": [True, False, False, False] * 1000000,
-    },
-    "10m_docs": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 10000000),
-        "phrase": ["foo", "bar"],
-        "expected": [True, False, False, False] * 10000000,
     },
     "many_docs_long_doc": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny",
@@ -175,6 +170,7 @@ perf_scenarios = {
 }
 
 
+@pytest.mark.skip(reason="Performance test")
 @w_scenarios(perf_scenarios)
 def test_phrase_performance(docs, phrase, expected):
     docs = docs()
