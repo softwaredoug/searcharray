@@ -14,39 +14,6 @@ def random_strings(num_strings, min_length, max_length):
     return strings
 
 
-perf_scenarios = {
-    "1m_docs": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 1000000),
-        "phrase": ["foo", "bar"],
-        "expected": [True, False, False, False] * 1000000,
-    },
-    "10m_docs": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 10000000),
-        "phrase": ["foo", "bar"],
-        "expected": [True, False, False, False] * 10000000,
-    },
-    "many_docs_long_doc": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny",
-                                             "la ma ta wa ga ao a b c d e f g a be ae i foo bar foo bar"] * 100000),
-        "phrase": ["foo", "bar"],
-        "expected": [True, False, False, False, True] * 100000,
-    },
-    "many_docs_large_term_dict": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny",
-                                             " ".join(random_strings(1000, 4, 10)),
-                                             "la ma ta wa ga ao a b c d e f g a be ae i foo bar foo bar"] * 100000),
-        "phrase": ["foo", "bar"],
-        "expected": [True, False, False, False, False, True] * 100000,
-    },
-    "many_docs_and_positions": {
-        "docs": lambda: PostingsArray.index([" ".join(["foo bar bar baz foo foo bar foo"] * 100),
-                                             " ".join(["what is the foo bar doing in the bar foo?"] * 100)] * 100000),
-        "phrase": ["foo", "bar"],
-        "expected": [True, True] * 100000
-    }
-
-}
-
 
 scenarios = {
     "length_one": {
@@ -163,6 +130,10 @@ def test_phrase(docs, phrase, expected):
     assert (term_freqs == expected).all()
     assert (matches == expected_matches).all()
     if len(phrase) > 1:
+        phrase_matches = docs.phrase_freq_scan_old(phrase)
+        assert (expected == phrase_matches).all()
+        phrase_matches = docs.phrase_freq_scan(phrase)
+        assert (expected == phrase_matches).all()
         phrase_matches = docs.phrase_freq(phrase)
         assert (expected == phrase_matches).all()
     assert (docs == docs_before).all(), "The phrase_match method should not modify the original array"
@@ -170,14 +141,61 @@ def test_phrase(docs, phrase, expected):
     assert (np.argsort(bm25) == np.argsort(expected)).all()
 
 
-@pytest.mark.skip
+perf_scenarios = {
+    "1m_docs": {
+        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 1000000),
+        "phrase": ["foo", "bar"],
+        "expected": [True, False, False, False] * 1000000,
+    },
+    "10m_docs": {
+        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 10000000),
+        "phrase": ["foo", "bar"],
+        "expected": [True, False, False, False] * 10000000,
+    },
+    "many_docs_long_doc": {
+        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny",
+                                             "la ma ta wa ga ao a b c d e f g a be ae i foo bar foo bar"] * 100000),
+        "phrase": ["foo", "bar"],
+        "expected": [True, False, False, False, True] * 100000,
+    },
+    "many_docs_large_term_dict": {
+        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny",
+                                             " ".join(random_strings(1000, 4, 10)),
+                                             "la ma ta wa ga ao a b c d e f g a be ae i foo bar foo bar"] * 100000),
+        "phrase": ["foo", "bar"],
+        "expected": [True, False, False, False, False, True] * 100000,
+    },
+    "many_docs_and_positions": {
+        "docs": lambda: PostingsArray.index([" ".join(["foo bar bar baz foo foo bar foo"] * 100),
+                                             " ".join(["what is the foo bar doing in the bar foo?"] * 100)] * 100000),
+        "phrase": ["foo", "bar"],
+        "expected": [200, 100] * 100000
+    }
+
+}
+
+
 @w_scenarios(perf_scenarios)
 def test_phrase_performance(docs, phrase, expected):
-    start = perf_counter()
     docs = docs()
-    matches = docs.match(phrase)
-    print(f"phrase_match 1 took {perf_counter() - start} seconds | {len(docs)} docs")
-    assert (matches == expected).all()
+
+    start = perf_counter()
+    # Very slow for large sets of positions
+    # PosnsDiff Time: 41.99s
+    # Term Mask Time: 352.18s
+    matches_every_diff = docs.phrase_freq_every_diff(phrase)
+    print(f"phrase_match_every_diff  took {perf_counter() - start} seconds | {len(docs)} docs")
+    assert (matches_every_diff == expected).all()
+
+    start = perf_counter()
+    matches_scan_old = docs.phrase_freq_scan_old(phrase)
+    print(f"phrase_match_scan old    took {perf_counter() - start} seconds | {len(docs)} docs")
+    assert (matches_scan_old == expected).all()
+
+    start = perf_counter()
+    matches_scan = docs.phrase_freq_scan(phrase)
+    print(f"phrase_match_scan        took {perf_counter() - start} seconds | {len(docs)} docs")
+    assert (matches_scan == expected).all()
 
 
 def test_positions():

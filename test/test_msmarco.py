@@ -72,31 +72,36 @@ def msmarco100k():
 
 @pytest.fixture(scope="session")
 def msmarco():
-    start = perf_counter()
-    if not msmarco_exists():
-        download_msmarco()
-    print("Loading docs...")
-    msmarco = pd.read_csv("data/msmarco-docs.tsv.gz", sep="\t", header=None, names=["id", "url", "title", "body"])
-    print(f"Loaded {len(msmarco)} docs in {perf_counter() - start:.4f}s")
+    msmarco_path = pathlib.Path("data/msmarco100k.pkl")
 
-    def ws_punc_tokenizer(text):
-        split = text.lower().split()
-        return [token.translate(str.maketrans('', '', string.punctuation))
-                for token in split]
+    if not msmarco_path.exists():
+        start = perf_counter()
+        if not msmarco_exists():
+            download_msmarco()
+        print("Loading docs...")
+        msmarco = pd.read_csv("data/msmarco-docs.tsv.gz", sep="\t", header=None, names=["id", "url", "title", "body"])
+        print(f"Loaded {len(msmarco)} docs in {perf_counter() - start:.4f}s")
 
-    print("Indexing...")
-    # msmarco["title_ws"] = PostingsArray.index(msmarco["title"])
-    msmarco["body_ws"] = PostingsArray.index(msmarco["body"])
-    print(f"Indexed in {perf_counter() - start:.4f}s")
+        def ws_punc_tokenizer(text):
+            split = text.lower().split()
+            return [token.translate(str.maketrans('', '', string.punctuation))
+                    for token in split]
 
-    return msmarco
+        print("Indexing...")
+        msmarco["title_ws"] = PostingsArray.index(msmarco["title"])
+        print(f"Indexed in {perf_counter() - start:.4f}s")
+        msmarco["body_ws"] = PostingsArray.index(msmarco["body"])
+        print(f"Indexed in {perf_counter() - start:.4f}s")
+        msmarco.to_pickle("data/msmarco.pkl")
+        return msmarco
+    else:
+        return pd.read_pickle("data/msmarco100k.pkl")
 
 
-@pytest.mark.skip
-def test_msmarco(msmarco100k):
+def test_msmarco(msmarco):
     phrase_search = ["what", "is"]
     start = perf_counter()
     print("Phrase search...")
-    results = msmarco100k['body_ws'].array.bm25(phrase_search)
+    results = msmarco['body_ws'].array.bm25(phrase_search)
     print(f"msmarco phraes search: {perf_counter() - start:.4f}s")
 

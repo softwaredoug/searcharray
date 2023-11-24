@@ -12,6 +12,7 @@ import logging
 
 import numpy as np
 from searcharray.term_dict import TermDict, TermMissingError
+from searcharray.phrase import scan_merge_all
 
 # Doc,Term -> freq
 # Note scipy sparse switching to *_array, which is more numpy like
@@ -19,8 +20,9 @@ from searcharray.term_dict import TermDict, TermMissingError
 from scipy.sparse import dok_matrix, csr_matrix
 
 root = logging.getLogger()
-root.setLevel(logging.WARNING)
+root.setLevel(logging.ERROR)
 
+# When running in pytest
 # import sys
 # handler = logging.StreamHandler(sys.stdout)
 # handler.setLevel(logging.INFO)
@@ -40,6 +42,27 @@ def vstack_with_pad(arrays, width=10, pad=-100):
             vstacked = vstack_padded
         vstacked[idx, :len(array)] = array
     return vstacked
+
+
+def self_adjs(prior_posns, next_posns):
+    """Given two arrays of positions, return the self adjacencies.
+
+    Prior is a subset of next, find all the locations in next in prior,
+    then get all the adjacent positions, returning a numpy array.
+    """
+    in1d = np.in1d(next_posns, prior_posns)
+    if len(in1d) == 0:
+        return np.array([])
+
+    # Where there's an intersection
+    start_indices = np.argwhere(in1d).flatten()
+    # The adjacent to the intersections
+    adj_indices = np.argwhere(in1d).flatten() + 1
+    adj_indices = adj_indices[adj_indices < len(next_posns)]
+
+    arr = np.union1d(next_posns[start_indices], next_posns[adj_indices])
+    arr.sort()
+    return arr
 
 
 class PostingsRow:
@@ -755,6 +778,24 @@ class PostingsArray(ExtensionArray):
         return mask
 
     def phrase_freq(self, tokens, slop=1):
+        return self.phrase_freq_every_diff(tokens, slop=slop)
+
+    def phrase_freq_scan(self, tokens, slop=1):
+        mask = self.and_query(tokens)
+
+        if np.sum(mask) == 0:
+            return mask
+
+        prior_term = tokens[0]
+        prior_posns = self.positions(prior_term, mask)
+        phrase_freqs = np.zeros(len(self))
+        for term_cnt, term in enumerate(tokens[1:]):
+            term_posns = self.positions(term, mask)
+            bigram_freqs, prior_posns = scan_merge_all(prior_posns, term_posns, slop=slop)
+            phrase_freqs[mask] = bigram_freqs
+        return phrase_freqs
+
+    def phrase_freq_scan_old(self, tokens, slop=1):
         from time import perf_counter
         start = perf_counter()
 
@@ -764,14 +805,14 @@ class PostingsArray(ExtensionArray):
             return mask
 
         # Any identical terms, default to shitty algo for now
-        if len(tokens) != len(set(tokens)):
-            return self.phrase_freq_shitty(tokens, slop=slop)
+        # if len(tokens) != len(set(tokens)):
+        #     return self.phrase_freq_shitty(tokens, slop=slop)
 
         # Iterate each phrase with its next term
         prior_term = tokens[0]
         prior_posns = self.positions(prior_term, mask)
         phrase_freqs = np.zeros(len(self))
-        for term in tokens[1:]:
+        for term_cnt, term in enumerate(tokens[1:]):
             term_posns = self.positions(term, mask)
 
             assert len(prior_posns) == len(term_posns)
@@ -783,24 +824,37 @@ class PostingsArray(ExtensionArray):
                 # Find insert position of every next term in prior term's positions
                 # Intuition:
                 # https://colab.research.google.com/drive/1EeqHYuCiqyptd-awS67Re78pqVdTfH4A
-                ins_posns = np.searchsorted(prior_posns[idx], term_posns[idx], side='right')
-                prior_adjacents = prior_posns[idx][ins_posns - 1]
-                adjacents = term_posns[idx] - prior_adjacents
-                bigram_freqs[idx] = np.sum(adjacents <= slop)
+                priors_in_self = self_adjs(prior_posns[idx], term_posns[idx])
+                takeaway = 0
+                satisfies_slop = None
+                cont_indices = None
+                if len(priors_in_self) == 0:
+                    ins_posns = np.searchsorted(prior_posns[idx], term_posns[idx], side='right')
+                    prior_adjacents = prior_posns[idx][ins_posns - 1]
+                    adjacents = term_posns[idx] - prior_adjacents
+                    satisfies_slop = adjacents <= slop
+                    cont_indices = np.argwhere(satisfies_slop).flatten()
+                else:
+                    adjacents = np.diff(priors_in_self)
+                    satisfies_slop = adjacents <= slop
+                    consecutive_slops = satisfies_slop[1:] & satisfies_slop[:-1]
+                    sum_consecutive = np.sum(consecutive_slops)
+                    takeaway = -np.floor_divide(sum_consecutive, -2)  # ceiling divide
+                    cont_indices = np.argwhere(satisfies_slop).flatten() + 1
 
-                cont_indices = np.argwhere(adjacents <= slop).flatten()
+                bigram_freqs[idx] = np.sum(satisfies_slop) - takeaway
                 cont_posn = term_posns[idx][cont_indices]
                 cont_posns.append(cont_posn)
             phrase_freqs[mask] = bigram_freqs
             prior_term = term
             prior_posns = cont_posns
-            logging.info(f"Term Time: {perf_counter() - term_start:.4f}s")
+            logging.info(f"Term ({term_cnt}) Time: {perf_counter() - term_start:.4f}s")
 
         logging.info(f"Phrase Search Time: {perf_counter() - start:.4f}s")
 
         return phrase_freqs
 
-    def phrase_freq_shitty(self, tokens, slop=1):
+    def phrase_freq_every_diff(self, tokens, slop=1):
         """Return number of occurences of a phrase."""
         from time import perf_counter
         # Start with docs with all terms
@@ -821,6 +875,9 @@ class PostingsArray(ExtensionArray):
             term_posns.append(vstack_with_pad(as_array, 5))
             vstack_with_pad_time = perf_counter() - start
             logging.info(f"Arr Posns 2: {vstack_with_pad_time:.2f}s")
+            if term_posns[-1].shape[1] > 100:
+                logging.info("Reverting to phrase_freq_scan")
+                return self.phrase_freq_scan_old(tokens, slop=slop)
         pad_time = perf_counter() - start
         logging.info(f"Pad time: {pad_time:.2f}s")
 
