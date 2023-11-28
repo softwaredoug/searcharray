@@ -2,16 +2,64 @@ import numpy as np
 from typing import List
 
 
-def advance_to(next_posns, posn, next_start, next_idx=0):
-    while next_idx < next_start and not next_posns[next_idx] > posn:
-        next_idx += 1
-    return next_idx
+def advance_to_scan(arr, target, next_start, idx):
+    while idx < next_start and not arr[idx] > target:
+        idx += 1
+    return idx
+
+
+def advance_after_binsearch(arr, target, next_start, idx):
+    """Scan arr from idx until just after target. Return next_start if exhausted.
+
+    Will manually create a skip index if next_start - idx is large
+
+    arr from idx -> next_start should be sorted
+
+    """
+    beg = idx
+    end = next_start - 1
+    space = end - beg
+    if space < 1000:
+        advance_to_scan(arr, target, next_start, idx)
+
+    # print(f"Binsearching {target} in arr[{beg}:{end}] = {arr[beg:end]}")
+    if arr[idx] > target:
+        # print("Already past, returning idx")
+        return idx
+
+    mid = None
+    while True:
+        space = end - beg
+        if space <= 1000:
+            return advance_to_scan(arr, target, next_start, beg)
+
+        mid = beg + (space // 2)
+        if arr[mid] == target:
+            # print(f"Found exact match, returning {mid + 1}")
+            return mid + 1
+        elif arr[mid] > target and arr[mid - 1] <= target:
+            # print(f"Found one past, returning {mid}")
+            return mid
+        elif arr[mid] < target:
+            # print(f"Moving beg to {mid}")
+            # print(f"       end is {end}")
+            # print(f"arr[{mid}] is {arr[mid]}")
+            beg = mid
+        else:  # elif arr[mid] > target:
+            # print(f"       beg is {beg}")
+            # print(f"Moving end to {mid}")
+            # print(f"arr[{mid}] is {arr[mid]}")
+            end = mid
+
+    # print(f"Exhausted binsearch, returning {next_start}")
+    return next_start
 
 
 def scan_merge(prior_posns: np.ndarray,
                prior_starts: np.ndarray,
                next_posns: np.ndarray,
                next_starts: np.ndarray,
+               scan_algo=advance_to_scan,
                slop=1):
     """Merge two term position lists together into a single list of bigrams.
 
@@ -43,9 +91,9 @@ def scan_merge(prior_posns: np.ndarray,
     while prior_idx < len(prior_posns):
         # Scan next until just past p
         prior = prior_posns[prior_idx]
-        next_idx = advance_to(next_posns, posn=prior,
-                              next_start=next_start,
-                              next_idx=next_idx)
+        next_idx = scan_algo(next_posns, target=prior,
+                             next_start=next_start,
+                             idx=next_idx)
 
         # Reset to head of next location,
         # Re-advance next
@@ -72,8 +120,8 @@ def scan_merge(prior_posns: np.ndarray,
             bigram_freq = 0
 
         prior = prior_posns[prior_idx]
-        next_idx = advance_to(next_posns, posn=prior,
-                              next_start=next_start, next_idx=next_idx)
+        next_idx = scan_algo(next_posns, target=prior,
+                             next_start=next_start, idx=next_idx)
 
         next_posn = next_posns[next_idx]
         # Check if within slop
@@ -96,6 +144,7 @@ def scan_merge_inplace(prior_posns: np.ndarray,
                        prior_starts: np.ndarray,
                        next_posns: np.ndarray,
                        next_starts: np.ndarray,
+                       scan_algo=advance_to_scan,
                        slop=1):
     """Merge two term position lists together into a single list of bigrams.
 
@@ -115,9 +164,10 @@ def scan_merge_inplace(prior_posns: np.ndarray,
     while prior_idx < prior_starts[-1]:
         # Scan next until just past p
         prior = prior_posns[prior_idx]
-        next_idx = advance_to(next_posns, posn=prior,
-                              next_start=next_start,
-                              next_idx=next_idx)
+        next_idx = scan_algo(next_posns,
+                             target=prior,
+                             next_start=next_start,
+                             idx=next_idx)
 
         # Reset to head of next location,
         # Re-advance next
@@ -140,8 +190,10 @@ def scan_merge_inplace(prior_posns: np.ndarray,
             bigram_freq = 0
 
         prior = prior_posns[prior_idx]
-        next_idx = advance_to(next_posns, posn=prior,
-                              next_start=next_start, next_idx=next_idx)
+        next_idx = scan_algo(next_posns,
+                             target=prior,
+                             next_start=next_start,
+                             idx=next_idx)
 
         next_posn = next_posns[next_idx]
         # Check if within slop
@@ -163,7 +215,7 @@ def scan_merge_inplace(prior_posns: np.ndarray,
     return bigram_freqs, prior_posns, prior_starts
 
 
-def scan_merge_all(prior_posns: List, next_posns: List, slop=1):
+def scan_merge_bigram(prior_posns: List, next_posns: List, slop=1):
     prior_starts = np.cumsum([lst.shape[0] for lst in prior_posns])
     next_starts = np.cumsum([lst.shape[0] for lst in next_posns])
     prior_posns = np.concatenate(prior_posns)

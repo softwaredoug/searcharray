@@ -129,6 +129,8 @@ def test_phrase(docs, phrase, expected):
     assert (term_freqs == expected).all()
     assert (matches == expected_matches).all()
     if len(phrase) > 1:
+        phrase_matches = docs.phrase_freq_wide_spans(phrase)
+        assert (expected == phrase_matches).all()
         phrase_matches = docs.phrase_freq_scan_old(phrase)
         assert (expected == phrase_matches).all()
         phrase_matches = docs.phrase_freq_scan(phrase)
@@ -152,14 +154,14 @@ perf_scenarios = {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny",
                                              "la ma ta wa ga ao a b c d e f g a be ae i foo bar foo bar"] * 100000),
         "phrase": ["foo", "bar"],
-        "expected": [True, False, False, False, True] * 100000,
+        "expected": [1, 0, 0, 0, 2] * 100000,
     },
     "many_docs_large_term_dict": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny",
                                              " ".join(random_strings(1000, 4, 10)),
                                              "la ma ta wa ga ao a b c d e f g a be ae i foo bar foo bar"] * 100000),
         "phrase": ["foo", "bar"],
-        "expected": [True, False, False, False, False, True] * 100000,
+        "expected": [1, 0, 0, 0, 0, 2] * 100000,
     },
     "many_docs_and_positions": {
         "docs": lambda: PostingsArray.index([" ".join(["foo bar bar baz foo foo bar foo"] * 100),
@@ -186,6 +188,16 @@ def test_phrase_performance(docs, phrase, expected):
     docs = docs()
 
     start = perf_counter()
+    matches_scan_inplace = docs.phrase_freq_wide_spans(phrase)
+    print(f"phrase_match_scan widespa took {perf_counter() - start} seconds | {len(docs)} docs")
+    assert (matches_scan_inplace == expected).all()
+
+    start = perf_counter()
+    matches_scan_inplace = docs.phrase_freq_scan_inplace_binsearch(phrase)
+    print(f"phrase_match_scan inplbin took {perf_counter() - start} seconds | {len(docs)} docs")
+    assert (matches_scan_inplace == expected).all()
+
+    start = perf_counter()
     matches = docs.phrase_freq(phrase)
     print(f"phrase_freq API took {perf_counter() - start} seconds | {len(docs)} docs")
     assert (matches == expected).all()
@@ -194,7 +206,7 @@ def test_phrase_performance(docs, phrase, expected):
     # Very slow for large sets of positions
     # PosnsDiff Time: 41.99s
     # Term Mask Time: 352.18s
-    matches_every_diff = docs.phrase_freq_every_diff(phrase)
+    matches_every_diff = docs.phrase_freq_every_diff(phrase, terminate_many_posns=False)
     print(f"phrase_match_every_diff  took {perf_counter() - start} seconds | {len(docs)} docs")
     assert (matches_every_diff == expected).all()
 
@@ -210,7 +222,7 @@ def test_phrase_performance(docs, phrase, expected):
 
     start = perf_counter()
     matches_scan_inplace = docs.phrase_freq_scan_inplace(phrase)
-    print(f"phrase_match_scan        took {perf_counter() - start} seconds | {len(docs)} docs")
+    print(f"phrase_match_scan inplace took {perf_counter() - start} seconds | {len(docs)} docs")
     assert (matches_scan_inplace == expected).all()
 
 

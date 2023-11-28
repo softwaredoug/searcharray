@@ -12,7 +12,8 @@ import logging
 
 import numpy as np
 from searcharray.term_dict import TermDict, TermMissingError
-from searcharray.phrase import scan_merge_all, scan_merge_inplace
+from searcharray.phrase import scan_merge_bigram, scan_merge_inplace, advance_after_binsearch
+from searcharray.wide_spans import all_wide_spans_of_slop
 
 # Doc,Term -> freq
 # Note scipy sparse switching to *_array, which is more numpy like
@@ -780,6 +781,22 @@ class PostingsArray(ExtensionArray):
     def phrase_freq(self, tokens, slop=1):
         return self.phrase_freq_every_diff(tokens, slop=slop)
 
+    def phrase_freq_wide_spans(self, tokens, slop=1):
+        mask = self.and_query(tokens)
+
+        if np.sum(mask) == 0:
+            return mask
+
+        posns = [self.positions(token, mask) for token in tokens]
+        starts = [np.cumsum([lst.shape[0] for lst in posn]) for posn in posns]
+        posns = [np.concatenate(posn) for posn in posns]
+
+        phrase_freqs = np.zeros(len(self), dtype=np.uint32)
+        freqs = all_wide_spans_of_slop(posns, starts, slop=slop)
+        phrase_freqs[mask] = freqs
+
+        return phrase_freqs
+
     def phrase_freq_scan_inplace(self, tokens, slop=1):
         mask = self.and_query(tokens)
 
@@ -807,6 +824,35 @@ class PostingsArray(ExtensionArray):
         phrase_freqs[mask] = bigram_freqs
         return phrase_freqs
 
+    def phrase_freq_scan_inplace_binsearch(self, tokens, slop=1):
+        mask = self.and_query(tokens)
+
+        if np.sum(mask) == 0:
+            return mask
+
+        prior_term = tokens[0]
+
+        prior_posns = self.positions(prior_term, mask)
+        prior_starts = np.cumsum([lst.shape[0] for lst in prior_posns])
+        prior_posns = np.concatenate(prior_posns)
+
+        bigram_freqs = None
+
+        phrase_freqs = np.zeros(len(self))
+
+        for term_cnt, term in enumerate(tokens[1:]):
+            term_posns = self.positions(term, mask)
+            term_starts = np.cumsum([lst.shape[0] for lst in term_posns])
+            term_posns = np.concatenate(term_posns)
+            bigram_freqs, prior_posns, prior_starts =\
+                scan_merge_inplace(
+                    prior_posns, prior_starts, term_posns, term_starts,
+                    scan_algo=advance_after_binsearch,
+                    slop=slop)
+
+        phrase_freqs[mask] = bigram_freqs
+        return phrase_freqs
+
     def phrase_freq_scan(self, tokens, slop=1):
         mask = self.and_query(tokens)
 
@@ -818,15 +864,16 @@ class PostingsArray(ExtensionArray):
         phrase_freqs = np.zeros(len(self))
         for term_cnt, term in enumerate(tokens[1:]):
             term_posns = self.positions(term, mask)
-            bigram_freqs, prior_posns = scan_merge_all(prior_posns, term_posns, slop=slop)
+            bigram_freqs, prior_posns = scan_merge_bigram(prior_posns, term_posns, slop=slop)
             phrase_freqs[mask] = bigram_freqs
         return phrase_freqs
 
-    def phrase_freq_scan_old(self, tokens, slop=1):
+    def phrase_freq_scan_old(self, tokens, mask=None, slop=1):
         from time import perf_counter
         start = perf_counter()
 
-        mask = self.and_query(tokens)
+        if mask is None:
+            mask = self.and_query(tokens)
 
         if np.sum(mask) == 0:
             return mask
@@ -881,17 +928,30 @@ class PostingsArray(ExtensionArray):
 
         return phrase_freqs
 
-    def phrase_freq_every_diff(self, tokens, slop=1):
+    def phrase_freq_every_diff(self, tokens, slop=1, batch_size=1000000,
+                               terminate_many_posns=True):
+        """Batch up calls to _phrase_freq_every_diff."""
+        mask = self.and_query(tokens)
+        phrase_freqs = np.zeros(len(self))
+        for batch_no in range(0, len(self), batch_size):
+            curr_mask = np.zeros(len(self), dtype=bool)
+            curr_mask[batch_no:batch_no + batch_size] = True
+            batch_mask = mask & curr_mask
+            this_freqs = self._phrase_freq_every_diff(tokens, slop=slop, mask=batch_mask,
+                                                      terminate_many_posns=terminate_many_posns)
+            phrase_freqs[batch_mask] = this_freqs
+        return phrase_freqs
+
+    def _phrase_freq_every_diff(self, tokens, mask, slop=1, terminate_many_posns=True):
         """Return number of occurences of a phrase."""
         from time import perf_counter
         # Start with docs with all terms
         start = perf_counter()
-        mask = self.and_query(tokens)
         # For detailed documentation of this algorithm, see this ChatGPT4 discussion
         # https://chat.openai.com/share/31affaad-dc91-4757-b31c-e85bdb5a0eb6
 
         if np.sum(mask) == 0:
-            return mask
+            return np.array([])
 
         # Pad for easy difference computation
         term_posns = []
@@ -902,13 +962,13 @@ class PostingsArray(ExtensionArray):
             term_posns.append(vstack_with_pad(as_array, 5))
             vstack_with_pad_time = perf_counter() - start
             logging.info(f"Arr Posns 2: {vstack_with_pad_time:.2f}s")
-            if term_posns[-1].shape[1] > 100:
+            if term_posns[-1].shape[1] > 100 and terminate_many_posns:
                 logging.info("Reverting to phrase_freq_scan")
-                return self.phrase_freq_scan_old(tokens, slop=slop)
+                bigram_freqs = self.phrase_freq_scan_old(tokens, mask=mask, slop=slop)
+                return bigram_freqs[mask]
         pad_time = perf_counter() - start
         logging.info(f"Pad time: {pad_time:.2f}s")
 
-        phrase_freqs = np.zeros(len(self))
         bigram_freqs = None
 
         prior_term = term_posns[0]
@@ -987,5 +1047,4 @@ class PostingsArray(ExtensionArray):
             prior_term = term
             logging.info(f"Loop Time: {perf_counter() - start:.2f}s")
 
-        phrase_freqs[mask] = bigram_freqs[bigram_freqs > 0]
-        return phrase_freqs
+        return bigram_freqs[bigram_freqs > 0]
