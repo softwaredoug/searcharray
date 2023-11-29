@@ -111,6 +111,19 @@ scenarios = {
         "phrase": ["foo", "bar"],
         "expected": [1, 0, 0, 0] * 25,
     },
+    "different_num_posns_fewer": {
+        "docs": lambda: PostingsArray.index(["foo " + " ".join(["bar"] * 5),
+                                             "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "phrase": ["foo", "bar"],
+        "expected": [1, 0, 0, 0] * 25,
+    },
+    "different_num_posns_mixed": {
+        "docs": lambda: PostingsArray.index(["foo " + " ".join(["bar"] * 5),
+                                             "foo " + " ".join(["bar"] * 50),
+                                             "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "phrase": ["foo", "bar"],
+        "expected": [1, 0, 0, 0] * 25,
+    },
     "10k_docs": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 10000),
         "phrase": ["foo", "bar"],
@@ -164,10 +177,11 @@ perf_scenarios = {
         "expected": [1, 0, 0, 0, 0, 2] * 100000,
     },
     "many_docs_and_positions": {
-        "docs": lambda: PostingsArray.index([" ".join(["foo bar bar baz foo foo bar foo"] * 100),
+        "docs": lambda: PostingsArray.index(["foo bar",
+                                             " ".join(["foo bar bar baz foo foo bar foo"] * 100),
                                              " ".join(["what is the foo bar doing in the bar foo?"] * 100)] * 100000),
         "phrase": ["foo", "bar"],
-        "expected": [200, 100] * 100000
+        "expected": [1, 200, 100] * 100000
     }
 
 }
@@ -186,16 +200,6 @@ perf_scenarios = {
 @w_scenarios(perf_scenarios)
 def test_phrase_performance(docs, phrase, expected):
     docs = docs()
-
-    start = perf_counter()
-    matches_scan_inplace = docs.phrase_freq_wide_spans(phrase)
-    print(f"phrase_match_scan widespa took {perf_counter() - start} seconds | {len(docs)} docs")
-    assert (matches_scan_inplace == expected).all()
-
-    start = perf_counter()
-    matches_scan_inplace = docs.phrase_freq_scan_inplace_binsearch(phrase)
-    print(f"phrase_match_scan inplbin took {perf_counter() - start} seconds | {len(docs)} docs")
-    assert (matches_scan_inplace == expected).all()
 
     start = perf_counter()
     matches = docs.phrase_freq(phrase)
@@ -224,6 +228,17 @@ def test_phrase_performance(docs, phrase, expected):
     matches_scan_inplace = docs.phrase_freq_scan_inplace(phrase)
     print(f"phrase_match_scan inplace took {perf_counter() - start} seconds | {len(docs)} docs")
     assert (matches_scan_inplace == expected).all()
+
+    start = perf_counter()
+    matches_scan_inplace = docs.phrase_freq_wide_spans(phrase)
+    print(f"phrase_match_scan widespa took {perf_counter() - start} seconds | {len(docs)} docs")
+    assert (matches_scan_inplace == expected).all()
+
+    start = perf_counter()
+    matches_scan_inplace = docs.phrase_freq_scan_inplace_binsearch(phrase)
+    print(f"phrase_match_scan inplbin took {perf_counter() - start} seconds | {len(docs)} docs")
+    assert (matches_scan_inplace == expected).all()
+
 
 
 def test_positions():

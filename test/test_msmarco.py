@@ -98,10 +98,10 @@ def msmarco():
         return pd.read_pickle("data/msmarco100k.pkl")
 
 
-def test_msmarco(msmarco):
+def test_msmarco(msmarco100k):
     phrase_search = ["what", "is"]
     start = perf_counter()
     print("Phrase search...")
-    results = msmarco['body_ws'].array.bm25(phrase_search)
+    results = msmarco100k['body_ws'].array.bm25(phrase_search)
     print(f"msmarco phraes search: {perf_counter() - start:.4f}s")
 

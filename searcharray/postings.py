@@ -45,6 +45,19 @@ def vstack_with_pad(arrays, width=10, pad=-100):
     return vstacked
 
 
+def vstack_with_mask(arrays, width=10, pad=-100, mask=None):
+    vstacked = np.zeros((len(arrays), width), dtype=arrays[0].dtype) + pad
+    if mask is None:
+        mask = np.ones(len(arrays), dtype=bool)
+    for idx, array in enumerate(arrays):
+        # Resize if needed, padding with pad
+        if len(array) > width:
+            mask[idx] = False  # Skip this value as too inefficient to pad given the width
+        else:
+            vstacked[idx, :len(array)] = array
+    return vstacked[mask], mask
+
+
 def self_adjs(prior_posns, next_posns):
     """Given two arrays of positions, return the self adjacencies.
 
@@ -937,12 +950,13 @@ class PostingsArray(ExtensionArray):
             curr_mask = np.zeros(len(self), dtype=bool)
             curr_mask[batch_no:batch_no + batch_size] = True
             batch_mask = mask & curr_mask
-            this_freqs = self._phrase_freq_every_diff(tokens, slop=slop, mask=batch_mask,
-                                                      terminate_many_posns=terminate_many_posns)
+            this_freqs, skipped_mask = self._phrase_freq_every_diff(tokens, slop=slop, mask=batch_mask)
             phrase_freqs[batch_mask] = this_freqs
+            slow_freqs = self.phrase_freq_scan_old(tokens, mask=skipped_mask, slop=slop)
+            phrase_freqs[skipped_mask] = slow_freqs[skipped_mask]
         return phrase_freqs
 
-    def _phrase_freq_every_diff(self, tokens, mask, slop=1, terminate_many_posns=True):
+    def _phrase_freq_every_diff(self, tokens, mask, slop=1):
         """Return number of occurences of a phrase."""
         from time import perf_counter
         # Start with docs with all terms
@@ -951,25 +965,30 @@ class PostingsArray(ExtensionArray):
         # https://chat.openai.com/share/31affaad-dc91-4757-b31c-e85bdb5a0eb6
 
         if np.sum(mask) == 0:
-            return np.array([])
+            return np.array([]), np.zeros(len(self), dtype=bool)
 
         # Pad for easy difference computation
         term_posns = []
+        keep_mask = np.ones(len(self), dtype=bool)
         for term in tokens:
             as_array = self.positions(term, mask)
             as_array_time = perf_counter() - start
             logging.info(f"Arr Posns 1: {as_array_time:.2f}s")
-            term_posns.append(vstack_with_pad(as_array, 5))
+            this_term_posns, term_keep_mask = vstack_with_mask(as_array, width=10)
+            term_posns.append(this_term_posns)
+            keep_mask[mask] &= term_keep_mask
             vstack_with_pad_time = perf_counter() - start
             logging.info(f"Arr Posns 2: {vstack_with_pad_time:.2f}s")
-            if term_posns[-1].shape[1] > 100 and terminate_many_posns:
-                logging.info("Reverting to phrase_freq_scan")
-                bigram_freqs = self.phrase_freq_scan_old(tokens, mask=mask, slop=slop)
-                return bigram_freqs[mask]
         pad_time = perf_counter() - start
         logging.info(f"Pad time: {pad_time:.2f}s")
 
-        bigram_freqs = None
+        bigram_freqs = np.zeros(np.sum(mask))
+
+        skipped_mask = ~keep_mask
+        mask &= keep_mask
+
+        if np.sum(mask) == 0:
+            return np.array([]), skipped_mask
 
         prior_term = term_posns[0]
         for term in term_posns[1:]:
@@ -1047,4 +1066,4 @@ class PostingsArray(ExtensionArray):
             prior_term = term
             logging.info(f"Loop Time: {perf_counter() - start:.2f}s")
 
-        return bigram_freqs[bigram_freqs > 0]
+        return bigram_freqs[bigram_freqs > 0], skipped_mask
