@@ -14,6 +14,7 @@ import numpy as np
 from searcharray.term_dict import TermDict, TermMissingError
 from searcharray.phrase import scan_merge_bigram, scan_merge_inplace, advance_after_binsearch
 from searcharray.wide_spans import all_wide_spans_of_slop
+from searcharray.posn_diffs import compute_phrase_freqs
 
 # Doc,Term -> freq
 # Note scipy sparse switching to *_array, which is more numpy like
@@ -30,32 +31,6 @@ root.setLevel(logging.ERROR)
 # formatter = logging.Formatter('%(message)s')
 # handler.setFormatter(formatter)
 # root.addHandler(handler)
-
-
-def vstack_with_pad(arrays, width=10, pad=-100):
-    vstacked = np.zeros((len(arrays), width), dtype=arrays[0].dtype) + pad
-    for idx, array in enumerate(arrays):
-        # Resize if needed, padding with pad
-        if len(array) > width:
-            logging.info(f"Resizing from {width} to {len(array)}")
-            vstack_padded = np.pad(vstacked, ((0, 0), (0, len(array) - width)), constant_values=pad)
-            width = len(array)
-            vstacked = vstack_padded
-        vstacked[idx, :len(array)] = array
-    return vstacked
-
-
-def vstack_with_mask(arrays, width=10, pad=-100, mask=None):
-    vstacked = np.zeros((len(arrays), width), dtype=arrays[0].dtype) + pad
-    if mask is None:
-        mask = np.ones(len(arrays), dtype=bool)
-    for idx, array in enumerate(arrays):
-        # Resize if needed, padding with pad
-        if len(array) > width:
-            mask[idx] = False  # Skip this value as too inefficient to pad given the width
-        else:
-            vstacked[idx, :len(array)] = array
-    return vstacked[mask], mask
 
 
 def self_adjs(prior_posns, next_posns):
@@ -941,129 +916,30 @@ class PostingsArray(ExtensionArray):
 
         return phrase_freqs
 
-    def phrase_freq_every_diff(self, tokens, slop=1, batch_size=1000000,
-                               terminate_many_posns=True):
+    def phrase_freq_every_diff(self, tokens, slop=1):
         """Batch up calls to _phrase_freq_every_diff."""
+        phrase_freqs = np.zeros(len(self))
+
         mask = self.and_query(tokens)
         phrase_freqs = np.zeros(len(self))
-        for batch_no in range(0, len(self), batch_size):
-            curr_mask = np.zeros(len(self), dtype=bool)
-            curr_mask[batch_no:batch_no + batch_size] = True
-            batch_mask = mask & curr_mask
-            this_freqs, skipped_mask = self._phrase_freq_every_diff(tokens, slop=slop, mask=batch_mask)
-            phrase_freqs[batch_mask] = this_freqs
-            slow_freqs = self.phrase_freq_scan_old(tokens, mask=skipped_mask, slop=slop)
-            phrase_freqs[skipped_mask] = slow_freqs[skipped_mask]
+        term_posns = [self.positions(term, mask) for term in tokens]
+        # Mask is now relative to AND matches, not to all docs
+        to_compute_mask = mask[mask].copy()
+        orig_compute_mask_len = len(to_compute_mask)
+        for width in range(10, 100, 10):
+            diff_phrase_freqs, computed_mask, skipped_mask = compute_phrase_freqs(term_posns,
+                                                                                  mask=to_compute_mask,
+                                                                                  slop=slop,
+                                                                                  width=width)
+            assert len(computed_mask) == orig_compute_mask_len
+            assert len(skipped_mask) == orig_compute_mask_len
+            if not np.any(skipped_mask) and not np.any(computed_mask):
+                break
+            to_compute_mask = skipped_mask
+            # Positions in current mask that were updated
+            update_mask = mask.copy()
+            update_mask[mask] &= computed_mask
+            phrase_freqs[update_mask] = diff_phrase_freqs
+            if not np.any(skipped_mask):
+                break
         return phrase_freqs
-
-    def _phrase_freq_every_diff(self, tokens, mask, slop=1):
-        """Return number of occurences of a phrase."""
-        from time import perf_counter
-        # Start with docs with all terms
-        start = perf_counter()
-        # For detailed documentation of this algorithm, see this ChatGPT4 discussion
-        # https://chat.openai.com/share/31affaad-dc91-4757-b31c-e85bdb5a0eb6
-
-        if np.sum(mask) == 0:
-            return np.array([]), np.zeros(len(self), dtype=bool)
-
-        # Pad for easy difference computation
-        term_posns = []
-        keep_mask = np.ones(len(self), dtype=bool)
-        for term in tokens:
-            as_array = self.positions(term, mask)
-            as_array_time = perf_counter() - start
-            logging.info(f"Arr Posns 1: {as_array_time:.2f}s")
-            this_term_posns, term_keep_mask = vstack_with_mask(as_array, width=10)
-            term_posns.append(this_term_posns)
-            keep_mask[mask] &= term_keep_mask
-            vstack_with_pad_time = perf_counter() - start
-            logging.info(f"Arr Posns 2: {vstack_with_pad_time:.2f}s")
-        pad_time = perf_counter() - start
-        logging.info(f"Pad time: {pad_time:.2f}s")
-
-        bigram_freqs = np.zeros(np.sum(mask))
-
-        skipped_mask = ~keep_mask
-        mask &= keep_mask
-
-        if np.sum(mask) == 0:
-            return np.array([]), skipped_mask
-
-        prior_term = term_posns[0]
-        for term in term_posns[1:]:
-            is_same_term = (term.shape == prior_term.shape) and np.all(term == prior_term)
-
-            # Compute positional differences
-            #
-            # Each row of posn_diffs is a term posn diff matrix
-            # Where columns are prior_term posns, rows are term posns
-            # This shows every possible term diff
-            #
-            # Example:
-            #   prior_term = array([[0, 4],[0, 4])
-            #         term = array([[1, 2, 3],[1, 2, 3]])
-            #
-            #
-            #   posn_diffs =
-            #
-            #     array([[ term[0] - prior_term[0], term[0] - prior_term[1] ],
-            #            [ term[1] - prior_term[0], ...
-            #            [ term[2] - prior_term[0], ...
-            #
-            #    or in our example
-            #
-            #     array([[ 1, -3],
-            #            [ 2, -2],
-            #            [ 3, -1]])
-            #
-            #  We care about all locations where posn == slop (or perhaps <= slop)
-            #  that is term is slop away from prior_term. Usually slop == 1 (ie 1 posn away)
-            #  for normal phrase matching
-            #
-            logging.info(f"term shape: {term.shape} | prior_term shape: {prior_term.shape}")
-            posn_diffs = term[:, :, np.newaxis] - prior_term[:, np.newaxis, :]
-            logging.info(f"PosnsDiff Time: {perf_counter() - start:.2f}s")
-
-            # For > 2 terms, we need to connect a third term by making prior_term = term
-            # and repeating
-            #
-            # BUT
-            # we only want those parts of term that are adjacent to prior_term
-            # before continuing, so we don't accidentally get a partial phrase
-            # so we need to make sure to
-            # Pad out any rows in 'term' where posn diff != slop
-            # so they're not considered on subsequent iterations
-            term_mask = np.any(posn_diffs == 1, axis=2)
-            term[~term_mask] = -100
-            logging.info(f"Term Mask Time: {perf_counter() - start:.2f}s")
-
-            # Count how many times the row term is 1 away from the col term
-            per_doc_diffs = np.sum(posn_diffs == slop, axis=1, dtype=np.int8)
-            logging.info(f"Per Doc Diffs Time: {perf_counter() - start:.2f}s")
-
-            # Doc-wise sum to get a 'term freq' for the prior_term - term bigram
-            bigram_freqs = np.sum(per_doc_diffs == slop, axis=1)
-            logging.info(f"BigramFreqs Time: {perf_counter() - start:.2f}s")
-            if is_same_term:
-                satisfies_slop = per_doc_diffs == slop
-                consecutive_ones = satisfies_slop[:, 1:] & satisfies_slop[:, :-1]
-                consecutive_ones = np.sum(consecutive_ones, axis=1)
-                # ceiling divide?
-                # Really these show up as
-                # 1 1 1 0 1
-                # we need to treat the 2nd consecutive 1 as 'not a match'
-                # and also update 'term' to not include it
-                bigram_freqs -= -np.floor_divide(consecutive_ones, -2)
-
-            # I _think_ last loop, bigram_freqs is the full phrase term freq
-
-            # Update mask to eliminate any non-matches
-            mask[mask] &= bigram_freqs > 0
-
-            # Should only keep positions of 'prior term' that are adjacent to the
-            # one prior to it...
-            prior_term = term
-            logging.info(f"Loop Time: {perf_counter() - start:.2f}s")
-
-        return bigram_freqs[bigram_freqs > 0], skipped_mask
