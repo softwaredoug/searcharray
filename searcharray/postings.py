@@ -894,7 +894,7 @@ class PostingsArray(ExtensionArray):
                     ins_posns = np.searchsorted(prior_posns[idx], term_posns[idx], side='right')
                     prior_adjacents = prior_posns[idx][ins_posns - 1]
                     adjacents = term_posns[idx] - prior_adjacents
-                    satisfies_slop = adjacents <= slop
+                    satisfies_slop = (adjacents <= slop) & ~(ins_posns == 0)
                     cont_indices = np.argwhere(satisfies_slop).flatten()
                 else:
                     adjacents = np.diff(priors_in_self)
@@ -918,19 +918,27 @@ class PostingsArray(ExtensionArray):
 
     def phrase_freq_every_diff(self, tokens, slop=1):
         """Batch up calls to _phrase_freq_every_diff."""
+        from time import perf_counter
+        start = perf_counter()
         phrase_freqs = np.zeros(len(self))
 
         mask = self.and_query(tokens)
+        print(f"Preamble0: {perf_counter() - start:.4f}s")
         phrase_freqs = np.zeros(len(self))
         term_posns = [self.positions(term, mask) for term in tokens]
         # Mask is now relative to AND matches, not to all docs
+        print(f"Preamble1: {perf_counter() - start:.4f}s")
         to_compute_mask = mask[mask].copy()
         orig_compute_mask_len = len(to_compute_mask)
-        for width in range(10, 100, 10):
+        remaining = True
+        print(f"Preamble2: {perf_counter() - start:.4f}s")
+        for width in range(10, 80, 10):
             diff_phrase_freqs, computed_mask, skipped_mask = compute_phrase_freqs(term_posns,
                                                                                   mask=to_compute_mask,
                                                                                   slop=slop,
                                                                                   width=width)
+
+            remaining = np.any(skipped_mask)
             assert len(computed_mask) == orig_compute_mask_len
             assert len(skipped_mask) == orig_compute_mask_len
             if not np.any(skipped_mask) and not np.any(computed_mask):
@@ -940,6 +948,16 @@ class PostingsArray(ExtensionArray):
             update_mask = mask.copy()
             update_mask[mask] &= computed_mask
             phrase_freqs[update_mask] = diff_phrase_freqs
-            if not np.any(skipped_mask):
+            if not remaining:
                 break
+            print(f"Phrase Search Time (LOOP): {perf_counter() - start:.4f}s")
+        print(f"Phrase Search Diff Time: {perf_counter() - start:.4f}s")
+        if remaining:
+            start = perf_counter()
+            remainder_mask = mask.copy()
+            remainder_mask[mask] &= skipped_mask
+            remainder_freqs = self.phrase_freq_scan_old(tokens, mask=remainder_mask, slop=slop)
+            phrase_freqs[remainder_mask] = remainder_freqs[remainder_mask]
+            print(f"Remaining Time: {perf_counter() - start:.4f}s")
+        print(f"Phrase Search Diff Time: {perf_counter() - start:.4f}s")
         return phrase_freqs

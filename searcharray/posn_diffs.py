@@ -110,11 +110,14 @@ def _compute_phrase_freqs(term_posns, mask, slop=1):
         # Last loop, bigram_freqs is the full phrase term freq
 
         # Update mask to eliminate any non-matches
+        bigram_freqs = bigram_freqs[mask[mask]]
         mask[mask] &= bigram_freqs > 0
+        bigram_freqs = bigram_freqs[bigram_freqs > 0]
 
         # Should only keep positions of 'prior term' that are adjacent to the
         # one prior to it...
         prior_term = term
+
     return bigram_freqs, mask
 
 

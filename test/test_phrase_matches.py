@@ -25,6 +25,11 @@ scenarios = {
         "phrase": ["foo", "bar"],
         "expected": [1, 0, 0, 0] * 25,
     },
+    "and_but_not_phrase": {
+        "docs": lambda: PostingsArray.index(["foo bear bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "phrase": ["foo", "bar"],
+        "expected": [0, 0, 0, 0] * 25,
+    },
     "term_repeats": {
         "docs": lambda: PostingsArray.index(["foo foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "bar"],
@@ -126,6 +131,15 @@ scenarios = {
         "phrase": ["foo", "bar"],
         "expected": [1, 1, 0, 0, 0] * 25,
     },
+    "different_num_posns_mixed_and_not_phrase": {
+        "docs": lambda: PostingsArray.index(["data3 bar bar foo foo",
+                                             "foo " + " ".join(["bar"] * 5),
+                                             "foo " + " ".join(["bar"] * 50),
+                                             "foo data2 bar",
+                                             "bunny funny wunny"] * 25),
+        "phrase": ["foo", "bar"],
+        "expected": [0, 1, 1, 0, 0] * 25,
+    },
     "10k_docs": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 10000),
         "phrase": ["foo", "bar"],
@@ -134,8 +148,7 @@ scenarios = {
 }
 
 
-@w_scenarios(scenarios)
-def test_phrase(docs, phrase, expected):
+def test_phrase_api(docs, phrase, expected):
     docs = docs()
     docs_before = docs.copy()
     term_freqs = docs.term_freq(phrase)
@@ -143,20 +156,18 @@ def test_phrase(docs, phrase, expected):
     matches = docs.match(phrase)
     assert (term_freqs == expected).all()
     assert (matches == expected_matches).all()
+    assert (docs == docs_before).all()
+
+
+@w_scenarios(scenarios)
+@pytest.mark.parametrize("algorithm", ["phrase_freq", "phrase_freq_scan_old", "phrase_freq_scan", "phrase_freq_scan_inplace"])
+def test_phrase(docs, phrase, expected, algorithm):
+    docs = docs()
+    docs_before = docs.copy()
     if len(phrase) > 1:
-        phrase_matches = docs.phrase_freq_wide_spans(phrase)
+        phrase_matches = getattr(docs, algorithm)(phrase)
         assert (expected == phrase_matches).all()
-        phrase_matches = docs.phrase_freq_scan_old(phrase)
-        assert (expected == phrase_matches).all()
-        phrase_matches = docs.phrase_freq_scan(phrase)
-        assert (expected == phrase_matches).all()
-        phrase_matches = docs.phrase_freq_scan_inplace(phrase)
-        assert (expected == phrase_matches).all()
-        phrase_matches = docs.phrase_freq(phrase)
-        assert (expected == phrase_matches).all()
-    assert (docs == docs_before).all(), "The phrase_match method should not modify the original array"
-    # bm25 = docs.bm25(phrase)
-    # assert (np.argsort(bm25) == np.argsort(expected)).all()
+        assert (docs == docs_before).all()
 
 
 perf_scenarios = {
@@ -244,7 +255,6 @@ def test_phrase_performance(docs, phrase, expected):
     matches_scan_inplace = docs.phrase_freq_scan_inplace_binsearch(phrase)
     print(f"phrase_match_scan inplbin took {perf_counter() - start} seconds | {len(docs)} docs")
     assert (matches_scan_inplace == expected).all()
-
 
 
 def test_positions():
