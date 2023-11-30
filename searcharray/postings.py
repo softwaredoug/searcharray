@@ -918,20 +918,20 @@ class PostingsArray(ExtensionArray):
 
     def phrase_freq_every_diff(self, tokens, slop=1):
         """Batch up calls to _phrase_freq_every_diff."""
-        from time import perf_counter
-        start = perf_counter()
+        # from time import perf_counter
+        # start = perf_counter()
         phrase_freqs = np.zeros(len(self))
 
         mask = self.and_query(tokens)
-        print(f"Preamble0: {perf_counter() - start:.4f}s")
+        # print(f"Preamble0: {perf_counter() - start:.4f}s")
         phrase_freqs = np.zeros(len(self))
         term_posns = [self.positions(term, mask) for term in tokens]
         # Mask is now relative to AND matches, not to all docs
-        print(f"Preamble1: {perf_counter() - start:.4f}s")
+        # print(f"Preamble1: {perf_counter() - start:.4f}s")
         to_compute_mask = mask[mask].copy()
         orig_compute_mask_len = len(to_compute_mask)
         remaining = True
-        print(f"Preamble2: {perf_counter() - start:.4f}s")
+        # print(f"Preamble2: {perf_counter() - start:.4f}s")
         for width in range(10, 80, 10):
             diff_phrase_freqs, computed_mask, skipped_mask = compute_phrase_freqs(term_posns,
                                                                                   mask=to_compute_mask,
@@ -950,14 +950,14 @@ class PostingsArray(ExtensionArray):
             phrase_freqs[update_mask] = diff_phrase_freqs
             if not remaining:
                 break
-            print(f"Phrase Search Time (LOOP): {perf_counter() - start:.4f}s")
-        print(f"Phrase Search Diff Time: {perf_counter() - start:.4f}s")
+            # print(f"Phrase Search Time (LOOP): {perf_counter() - start:.4f}s")
+        # print(f"Phrase Search Diff Time: {perf_counter() - start:.4f}s")
         if remaining:
-            start = perf_counter()
+            # start = perf_counter()
             remainder_mask = mask.copy()
             remainder_mask[mask] &= skipped_mask
             remainder_freqs = self.phrase_freq_scan_old(tokens, mask=remainder_mask, slop=slop)
             phrase_freqs[remainder_mask] = remainder_freqs[remainder_mask]
-            print(f"Remaining Time: {perf_counter() - start:.4f}s")
-        print(f"Phrase Search Diff Time: {perf_counter() - start:.4f}s")
+            # print(f"Remaining Time: {perf_counter() - start:.4f}s")
+        # print(f"Phrase Search Diff Time: {perf_counter() - start:.4f}s")
         return phrase_freqs
