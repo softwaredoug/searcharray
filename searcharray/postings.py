@@ -761,7 +761,7 @@ class PostingsArray(ExtensionArray):
     def and_query(self, tokens):
         """Return a mask on the postings array indicating which elements contain all terms."""
         masks = [self.match(term) for term in tokens]
-        mask = np.array([True] * len(self))
+        mask = np.ones(len(self), dtype=bool)
         for curr_mask in masks:
             mask = mask & curr_mask
         return mask
@@ -918,46 +918,20 @@ class PostingsArray(ExtensionArray):
 
     def phrase_freq_every_diff(self, tokens, slop=1):
         """Batch up calls to _phrase_freq_every_diff."""
-        # from time import perf_counter
-        # start = perf_counter()
-        phrase_freqs = np.zeros(len(self))
+        phrase_freqs = -np.ones(len(self))
 
         mask = self.and_query(tokens)
-        # print(f"Preamble0: {perf_counter() - start:.4f}s")
-        phrase_freqs = np.zeros(len(self))
-        term_posns = [self.positions(term, mask) for term in tokens]
-        # Mask is now relative to AND matches, not to all docs
-        # print(f"Preamble1: {perf_counter() - start:.4f}s")
-        to_compute_mask = mask[mask].copy()
-        orig_compute_mask_len = len(to_compute_mask)
-        remaining = True
-        # print(f"Preamble2: {perf_counter() - start:.4f}s")
-        for width in range(10, 80, 10):
-            diff_phrase_freqs, computed_mask, skipped_mask = compute_phrase_freqs(term_posns,
-                                                                                  mask=to_compute_mask,
-                                                                                  slop=slop,
-                                                                                  width=width)
+        phrase_freqs[~mask] = 0
 
-            remaining = np.any(skipped_mask)
-            assert len(computed_mask) == orig_compute_mask_len
-            assert len(skipped_mask) == orig_compute_mask_len
-            if not np.any(skipped_mask) and not np.any(computed_mask):
-                break
-            to_compute_mask = skipped_mask
-            # Positions in current mask that were updated
-            update_mask = mask.copy()
-            update_mask[mask] &= computed_mask
-            phrase_freqs[update_mask] = diff_phrase_freqs
-            if not remaining:
-                break
-            # print(f"Phrase Search Time (LOOP): {perf_counter() - start:.4f}s")
-        # print(f"Phrase Search Diff Time: {perf_counter() - start:.4f}s")
-        if remaining:
-            # start = perf_counter()
-            remainder_mask = mask.copy()
-            remainder_mask[mask] &= skipped_mask
-            remainder_freqs = self.phrase_freq_scan_old(tokens, mask=remainder_mask, slop=slop)
-            phrase_freqs[remainder_mask] = remainder_freqs[remainder_mask]
-            # print(f"Remaining Time: {perf_counter() - start:.4f}s")
-        # print(f"Phrase Search Diff Time: {perf_counter() - start:.4f}s")
+        term_posns = [self.positions(term, mask) for term in tokens]
+        for width in range(10, 80, 10):
+            phrase_freqs[mask] = compute_phrase_freqs(term_posns,
+                                                      phrase_freqs[mask],
+                                                      slop=slop,
+                                                      width=width)
+
+        remaining_mask = phrase_freqs == -1
+        if np.any(remaining_mask):
+            remainder_freqs = self.phrase_freq_scan_old(tokens, mask=remaining_mask, slop=slop)
+            phrase_freqs[remaining_mask] = remainder_freqs[remaining_mask]
         return phrase_freqs

@@ -1,8 +1,9 @@
 """Phrase search by dumb numpy position differences subtraction, bigram by bigram."""
 import numpy as np
+from typing import List
 
 
-def vstack_with_mask(posns, mask=None, width=10, pad=-100):
+def vstack_with_mask(posns: List[np.ndarray], phrase_freqs: np.ndarray, width: int = 0, pad: int = -100):
     """Vertically stack arrays, only accepting those that fit within width.
 
     Parameters
@@ -10,7 +11,8 @@ def vstack_with_mask(posns, mask=None, width=10, pad=-100):
     posns: list of np.ndarray term positions for a given term across multiple docs
     width: int, max number of positions we accept
     pad: int, value to pad with when no position present
-    mask: np.ndarray, boolean mask of which arrays to accept
+    phrase_freqs: np.ndarray, phrase freqs for each doc.
+                 -1 indicates "not yet processed" 0 means "defiiitely not a match"
 
     Returns
     -------
@@ -18,33 +20,33 @@ def vstack_with_mask(posns, mask=None, width=10, pad=-100):
     mask: np.ndarray, boolean mask of which arrays were accepted (so you can recompute them a different way)
     """
     vstacked = np.zeros((len(posns), width), dtype=posns[0].dtype) + pad
-    if mask is None:
-        mask = np.ones(len(posns), dtype=bool)
     for idx, array in enumerate(posns):
-        if len(array) > width:
-            mask[idx] = False  # Skip this value as too inefficient to pad given the width
+        if len(array) >= width:
+            phrase_freqs[idx] = -2  # Mark as skip this round
         else:
             vstacked[idx, :len(array)] = array
-    return vstacked, mask
+    return vstacked
 
 
-def stack_term_posns(term_posns, mask, width=10):
+def stack_term_posns(term_posns: List[np.ndarray], phrase_freqs: np.ndarray, width: int = 10):
     # Pad for easy difference computation
     keep_term_posns = []
     # keep_mask = np.ones(len(self), dtype=bool)
     for term_posn in term_posns:
-        this_term_posns, mask = vstack_with_mask(term_posn, mask=mask, width=width)
+        this_term_posns = vstack_with_mask(term_posn, phrase_freqs, width=width)
         keep_term_posns.append(this_term_posns)
-    return keep_term_posns, mask
+    return keep_term_posns
 
 
-def _compute_phrase_freqs(term_posns, mask, slop=1):
+def _compute_phrase_freqs(term_posns, phrase_freqs: np.ndarray, slop=1):
 
-    if not np.any(mask):
-        return np.array([], dtype=np.uint32), mask
+    to_compute = phrase_freqs == -1
+
+    if not np.any(to_compute):
+        return phrase_freqs
 
     # Only examine masked
-    term_posns = [term_posn[mask] for term_posn in term_posns]
+    term_posns = [term_posn[to_compute] for term_posn in term_posns]
 
     prior_term = term_posns[0]
     for term in term_posns[1:]:
@@ -110,40 +112,34 @@ def _compute_phrase_freqs(term_posns, mask, slop=1):
         # Last loop, bigram_freqs is the full phrase term freq
 
         # Update mask to eliminate any non-matches
-        bigram_freqs = bigram_freqs[mask[mask]]
-        mask[mask] &= bigram_freqs > 0
-        bigram_freqs = bigram_freqs[bigram_freqs > 0]
+        phrase_freqs[to_compute] = bigram_freqs
 
         # Should only keep positions of 'prior term' that are adjacent to the
         # one prior to it...
         prior_term = term
 
-    return bigram_freqs, mask
+    return phrase_freqs
 
 
-def compute_phrase_freqs(term_posns, mask, slop=1, width=10):
+def compute_phrase_freqs(term_posns, phrase_freqs, slop=1, width=10):
     """Compute phrase freq using matrix-diff method for docs up to width posns. Skip others.
 
     Parameters
     ----------
     term_posns: list of np.ndarray term positions for a given term across multiple docs
-    mask: np.ndarray, boolean mask of which docs to compute phrase_freqs
+    phrase_freqs: np.ndarray, phrase freqs for each doc present in term_posns
 
     Returns
     -------
     phrase_freqs: np.ndarray, phrase freqs for each doc present in mask
-    matched_mask: np.ndarray, boolean mask of which docs were accepted and matched
-    skipped_mask: np.ndarray, boolean mask of which docs were skipped due to width violation (compute another way)
 
     See Also
     --------
     Colab notebook: https://colab.research.google.com/drive/1NRxeO8Ya8jSlFP5YwZaGh1-43kDH4OXG?authuser=1#scrollTo=5JZV8svpauYB
     """
-    orig_mask = mask.copy()
-    stacked, mask = stack_term_posns(term_posns, mask, width=width)
-    skipped_mask = orig_mask & ~mask
-    for stack in stacked:
-        assert len(stack) == len(mask)
-        assert stack.shape[0] == len(mask)
-    phrase_freqs, mask = _compute_phrase_freqs(stacked, mask, slop=slop)
-    return phrase_freqs, mask, skipped_mask
+    if len(term_posns[0]) != len(phrase_freqs):
+        raise ValueError("term_posns and phrase_freqs must be same length")
+    stacked = stack_term_posns(term_posns, phrase_freqs, width=width)
+    phrase_freqs = _compute_phrase_freqs(stacked, phrase_freqs, slop=slop)
+    phrase_freqs[phrase_freqs == -2] = -1
+    return phrase_freqs
