@@ -12,9 +12,9 @@ import logging
 
 import numpy as np
 from searcharray.term_dict import TermDict, TermMissingError
-from searcharray.phrase import scan_merge_bigram, scan_merge_inplace, advance_after_binsearch
-from searcharray.wide_spans import all_wide_spans_of_slop
-from searcharray.posn_diffs import compute_phrase_freqs
+from searcharray.phrase.scan_merge import scan_merge_bigram, scan_merge_inplace, advance_after_binsearch
+from searcharray.phrase.wide_spans import all_wide_spans_of_slop
+from searcharray.phrase.posn_diffs import compute_phrase_freqs
 
 # Doc,Term -> freq
 # Note scipy sparse switching to *_array, which is more numpy like
