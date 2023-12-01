@@ -98,6 +98,24 @@ def msmarco():
         return pd.read_pickle("data/msmarco100k.pkl")
 
 
+# (venv)  $ git co 60ad46d1a2edc1504942b2c80b71b38673ff6426                                              search-array$
+# Previous HEAD position was 55c3594 Add mask for diff, but one test still fails
+# HEAD is now at 60ad46d Save different phrase implementations
+# (venv)  $ python -m pytest -s "test/test_msmarco.py"                                                   search-array$
+# ================================================ test session starts ================================================
+# platform darwin -- Python 3.11.6, pytest-7.4.3, pluggy-1.3.0
+# rootdir: /Users/douglas.turnbull/src/search-array
+# plugins: cov-4.1.0
+# collected 1 item
+#
+# test/test_msmarco.py Phrase search...
+# msmarco phraes search: 1.9268s
+#
+# After looping different widths
+# e6980396976231a8a124a1d8d58ee939d8f27482
+# test/test_msmarco.py Phrase search...
+# msmarco phraes search: 1.5184s
+
 def test_msmarco(msmarco100k):
     phrase_search = ["what", "is"]
     start = perf_counter()

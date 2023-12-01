@@ -89,7 +89,7 @@ def scan_merge(prior_posns: np.ndarray,
     start_idx = 0
     prior_idx = 0
     while prior_idx < len(prior_posns):
-        # Scan next until just past p
+        # Scan next until just past prior
         prior = prior_posns[prior_idx]
         next_idx = scan_algo(next_posns, target=prior,
                              next_start=next_start,
@@ -112,16 +112,15 @@ def scan_merge(prior_posns: np.ndarray,
             cont_nexts.append(np.array(cont_next))
             bigram_freqs.append(bigram_freq)
 
-            # print("Resetting with")
-            # print(cont_nexts)
-            # print(bigram_freqs)
-
             cont_next = []
             bigram_freq = 0
 
         prior = prior_posns[prior_idx]
         next_idx = scan_algo(next_posns, target=prior,
                              next_start=next_start, idx=next_idx)
+
+        if next_idx >= next_start:
+            continue
 
         next_posn = next_posns[next_idx]
         # Check if within slop
@@ -194,6 +193,8 @@ def scan_merge_inplace(prior_posns: np.ndarray,
                              target=prior,
                              next_start=next_start,
                              idx=next_idx)
+        if next_idx >= next_start:
+            continue
 
         next_posn = next_posns[next_idx]
         # Check if within slop
