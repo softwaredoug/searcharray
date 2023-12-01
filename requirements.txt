@@ -25,3 +25,4 @@ stack-data==0.6.3
 traitlets==5.13.0
 tzdata==2023.3
 wcwidth==0.2.9
+requests==2.31.0
