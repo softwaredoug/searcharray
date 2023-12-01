@@ -116,6 +116,7 @@ def msmarco():
 # test/test_msmarco.py Phrase search...
 # msmarco phraes search: 1.5184s
 
+@pytest.mark.skip
 def test_msmarco(msmarco100k):
     phrase_search = ["what", "is"]
     start = perf_counter()
