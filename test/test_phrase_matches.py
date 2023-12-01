@@ -25,6 +25,11 @@ scenarios = {
         "phrase": ["foo", "bar"],
         "expected": [1, 0, 0, 0] * 25,
     },
+    "term_does_not_exist": {
+        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "phrase": ["term_does", "not_exist"],
+        "expected": [0, 0, 0, 0] * 25,
+    },
     "and_but_not_phrase": {
         "docs": lambda: PostingsArray.index(["foo bear bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "bar"],

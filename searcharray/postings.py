@@ -922,6 +922,8 @@ class PostingsArray(ExtensionArray):
 
         mask = self.and_query(tokens)
         phrase_freqs[~mask] = 0
+        if np.sum(mask) == 0:
+            return phrase_freqs
 
         term_posns = [self.positions(term, mask) for term in tokens]
         for width in range(10, 80, 10):
