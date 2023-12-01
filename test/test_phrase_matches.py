@@ -216,6 +216,7 @@ perf_scenarios = {
 # phrase_match_scan        took 4.758700999984285 seconds | 4000000 docs
 # phrase_match_scan        took 4.029075291007757 seconds | 4000000 docs
 
+@pytest.mark.skip("Performance test")
 @w_scenarios(perf_scenarios)
 def test_phrase_performance(docs, phrase, expected):
     start = perf_counter()
