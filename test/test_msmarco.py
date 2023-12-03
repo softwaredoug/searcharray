@@ -117,10 +117,14 @@ def msmarco():
 # msmarco phraes search: 1.5184s
 
 @pytest.mark.skip
-def test_msmarco(msmarco100k):
-    phrase_search = ["what", "is"]
+@pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation"])
+def test_msmarco(phrase_search, msmarco100k):
+    import cProfile
+    phrase_search = phrase_search.split()
+    # print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+    # print(f"Memory Usage (TITLE): {msmarco100k['title_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     start = perf_counter()
-    print("Phrase search...")
-    results = msmarco100k['body_ws'].array.bm25(phrase_search)
-    print(f"msmarco phraes search: {perf_counter() - start:.4f}s")
-
+    with cProfile.Profile() as pr:
+        msmarco100k['body_ws'].array.bm25(phrase_search)
+        pr.print_stats(sort="cumtime")
+    print(f"msmarco phrase search {phrase_search}: {perf_counter() - start:.4f}s")

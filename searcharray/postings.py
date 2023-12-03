@@ -436,7 +436,11 @@ class PostingsArray(ExtensionArray):
 
     @property
     def nbytes(self):
-        return self.term_freqs.nbytes + self.posns.nbytes
+        posns_lookup_bytes = sum(x.nbytes for x in self.posns_lookup)
+        print(f"posns_lookup_bytes = {posns_lookup_bytes / 1024 ** 2:.2f} MB")
+        print(f"term_freqs.nbytes = {self.term_freqs.nbytes / 1024 ** 2:.2f} MB")
+        print(f"posns.nbytes = {self.posns.nbytes / 1024 ** 2:.2f} MB")
+        return self.term_freqs.nbytes + self.posns.nbytes + posns_lookup_bytes
 
     def __getitem__(self, key):
         key = pd.api.indexers.check_array_indexer(self, key)
@@ -724,6 +728,8 @@ class PostingsArray(ExtensionArray):
         k1 : float, optional BM25 param. Defaults to 1.2.
         b : float, optional BM25 param. Defaults to 0.75.
         """
+        # Get term freqs per token
+        token = self._check_token_arg(token)
         return self.bm25_idf(token, doc_stats=doc_stats) * self.bm25_tf(token)
 
     def _posns_lookup_to_csr(self):
@@ -886,16 +892,22 @@ class PostingsArray(ExtensionArray):
                 # Find insert position of every next term in prior term's positions
                 # Intuition:
                 # https://colab.research.google.com/drive/1EeqHYuCiqyptd-awS67Re78pqVdTfH4A
+                if len(prior_posns[idx]) == 0:
+                    bigram_freqs[idx] = 0
+                    cont_posns.append([])
+                    continue
                 priors_in_self = self_adjs(prior_posns[idx], term_posns[idx])
                 takeaway = 0
                 satisfies_slop = None
                 cont_indices = None
+                # Different term
                 if len(priors_in_self) == 0:
                     ins_posns = np.searchsorted(prior_posns[idx], term_posns[idx], side='right')
                     prior_adjacents = prior_posns[idx][ins_posns - 1]
                     adjacents = term_posns[idx] - prior_adjacents
                     satisfies_slop = (adjacents <= slop) & ~(ins_posns == 0)
                     cont_indices = np.argwhere(satisfies_slop).flatten()
+                # Overlapping term
                 else:
                     adjacents = np.diff(priors_in_self)
                     satisfies_slop = adjacents <= slop
