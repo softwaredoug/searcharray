@@ -115,9 +115,25 @@ def msmarco():
 # e6980396976231a8a124a1d8d58ee939d8f27482
 # test/test_msmarco.py Phrase search...
 # msmarco phraes search: 1.5184s
-
-@pytest.mark.skip
-@pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation"])
+#
+# Before col cache
+# test/test_msmarco.py msmarco phrase search ['what', 'is']: 2.0513s
+# .msmarco phrase search ['what', 'is', 'the']: 2.6227s
+# .msmarco phrase search ['what', 'is', 'the', 'purpose']: 1.0535s
+# .msmarco phrase search ['what', 'is', 'the', 'purpose', 'of']: 1.2327s
+# .msmarco phrase search ['what', 'is', 'the', 'purpose', 'of', 'cats']: 1.1104s
+# .msmarco phrase search ['star', 'trek']: 0.4251s
+# .msmarco phrase search ['star', 'trek', 'the', 'next', 'generation']: 0.9067s
+#
+# After col cache
+# test/test_msmarco.py msmarco phrase search ['what', 'is']: 1.7201s
+# .msmarco phrase search ['what', 'is', 'the']: 2.2504s
+# .msmarco phrase search ['what', 'is', 'the', 'purpose']: 0.4560s
+# .msmarco phrase search ['what', 'is', 'the', 'purpose', 'of']: 0.4879s
+# .msmarco phrase search ['what', 'is', 'the', 'purpose', 'of', 'cats']: 0.1907s
+# .msmarco phrase search ['star', 'trek']: 0.2590s
+# .msmarco phrase search ['star', 'trek', 'the', 'next', 'generation']: 0.2521s
+@pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
 def test_msmarco(phrase_search, msmarco100k):
     import cProfile
     phrase_search = phrase_search.split()
@@ -126,5 +142,5 @@ def test_msmarco(phrase_search, msmarco100k):
     start = perf_counter()
     with cProfile.Profile() as pr:
         msmarco100k['body_ws'].array.bm25(phrase_search)
-        pr.print_stats(sort="cumtime")
+        # pr.print_stats(sort="cumtime")
     print(f"msmarco phrase search {phrase_search}: {perf_counter() - start:.4f}s")

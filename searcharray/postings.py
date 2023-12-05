@@ -11,15 +11,17 @@ import logging
 
 
 import numpy as np
+from searcharray.utils.row_viewable_matrix import RowViewableMatrix
 from searcharray.term_dict import TermDict, TermMissingError
 from searcharray.phrase.scan_merge import scan_merge_bigram, scan_merge_inplace, advance_after_binsearch
 from searcharray.phrase.wide_spans import all_wide_spans_of_slop
 from searcharray.phrase.posn_diffs import compute_phrase_freqs
+from searcharray.phrase.padded_arrays import PaddedPosnArrays, PaddedPosnArraysBuilder
 
 # Doc,Term -> freq
 # Note scipy sparse switching to *_array, which is more numpy like
 # However, as of now, these don't seem fully baked
-from scipy.sparse import dok_matrix, csr_matrix
+from scipy.sparse import dok_matrix
 
 root = logging.getLogger()
 root.setLevel(logging.ERROR)
@@ -90,9 +92,19 @@ class PostingsRow:
         if self.posns is None:
             return {}
         if term is None:
-            return self.posns.items()
+            posns = self.posns.items()
         else:
-            return np.array(self.posns[term])
+            posns = np.array(self.posns[term])
+        return posns
+
+    def raw_positions(self, term_dict, term=None):
+        if self.posns is None:
+            return {}
+        if term is None:
+            posns = [(term_dict.get_term_id(term), posns) for term, posns in self.posns.items()]
+        else:
+            posns = [(term_dict.get_term_id(term), self.posns[term])]
+        return posns
 
     def tf_to_dense(self, term_dict):
         """Convert to a dense vector of term frequencies."""
@@ -199,71 +211,6 @@ def ws_tokenizer(string):
         raise ValueError("Expected a string")
     return string.split()
 
-
-class RowViewableMatrix:
-    """A slicable matrix that can return views without copying."""
-
-    def __init__(self, csr_mat: csr_matrix, rows: np.ndarray = None):
-        self.mat = csr_mat
-        if rows is None:
-            self.rows = np.arange(self.mat.shape[0])
-        elif isinstance(rows, numbers.Integral):
-            self.rows = np.array([rows])
-        else:
-            self.rows = rows
-
-    def slice(self, keys):
-        return RowViewableMatrix(self.mat, self.rows[keys])
-
-    def __setitem__(self, keys, values):
-        # Replace nan with 0
-        actual_keys = self.rows[keys]
-        if isinstance(actual_keys, numbers.Integral):
-            self.mat[actual_keys] = values
-        elif len(actual_keys) > 0:
-            self.mat[actual_keys] = values
-
-    def copy_row_at(self, row):
-        return self.mat[self.rows[row]]
-
-    def copy(self):
-        return RowViewableMatrix(self.mat.copy(), self.rows.copy())
-
-    def sum(self, axis=0):
-        return self.mat[self.rows].sum(axis=axis)
-
-    def copy_col_at(self, col):
-        return self.mat[self.rows, col]
-
-    def __getitem__(self, key):
-        if isinstance(key, numbers.Integral):
-            return self.copy_row_at(key)
-        else:
-            return self.slice(key)
-
-    @property
-    def nbytes(self):
-        return self.mat.data.nbytes + \
-            self.mat.indptr.nbytes + \
-            self.mat.indices.nbytes + \
-            self.rows.nbytes
-
-    @property
-    def shape(self):
-        return (len(self.rows), self.mat.shape[1])
-
-    def resize(self, shape):
-        self.mat.resize(shape)
-
-    def __len__(self):
-        return len(self.rows)
-
-    def __repr__(self):
-        return f"RowViewableMatrix({repr(self.mat)}, {repr(self.rows)})"
-
-    def __str__(self):
-        return f"RowViewableMatrix({str(self.mat)}, {str(self.rows)})"
-
 # To add positions
 # Row/Col -> index to roaring bitmap
 # Must be slicable
@@ -275,14 +222,13 @@ def _build_index_from_dict(postings):
     start = perf_counter()
     term_dict = TermDict()
     freqs_table = defaultdict(int)
-    posns_table = defaultdict(int)
     avg_doc_length = 0
-    posns_lookup = [np.array([])]  # 0th is empty / None due to using a sparse matrix to lookup into this
     num_postings = 0
     add_term_time = 0
     set_time = 0
     get_posns_time = 0
     set_posns_time = 0
+    posns = PaddedPosnArraysBuilder()
 
     # COPY 1
     # Consume generator (tokenized postings) into list
@@ -315,9 +261,8 @@ def _build_index_from_dict(postings):
 
             set_posns_start = perf_counter()
             if positions is not None:
-                idx = len(posns_lookup)
-                posns_lookup.append(np.array(positions))
-                posns_table[doc_id, term_id] += idx
+                posns.add_posns(doc_id, term_id, positions)
+
             set_posns_time += perf_counter() - set_posns_start
 
         if doc_id % 1000 == 0:
@@ -341,25 +286,17 @@ def _build_index_from_dict(postings):
     freqs_csr = freqs_dok.tocsr()
     logging.debug(f"CSR 1 took {perf_counter() - start} seconds to build")
 
-    posns_dok = dok_matrix((num_postings, len(term_dict)), dtype=np.uint32)
-    dict.update(posns_dok, posns_table)
-    logging.debug(f"DOK 2 took {perf_counter() - start} seconds to build")
-    posns_csr = posns_dok.tocsr()
-    logging.debug(f"CSR 2 took {perf_counter() - start} seconds to build")
-
-    assert freqs_dok.shape == posns_dok.shape
-    return RowViewableMatrix(freqs_csr), RowViewableMatrix(posns_csr), posns_lookup, term_dict, avg_doc_length
+    return RowViewableMatrix(freqs_csr), posns.build(num_postings, len(term_dict)), term_dict, avg_doc_length
 
 
-def _row_to_postings_row(row, term_dict, posns, posns_lookup):
+def _row_to_postings_row(row, term_dict, posns):
     tfs = {}
     non_zeros = row.nonzero()
     labeled_posns = {}
-    for row_idx, col_idx in zip(non_zeros[0], non_zeros[1]):
-        term = term_dict.get_term(col_idx)
-        tfs[term] = int(row[row_idx, col_idx])
-        posn = posns[col_idx]
-        term_posns = posns_lookup[posn]
+    for row_idx, term_idx in zip(non_zeros[0], non_zeros[1]):
+        term = term_dict.get_term(term_idx)
+        tfs[term] = int(row[row_idx, term_idx])
+        term_posns = posns.positions(term_idx, key=row_idx, padded=False)[0]
         labeled_posns[term] = term_posns
 
     result = PostingsRow(tfs, labeled_posns)
@@ -385,12 +322,8 @@ class PostingsArray(ExtensionArray):
             raise TypeError("Expected list-like object, got {}".format(type(postings)))
 
         self.tokenizer = tokenizer
-        self.term_freqs, self.posns, self.posns_lookup, \
+        self.term_freqs, self.posns, \
             self.term_dict, self.avg_doc_length = _build_index_from_dict(postings)
-        if self.posns is not None and len(self.posns) > 0 and self.posns.shape[1] > 0:
-            max_lookup = self.posns.mat.max()
-            if max_lookup > len(self.posns_lookup):
-                self.posns_lookup = np.resize(self.posns_lookup, max_lookup + 1)
 
     @classmethod
     def index(cls, array, tokenizer=ws_tokenizer):
@@ -436,11 +369,7 @@ class PostingsArray(ExtensionArray):
 
     @property
     def nbytes(self):
-        posns_lookup_bytes = sum(x.nbytes for x in self.posns_lookup)
-        print(f"posns_lookup_bytes = {posns_lookup_bytes / 1024 ** 2:.2f} MB")
-        print(f"term_freqs.nbytes = {self.term_freqs.nbytes / 1024 ** 2:.2f} MB")
-        print(f"posns.nbytes = {self.posns.nbytes / 1024 ** 2:.2f} MB")
-        return self.term_freqs.nbytes + self.posns.nbytes + posns_lookup_bytes
+        return self.term_freqs.nbytes + self.posns.nbytes
 
     def __getitem__(self, key):
         key = pd.api.indexers.check_array_indexer(self, key)
@@ -448,9 +377,7 @@ class PostingsArray(ExtensionArray):
         if isinstance(key, numbers.Integral):
             try:
                 rows = self.term_freqs[key]
-                posn_keys = self.posns[key].toarray().flatten()
-
-                return _row_to_postings_row(rows[0], self.term_dict, posn_keys, self.posns_lookup)
+                return _row_to_postings_row(rows[0], self.term_dict, self.posns)
             except IndexError:
                 raise IndexError("index out of bounds")
         else:
@@ -460,7 +387,6 @@ class PostingsArray(ExtensionArray):
             arr = PostingsArray([], tokenizer=self.tokenizer)
             arr.term_freqs = sliced_tfs
             arr.posns = sliced_posns
-            arr.posns_lookup = self.posns_lookup
             arr.term_dict = self.term_dict
             arr.avg_doc_length = self.avg_doc_length
             return arr
@@ -491,20 +417,15 @@ class PostingsArray(ExtensionArray):
                 term_freqs = np.asarray([value])
             elif isinstance(value, PostingsRow):
                 term_freqs = np.asarray([value.tf_to_dense(self.term_dict)])
-                posns = np.asarray([value.positions()])
+                posns = [value.raw_positions(self.term_dict)]
             elif isinstance(value, np.ndarray):
                 term_freqs = np.asarray([x.tf_to_dense(self.term_dict) for x in value])
-                posns = np.asarray([x.positions() for x in value])
+                posns = [x.raw_positions(self.term_dict) for x in value]
             np.nan_to_num(term_freqs, copy=False, nan=0)
             self.term_freqs[key] = term_freqs
 
             if posns is not None:
-                update_rows = self.posns[key]
-                for update_row_idx, new_posns_row in enumerate(posns):
-                    for term, positions in new_posns_row:
-                        term_id = self.term_dict.get_term_id(term)
-                        lookup_location = update_rows[update_row_idx][0, term_id]
-                        self.posns_lookup[lookup_location] = positions
+                self.posns.insert(key, posns)
 
             # Assume we have a positions for each term, doc pair. We can just update it.
             # Otherwise we would have added new terms
@@ -526,11 +447,8 @@ class PostingsArray(ExtensionArray):
                 self.term_dict.add_term(term[0])
 
         self.term_freqs.resize((self.term_freqs.shape[0], len(self.term_dict)))
-        self.posns.resize((self.term_freqs.shape[0], len(self.term_dict)))
+        self.posns.ensure_capacity(self.term_freqs.shape[0], len(self.term_dict))
         # Ensure posns_lookup has at least max self.posns
-        max_lookup = self.posns.mat.max()
-        if max_lookup > len(self.posns_lookup):
-            self.posns_lookup = np.resize(self.posns_lookup, max_lookup + 1)
         self[key] = value
 
     def value_counts(
@@ -620,7 +538,6 @@ class PostingsArray(ExtensionArray):
     def copy(self):
         postings_arr = PostingsArray([], tokenizer=self.tokenizer)
         postings_arr.posns = self.posns.copy()
-        postings_arr.posns_lookup = self.posns_lookup.copy()
         postings_arr.term_freqs = self.term_freqs.copy()
         postings_arr.term_dict = self.term_dict.copy()
         postings_arr.avg_doc_length = self.avg_doc_length
@@ -732,37 +649,10 @@ class PostingsArray(ExtensionArray):
         token = self._check_token_arg(token)
         return self.bm25_idf(token, doc_stats=doc_stats) * self.bm25_tf(token)
 
-    def _posns_lookup_to_csr(self):
-        """Convert the posns_lookup to a csr_matrix."""
-        from scipy.sparse import csr_matrix
-        # This is a list of lists of positions
-        # We want to convert it to a csr_matrix
-        # where each row is a document and each column is a position
-        mat = csr_matrix((len(self.posns_lookup) + 1, 255), dtype=np.int8)
-        for row in range(len(self.posns_lookup)):
-            for col in self.posns_lookup[row]:
-                if col > mat.shape[1]:
-                    mat.resize((mat.shape[0], col + 1))
-                mat[row, col] = 1
-        return mat
-
-    def positions(self, token, key=None):
+    def positions(self, token, key=None, pad=False):
         """Return a list of lists of positions of the given term."""
         term_id = self.term_dict.get_term_id(token)
-
-        if key is not None:
-            posns_to_lookup = self.posns[key].copy_col_at(term_id)
-        else:
-            posns_to_lookup = self.posns.copy_col_at(term_id)
-
-        # This could be faster if posns_lookup was more row slicable
-        posns_to_lookup = posns_to_lookup.toarray().flatten()
-        posns = [self.posns_lookup[lookup] for lookup in posns_to_lookup]
-        # posns_mat = self._posns_lookup_to_csr()
-        # this_mat = posns_mat[posns_to_lookup]
-        # nonzeros = this_mat.nonzero()
-        # this_mat[nonzeros] = (nonzeros[1] + 1)
-        return posns
+        return self.posns.positions(term_id, key=key, padded=pad)
 
     def and_query(self, tokens):
         """Return a mask on the postings array indicating which elements contain all terms."""
@@ -937,8 +827,8 @@ class PostingsArray(ExtensionArray):
         if np.sum(mask) == 0:
             return phrase_freqs
 
-        term_posns = [self.positions(term, mask) for term in tokens]
-        for width in range(10, 80, 10):
+        term_posns = [self.positions(term, mask, pad=True) for term in tokens]
+        for width in [10, 20, 30, 40]:
             phrase_freqs[mask] = compute_phrase_freqs(term_posns,
                                                       phrase_freqs[mask],
                                                       slop=slop,
