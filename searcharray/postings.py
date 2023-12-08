@@ -16,7 +16,7 @@ from searcharray.term_dict import TermDict, TermMissingError
 from searcharray.phrase.scan_merge import scan_merge_bigram, scan_merge_inplace, advance_after_binsearch
 from searcharray.phrase.wide_spans import all_wide_spans_of_slop
 from searcharray.phrase.posn_diffs import compute_phrase_freqs
-from searcharray.phrase.padded_arrays import PaddedPosnArrays, PaddedPosnArraysBuilder
+from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArray
 
 # Doc,Term -> freq
 # Note scipy sparse switching to *_array, which is more numpy like
@@ -228,7 +228,7 @@ def _build_index_from_dict(postings):
     set_time = 0
     get_posns_time = 0
     set_posns_time = 0
-    posns = PaddedPosnArraysBuilder()
+    posns = PosnBitArrayBuilder()
 
     # COPY 1
     # Consume generator (tokenized postings) into list
@@ -271,6 +271,7 @@ def _build_index_from_dict(postings):
             logging.debug(f"   set time: {set_time}")
             logging.debug(f"   get posns time: {get_posns_time}")
             logging.debug(f"   set posns time: {set_posns_time}")
+        posns.ensure_capacity(doc_id)
         num_postings += 1
 
     if num_postings > 0:
@@ -286,18 +287,21 @@ def _build_index_from_dict(postings):
     freqs_csr = freqs_dok.tocsr()
     logging.debug(f"CSR 1 took {perf_counter() - start} seconds to build")
 
-    return RowViewableMatrix(freqs_csr), posns.build(num_postings, len(term_dict)), term_dict, avg_doc_length
+    return RowViewableMatrix(freqs_csr), posns.build(), term_dict, avg_doc_length
 
 
-def _row_to_postings_row(row, term_dict, posns):
+def _row_to_postings_row(row, term_dict, posns: PosnBitArray):
     tfs = {}
     non_zeros = row.nonzero()
     labeled_posns = {}
     for row_idx, term_idx in zip(non_zeros[0], non_zeros[1]):
         term = term_dict.get_term(term_idx)
         tfs[term] = int(row[row_idx, term_idx])
-        term_posns = posns.positions(term_idx, key=row_idx, padded=False)[0]
-        labeled_posns[term] = term_posns
+        term_posns = posns.positions(term_idx, key=row_idx)
+        try:
+            labeled_posns[term] = term_posns[0]
+        except IndexError:
+            import pdb; pdb.set_trace()
 
     result = PostingsRow(tfs, labeled_posns)
     # TODO add positions
@@ -447,7 +451,6 @@ class PostingsArray(ExtensionArray):
                 self.term_dict.add_term(term[0])
 
         self.term_freqs.resize((self.term_freqs.shape[0], len(self.term_dict)))
-        self.posns.ensure_capacity(self.term_freqs.shape[0], len(self.term_dict))
         # Ensure posns_lookup has at least max self.posns
         self[key] = value
 
@@ -652,7 +655,7 @@ class PostingsArray(ExtensionArray):
     def positions(self, token, key=None, pad=False):
         """Return a list of lists of positions of the given term."""
         term_id = self.term_dict.get_term_id(token)
-        return self.posns.positions(term_id, key=key, padded=pad)
+        return self.posns.positions(term_id, key=key)
 
     def and_query(self, tokens):
         """Return a mask on the postings array indicating which elements contain all terms."""
