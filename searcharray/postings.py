@@ -298,10 +298,7 @@ def _row_to_postings_row(row, term_dict, posns: PosnBitArray):
         term = term_dict.get_term(term_idx)
         tfs[term] = int(row[row_idx, term_idx])
         term_posns = posns.positions(term_idx, key=row_idx)
-        try:
-            labeled_posns[term] = term_posns[0]
-        except IndexError:
-            import pdb; pdb.set_trace()
+        labeled_posns[term] = term_posns
 
     result = PostingsRow(tfs, labeled_posns)
     # TODO add positions
@@ -830,7 +827,8 @@ class PostingsArray(ExtensionArray):
         if np.sum(mask) == 0:
             return phrase_freqs
 
-        term_posns = [self.positions(term, mask, pad=True) for term in tokens]
+        term_posns = [self.positions(term, mask) for term in tokens]
+        import pdb; pdb.set_trace()
         for width in [10, 20, 30, 40]:
             phrase_freqs[mask] = compute_phrase_freqs(term_posns,
                                                       phrase_freqs[mask],

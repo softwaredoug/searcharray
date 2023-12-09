@@ -233,8 +233,13 @@ class PosnBitArray:
             return [np.array([], dtype=np.uint32) for doc_id in doc_ids]
         decoded = decode_posns(term_posns)
 
-        decs = [dec[1] for dec in decoded]
-        return decs
+        # decs = [dec[1] for dec in decoded]
+        if len(decoded) == 0:
+            return np.array([], dtype=np.uint32)
+        try:
+            return decoded[0][1]
+        except IndexError:
+            import pdb; pdb.set_trace()
 
     def insert(self, key, term_ids_to_posns):
         new_posns = PosnBitArrayBuilder()
