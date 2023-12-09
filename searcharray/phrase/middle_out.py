@@ -12,9 +12,20 @@ from typing import List, Optional
 import numbers
 
 
+DOC_ID_MASK = 0xFFFFFFF000000000
+DOC_ID_BITS = 28
+POSN_MSB_MASK = 0x0000000FFFFC0000
+POSN_MSB_BITS = 18
+POSN_LSB_MASK = 0x000000000003FFFF
+POSN_LSB_BITS = 18
+
+assert DOC_ID_BITS + POSN_MSB_BITS + POSN_LSB_BITS == 64
+assert DOC_ID_MASK | POSN_MSB_MASK | POSN_LSB_MASK == 0xFFFFFFFFFFFFFFFF
+
+
 def validate_posns(posns: np.ndarray):
-    if not np.all(posns < 65536):
-        raise ValueError("Positions must be less than 65536")
+    if not np.all(posns < 2**POSN_LSB_BITS):
+        raise ValueError(f"Positions must be less than {2**POSN_LSB_BITS}")
 
 
 def encode_posns(posns: np.ndarray, doc_ids: Optional[np.ndarray] = None):
@@ -30,11 +41,11 @@ def encode_posns(posns: np.ndarray, doc_ids: Optional[np.ndarray] = None):
 
     """
     validate_posns(posns)
-    cols = posns // 16    # Header of bit to use
-    cols = cols.astype(np.uint64) << 16
+    cols = posns // POSN_LSB_BITS    # Header of bit to use
+    cols = cols.astype(np.uint64) << POSN_MSB_BITS
     if doc_ids is not None:
-        cols |= doc_ids.astype(np.uint64) << 32
-    values = posns % 16   # Value to encode
+        cols |= doc_ids.astype(np.uint64) << (64 - DOC_ID_BITS)
+    values = posns % POSN_LSB_BITS   # Value to encode
 
     change_indices = np.nonzero(np.diff(cols))[0] + 1
     change_indices = np.insert(change_indices, 0, 0)
@@ -48,12 +59,11 @@ def encode_posns(posns: np.ndarray, doc_ids: Optional[np.ndarray] = None):
 def decode_posns(encoded: np.ndarray):
     """Unpack bit packed positions into docids, position tuples."""
     # Get 16 MSBs
-    doc_ids = (encoded & 0xFFFFFFFF00000000) >> 32
+    doc_ids = (encoded & DOC_ID_MASK) >> (64 - DOC_ID_BITS)
 
     docs_diff = np.diff(doc_ids)
     split_at = np.argwhere(docs_diff > 0).flatten() + 1
 
-    # encoded &= 0x00000000FFFFFFFF
     enc_per_doc = np.split(encoded, split_at)
 
     doc_posns = []
@@ -64,13 +74,13 @@ def decode_posns(encoded: np.ndarray):
         if len(enc_in_doc) == 0:
             continue
 
-        doc_id = ((enc_in_doc & 0xFFFFFFFF00000000) >> 32)[0]
-        msbs = (enc_in_doc & 0x00000000FFFF0000) >> 16
-        for bit in range(16):
+        doc_id = ((enc_in_doc & DOC_ID_MASK) >> (64 - DOC_ID_BITS))[0]
+        msbs = (enc_in_doc & POSN_MSB_MASK) >> POSN_MSB_BITS
+        for bit in range(POSN_LSB_BITS):
             mask = 1 << bit
             lsbs = enc_in_doc & mask
             set_lsbs = lsbs != 0
-            posn_arrays.append(bit + (msbs[set_lsbs] * 16))
+            posn_arrays.append(bit + (msbs[set_lsbs] * POSN_LSB_BITS))
         all_posns = np.concatenate(posn_arrays)
         doc_posns.append((doc_id, all_posns))
     return doc_posns
@@ -79,7 +89,7 @@ def decode_posns(encoded: np.ndarray):
 def intersect_msbs(lhs: np.ndarray, rhs: np.ndarray):
     """Return the MSBs that are common to both lhs and rhs."""
     # common = np.intersect1d(lhs_msbs, rhs_msbs)
-    _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> 16, rhs >> 16, indices=True)
+    _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> POSN_LSB_BITS, rhs >> POSN_LSB_BITS, indices=True)
     # With large arrays np.isin becomes a bottleneck
     return lhs[lhs_idx], rhs[rhs_idx]
 
@@ -98,16 +108,16 @@ def convert_doc_ids(doc_ids):
 def get_docs(encoded: np.ndarray, doc_ids: np.ndarray):
     """Get list of encoded that have positions in doc_ids."""
     doc_ids = convert_doc_ids(doc_ids)
-    encoded_doc_ids = encoded.astype(np.uint64) >> 32
-    empty = doc_ids << 32
-    common = snp.intersect(doc_ids, encoded_doc_ids)
+    assert len(doc_ids.shape) == 1
+    assert len(encoded.shape) == 1
+    encoded_doc_ids = encoded.astype(np.uint64) >> (64 - DOC_ID_BITS)
+    empty = doc_ids << (64 - DOC_ID_BITS)
+    _, (idx_docs, idx_enc) = snp.intersect(doc_ids, encoded_doc_ids, indices=True)
 
-    idx_enc = np.isin(encoded_doc_ids, common)
-    idx_docs = np.isin(doc_ids, common)
-    found = encoded_doc_ids[idx_enc]
-    empties = empty[~idx_docs]
+    found = encoded[idx_enc]
+    empties = empty[np.isin(doc_ids, found, invert=True)]
 
-    merged = snp.merge(found, empties)
+    merged = snp.merge(found, empties, duplicates=snp.DROP)
     return merged
 
 
@@ -116,13 +126,13 @@ def inner_bigram_match(lhs, rhs):
     lhs, rhs = intersect_msbs(lhs, rhs)
     if len(lhs) != len(rhs):
         raise ValueError("Encoding error, MSBs apparently are duplicated among your encoded posn arrays.")
-    rhs_next = (rhs & 0xFFFFFFFFFFFF0000)
+    rhs_next = (rhs & DOC_ID_MASK)
     rhs_next_mask = np.zeros(len(rhs), dtype=bool)
     counts = []
     # With popcount soon to be in numpy, this could potentially
     # be simply a left shift of the RHS LSB poppcount, and and a popcount
     # to count the overlaps
-    for bit in range(1, 15):
+    for bit in range(1, POSN_LSB_BITS - 1):
         lhs_mask = 1 << bit
         rhs_mask = 1 << (bit + 1)
         lhs_set = (lhs & lhs_mask) != 0
@@ -143,11 +153,13 @@ class PosnBitArrayBuilder:
         self.max_doc_id = 0
 
     def add_posns(self, doc_id: int, term_id: int, posns):
+        if len(posns.shape) != 1:
+            raise ValueError("posns must be a 1D array")
         if term_id not in self.term_posns:
             self.term_posns[term_id] = []
             self.term_posn_doc_ids[term_id] = []
         doc_ids = [doc_id] * len(posns)
-        self.term_posns[term_id].extend(posns)
+        self.term_posns[term_id].extend(posns.tolist())
         self.term_posn_doc_ids[term_id].extend(doc_ids)
         self.max_doc_id = max(self.max_doc_id, doc_id)
 
@@ -157,8 +169,12 @@ class PosnBitArrayBuilder:
     def build(self):
         encoded_term_posns = {}
         for term_id, posns in self.term_posns.items():
-            if isinstance(posns, list):
-                posns = np.asarray(posns, dtype=np.uint32)
+            if len(posns) == 0:
+                posns = np.asarray([], dtype=np.uint32).flatten()
+            elif isinstance(posns, list):
+                posns_arr = np.asarray(posns, dtype=np.uint32)
+                assert len(posns_arr.shape) == 1
+                posns = posns_arr
             doc_ids = self.term_posn_doc_ids[term_id]
             if isinstance(doc_ids, list):
                 doc_ids = np.asarray(doc_ids, dtype=np.uint32)
@@ -169,6 +185,8 @@ class PosnBitArrayBuilder:
 
 
 def index_range(rng, key):
+    if key is None:
+        return rng
     if isinstance(rng, np.ndarray):
         return rng[key]
 
@@ -202,10 +220,10 @@ class PosnBitArray:
 
     def slice(self, key):
         sliced_term_posns = {}
-        # import pdb; pdb.set_trace()
         doc_ids = index_range(self.doc_ids, key)
         for term_id, posns in self.encoded_term_posns.items():
             encoded = self.encoded_term_posns[term_id]
+            assert len(encoded.shape) == 1
             sliced_term_posns[term_id] = get_docs(encoded, doc_ids=doc_ids)
 
         return PosnBitArray(sliced_term_posns, doc_ids=doc_ids)
@@ -221,25 +239,27 @@ class PosnBitArray:
             except KeyError:
                 pass
 
-    def positions(self, term_id: int, key):
+    def positions(self, term_id: int, key) -> List:
         # Check if key is in doc ids?
         doc_ids = index_range(self.doc_ids, key)
         if isinstance(doc_ids, numbers.Number):
-            doc_ids = [doc_ids]
+            doc_ids = np.asarray([doc_ids])
         try:
             term_posns = get_docs(self.encoded_term_posns[term_id],
-                                  doc_ids=np.asarray(doc_ids))
+                                  doc_ids=doc_ids)
         except KeyError:
-            return [np.array([], dtype=np.uint32) for doc_id in doc_ids]
+            r_val = [np.array([], dtype=np.uint32) for doc_id in doc_ids]
+            if len(r_val) == 1:
+                r_val = r_val[0]
+            return r_val
         decoded = decode_posns(term_posns)
 
-        # decs = [dec[1] for dec in decoded]
         if len(decoded) == 0:
             return np.array([], dtype=np.uint32)
-        try:
-            return decoded[0][1]
-        except IndexError:
-            import pdb; pdb.set_trace()
+        decs = [dec[1] for dec in decoded]
+        if len(decs) == 1:
+            decs = decs[0]
+        return decs
 
     def insert(self, key, term_ids_to_posns):
         new_posns = PosnBitArrayBuilder()

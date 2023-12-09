@@ -65,9 +65,17 @@ class PostingsRow:
     https://github.com/pandas-dev/pandas/issues/17777
     """
 
-    def __init__(self, postings, posns=None):
+    def __init__(self, postings, posns: dict = None):
         self.postings = postings
         self.posns = None
+
+        if posns is not None:
+            for term, term_posns in posns.items():
+                if not isinstance(term_posns, np.ndarray):
+                    posns[term] = np.array(term_posns)
+                    if len(posns[term].shape) != 1:
+                        import pdb; pdb.set_trace()
+                        raise ValueError("Positions must be a 1D array.")
         if self.posns is not None and len(self.postings) != len(self.posns):
             raise ValueError("Postings and positions must be the same length.")
         else:
@@ -828,7 +836,6 @@ class PostingsArray(ExtensionArray):
             return phrase_freqs
 
         term_posns = [self.positions(term, mask) for term in tokens]
-        import pdb; pdb.set_trace()
         for width in [10, 20, 30, 40]:
             phrase_freqs[mask] = compute_phrase_freqs(term_posns,
                                                       phrase_freqs[mask],
