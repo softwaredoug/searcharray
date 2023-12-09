@@ -249,7 +249,7 @@ class PosnBitArray:
                                   doc_ids=doc_ids)
         except KeyError:
             r_val = [np.array([], dtype=np.uint32) for doc_id in doc_ids]
-            if len(r_val) == 1:
+            if len(r_val) == 1 and isinstance(key, numbers.Number):
                 r_val = r_val[0]
             return r_val
         decoded = decode_posns(term_posns)
@@ -257,7 +257,7 @@ class PosnBitArray:
         if len(decoded) == 0:
             return np.array([], dtype=np.uint32)
         decs = [dec[1] for dec in decoded]
-        if len(decs) == 1:
+        if len(decs) == 1 and isinstance(key, numbers.Number):
             decs = decs[0]
         return decs
 

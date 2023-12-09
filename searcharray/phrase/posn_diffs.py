@@ -20,6 +20,8 @@ def vstack_with_mask(posns: List[np.ndarray], phrase_freqs: np.ndarray, width: i
     mask: np.ndarray, boolean mask of which arrays were accepted (so you can recompute them a different way)
     """
     vstacked = np.zeros((len(posns), width), dtype=posns[0].dtype) + pad
+    if not isinstance(posns[0], np.ndarray):
+        raise TypeError("posns must be a list of np.ndarrays")
     for idx, array in enumerate(posns):
         if len(array) >= width:
             phrase_freqs[idx] = -2  # Mark as skip this round
@@ -138,7 +140,6 @@ def compute_phrase_freqs(term_posns, phrase_freqs, slop=1, width=10):
     Colab notebook: https://colab.research.google.com/drive/1NRxeO8Ya8jSlFP5YwZaGh1-43kDH4OXG?authuser=1#scrollTo=5JZV8svpauYB
     """
     if len(term_posns[0]) != len(phrase_freqs):
-        import pdb; pdb.set_trace()
         raise ValueError("term_posns and phrase_freqs must be same length")
     stacked = stack_term_posns(term_posns, phrase_freqs, width=width)
     phrase_freqs = _compute_phrase_freqs(stacked, phrase_freqs, slop=slop)

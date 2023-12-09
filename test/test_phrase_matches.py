@@ -279,3 +279,19 @@ def test_positions():
             assert (posn == [1]).all()
         else:
             assert (posn == []).all()
+
+
+def test_positions_mask():
+    data = PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25)
+    positions = data.positions("bar", np.asarray([True, False, False, False] * 25))
+    assert len(positions) == 25
+    for idx, posn in enumerate(positions):
+        assert (posn == [1, 2]).all()
+
+
+def test_positions_mask_single():
+    data = PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"])
+    positions = data.positions("bar", np.asarray([True, False, False, False]))
+    assert len(positions) == 1
+    for idx, posn in enumerate(positions):
+        assert (posn == [1, 2]).all()
