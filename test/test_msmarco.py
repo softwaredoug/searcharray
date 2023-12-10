@@ -72,7 +72,7 @@ def msmarco100k():
 
 @pytest.fixture(scope="session")
 def msmarco():
-    msmarco_path = pathlib.Path("data/msmarco100k.pkl")
+    msmarco_path = pathlib.Path("data/msmarco.pkl")
 
     if not msmarco_path.exists():
         start = perf_counter()
@@ -95,8 +95,14 @@ def msmarco():
         msmarco.to_pickle("data/msmarco.pkl")
         return msmarco
     else:
-        return pd.read_pickle("data/msmarco100k.pkl")
+        return pd.read_pickle("data/msmarco.pkl")
 
+
+# Memory usage
+#
+#Indexed in 14.7362s
+# [postings.py:303 - _build_index_from_dict() ] Padded Posn memory usage: 4274.036334991455 MB
+# [postings.py:304 - _build_index_from_dict() ] Bitwis Posn memory usage: 800.7734680175781 MB
 
 # (venv)  $ git co 60ad46d1a2edc1504942b2c80b71b38673ff6426                                              search-array$
 # Previous HEAD position was 55c3594 Add mask for diff, but one test still fails
@@ -133,15 +139,12 @@ def msmarco():
 # .msmarco phrase search ['what', 'is', 'the', 'purpose', 'of', 'cats']: 0.1907s
 # .msmarco phrase search ['star', 'trek']: 0.2590s
 # .msmarco phrase search ['star', 'trek', 'the', 'next', 'generation']: 0.2521s
-@pytest.mark.skip
 @pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
 def test_msmarco(phrase_search, msmarco100k):
-    import cProfile
     phrase_search = phrase_search.split()
-    # print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
-    # print(f"Memory Usage (TITLE): {msmarco100k['title_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+    print(f"STARTING {phrase_search}")
+    print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+    print(f"Memory Usage (TITLE): {msmarco100k['title_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     start = perf_counter()
-    with cProfile.Profile() as pr:
-        msmarco100k['body_ws'].array.bm25(phrase_search)
-        # pr.print_stats(sort="cumtime")
+    msmarco100k['body_ws'].array.bm25(phrase_search)
     print(f"msmarco phrase search {phrase_search}: {perf_counter() - start:.4f}s")

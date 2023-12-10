@@ -10,6 +10,20 @@ import sortednp as snp
 from copy import deepcopy
 from typing import List, Optional
 import numbers
+import logging
+from time import perf_counter
+
+
+logger = logging.getLogger(__name__)
+
+# When running in pytest
+import sys  # noqa
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.ERROR)
+formatter = logging.Formatter("[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.setLevel(logging.ERROR)
 
 
 DOC_ID_MASK = 0xFFFFFFF000000000
@@ -54,6 +68,41 @@ def encode_posns(posns: np.ndarray, doc_ids: Optional[np.ndarray] = None):
     if len(encoded) == 0:
         return encoded
     return np.bitwise_or.reduceat(encoded, change_indices)
+
+
+def groupby(docs_with_posns):
+    start = perf_counter()
+    unique_keys = np.unique(docs_with_posns[:, 0])
+    logger.debug(f"unique  took {perf_counter() - start:.2f} seconds")
+    grouped_array = [(key, docs_with_posns[docs_with_posns[:, 0] == key, 1]) for key in unique_keys]
+    logger.debug(f"grouped took {perf_counter() - start:.2f} seconds")
+    return grouped_array
+
+
+def decode_posns2(encoded):
+    start = perf_counter()
+    doc_ids = (encoded & DOC_ID_MASK) >> (64 - DOC_ID_BITS)
+    msbs = (encoded & POSN_MSB_MASK) >> POSN_MSB_BITS
+    to_concat = []
+    for bit in range(POSN_LSB_BITS):
+        mask = 1 << bit
+        lsbs = encoded & mask
+        set_lsbs = (lsbs != 0)
+        this_doc_ids = doc_ids[set_lsbs]
+        posns = bit + (msbs[set_lsbs] * POSN_LSB_BITS)
+        doc_with_posn = np.dstack([this_doc_ids, posns])[0]
+        to_concat.append(doc_with_posn)
+
+    logger.debug(f"loop took {perf_counter() - start:.2f} seconds")
+    stacked = np.vstack(to_concat)
+    # Sort by doc_id, then posn
+    sorted_posns = stacked[np.lexsort((stacked[:, 1], stacked[:, 0]))]
+    doc_ids, idx = np.unique(sorted_posns[:, 0], return_index=True)
+    grouped = np.split(sorted_posns[:, 1], idx[1:])
+    as_list = list(zip(doc_ids, grouped))
+
+    logger.debug(f"groupby took {perf_counter() - start:.2f} seconds | got {len(as_list)}")
+    return as_list
 
 
 def decode_posns(encoded: np.ndarray):
@@ -241,25 +290,44 @@ class PosnBitArray:
 
     def positions(self, term_id: int, key) -> List:
         # Check if key is in doc ids?
+        start = perf_counter()
         doc_ids = index_range(self.doc_ids, key)
+        logger.debug(f"index_range took {perf_counter() - start} seconds")
         if isinstance(doc_ids, numbers.Number):
             doc_ids = np.asarray([doc_ids])
         try:
             term_posns = get_docs(self.encoded_term_posns[term_id],
                                   doc_ids=doc_ids)
+            logger.debug(f"get_docs took {perf_counter() - start} seconds")
         except KeyError:
             r_val = [np.array([], dtype=np.uint32) for doc_id in doc_ids]
             if len(r_val) == 1 and isinstance(key, numbers.Number):
                 r_val = r_val[0]
+            logger.debug(f"positions exit(1) took {perf_counter() - start} seconds")
             return r_val
-        decoded = decode_posns(term_posns)
+        decoded = decode_posns2(term_posns)
+        logger.debug(f"decode took {perf_counter() - start} seconds")
 
         if len(decoded) == 0:
             return np.array([], dtype=np.uint32)
-        decs = [dec[1] for dec in decoded]
-        if len(decs) == 1 and isinstance(key, numbers.Number):
-            decs = decs[0]
-        return decs
+            logger.debug(f"positions exit(2) took {perf_counter() - start} seconds")
+        if len(decoded) != len(doc_ids):
+            # Fill non matches
+            as_dict = dict(decoded)
+            decs = []
+            for doc_id in doc_ids:
+                if doc_id in as_dict:
+                    decs.append(as_dict[doc_id])
+                else:
+                    decs.append(np.array([], dtype=np.uint32))
+            logger.debug(f"positions exit(4) took {perf_counter() - start} seconds")
+            return decs
+        else:
+            decs = [dec[1] for dec in decoded]
+            if len(decs) == 1 and isinstance(key, numbers.Number):
+                decs = decs[0]
+            logger.debug(f"positions exit(4) took {perf_counter() - start} seconds")
+            return decs
 
     def insert(self, key, term_ids_to_posns):
         new_posns = PosnBitArrayBuilder()

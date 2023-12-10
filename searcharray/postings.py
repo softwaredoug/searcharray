@@ -23,16 +23,16 @@ from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArray
 # However, as of now, these don't seem fully baked
 from scipy.sparse import dok_matrix
 
-root = logging.getLogger()
-root.setLevel(logging.ERROR)
+logger = logging.getLogger(__name__)
 
 # When running in pytest
-# import sys
-# handler = logging.StreamHandler(sys.stdout)
-# handler.setLevel(logging.INFO)
-# formatter = logging.Formatter('%(message)s')
-# handler.setFormatter(formatter)
-# root.addHandler(handler)
+import sys  # noqa
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.ERROR)
+formatter = logging.Formatter("[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.setLevel(logging.ERROR)
 
 
 def self_adjs(prior_posns, next_posns):
@@ -74,7 +74,6 @@ class PostingsRow:
                 if not isinstance(term_posns, np.ndarray):
                     posns[term] = np.array(term_posns)
                     if len(posns[term].shape) != 1:
-                        import pdb; pdb.set_trace()
                         raise ValueError("Positions must be a 1D array.")
         if self.posns is not None and len(self.postings) != len(self.posns):
             raise ValueError("Postings and positions must be the same length.")
@@ -242,7 +241,7 @@ def _build_index_from_dict(postings):
     # Consume generator (tokenized postings) into list
     # its faster this way?
     postings = list(postings)
-    logging.debug(f"Tokenized {len(postings)} documents in {perf_counter() - start} seconds")
+    logger.debug(f"Tokenized {len(postings)} documents in {perf_counter() - start} seconds")
 
     # COPY 2
     # Build dict for sparse matrix
@@ -274,28 +273,31 @@ def _build_index_from_dict(postings):
             set_posns_time += perf_counter() - set_posns_start
 
         if doc_id % 1000 == 0:
-            logging.debug(f"Indexed {doc_id} documents in {perf_counter() - start} seconds")
-            logging.debug(f"   add time: {add_term_time}")
-            logging.debug(f"   set time: {set_time}")
-            logging.debug(f"   get posns time: {get_posns_time}")
-            logging.debug(f"   set posns time: {set_posns_time}")
+            logger.debug(f"Indexed {doc_id} documents in {perf_counter() - start} seconds")
+            logger.debug(f"   add time: {add_term_time}")
+            logger.debug(f"   set time: {set_time}")
+            logger.debug(f"   get posns time: {get_posns_time}")
+            logger.debug(f"   set posns time: {set_posns_time}")
         posns.ensure_capacity(doc_id)
         num_postings += 1
 
     if num_postings > 0:
         avg_doc_length /= num_postings
 
-    logging.debug(f"Indexed {num_postings} documents in {perf_counter() - start} seconds")
+    logger.debug(f"Indexed {num_postings} documents in {perf_counter() - start} seconds")
 
     # COPY 2
     freqs_dok = dok_matrix((num_postings, len(term_dict)), dtype=np.uint32)
     dict.update(freqs_dok, freqs_table)
-    logging.debug(f"DOK 1 took {perf_counter() - start} seconds to build")
+    logger.debug(f"DOK 1 took {perf_counter() - start} seconds to build")
 
     freqs_csr = freqs_dok.tocsr()
-    logging.debug(f"CSR 1 took {perf_counter() - start} seconds to build")
+    logger.debug(f"CSR 1 took {perf_counter() - start} seconds to build")
 
-    return RowViewableMatrix(freqs_csr), posns.build(), term_dict, avg_doc_length
+    bit_posns = posns.build()
+    logger.info(f"Bitwis Posn memory usage: {bit_posns.nbytes / 1024 / 1024} MB")
+
+    return RowViewableMatrix(freqs_csr), bit_posns, term_dict, avg_doc_length
 
 
 def _row_to_postings_row(row, term_dict, posns: PosnBitArray):
@@ -657,10 +659,11 @@ class PostingsArray(ExtensionArray):
         token = self._check_token_arg(token)
         return self.bm25_idf(token, doc_stats=doc_stats) * self.bm25_tf(token)
 
-    def positions(self, token, key=None, pad=False):
+    def positions(self, token, key=None):
         """Return a list of lists of positions of the given term."""
         term_id = self.term_dict.get_term_id(token)
-        return self.posns.positions(term_id, key=key)
+        posns = self.posns.positions(term_id, key=key)
+        return posns
 
     def and_query(self, tokens):
         """Return a mask on the postings array indicating which elements contain all terms."""
@@ -820,9 +823,9 @@ class PostingsArray(ExtensionArray):
             phrase_freqs[mask] = bigram_freqs
             prior_term = term
             prior_posns = cont_posns
-            logging.info(f"Term ({term_cnt}) Time: {perf_counter() - term_start:.4f}s")
+            logger.info(f"Term ({term_cnt}) Time: {perf_counter() - term_start:.4f}s")
 
-        logging.info(f"Phrase Search Time: {perf_counter() - start:.4f}s")
+        logger.info(f"Phrase Search Time: {perf_counter() - start:.4f}s")
 
         return phrase_freqs
 
