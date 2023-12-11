@@ -139,13 +139,23 @@ def msmarco():
 # .msmarco phrase search ['what', 'is', 'the', 'purpose', 'of', 'cats']: 0.1907s
 # .msmarco phrase search ['star', 'trek']: 0.2590s
 # .msmarco phrase search ['star', 'trek', 'the', 'next', 'generation']: 0.2521s
-@pytest.mark.skip
+#
+# After new binary representation
+# test/test_msmarco.py msmarco phrase search ['what', 'is']: 0.4319s
+# .msmarco phrase search ['what', 'is', 'the']: 0.4078s
+# .msmarco phrase search ['what', 'is', 'the', 'purpose']: 0.1959s
+# .msmarco phrase search ['what', 'is', 'the', 'purpose', 'of']: 0.2283s
+# .msmarco phrase search ['what', 'is', 'the', 'purpose', 'of', 'cats']: 0.1924s
+# .msmarco phrase search ['star', 'trek']: 0.2358s
+# .msmarco phrase search ['star', 'trek', 'the', 'next', 'generation']: 0.2503s
+# .msmarco phrase search ['what', 'what', 'what']: 0.3280s
+#
 @pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
 def test_msmarco(phrase_search, msmarco100k):
     phrase_search = phrase_search.split()
-    print(f"STARTING {phrase_search}")
-    print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
-    print(f"Memory Usage (TITLE): {msmarco100k['title_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+    # print(f"STARTING {phrase_search}")
+    # print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+    # print(f"Memory Usage (TITLE): {msmarco100k['title_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     start = perf_counter()
     msmarco100k['body_ws'].array.bm25(phrase_search)
     print(f"msmarco phrase search {phrase_search}: {perf_counter() - start:.4f}s")

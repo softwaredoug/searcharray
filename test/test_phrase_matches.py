@@ -145,6 +145,12 @@ scenarios = {
         "phrase": ["foo", "bar"],
         "expected": [0, 1, 1, 0, 0] * 25,
     },
+    "long_doc": {
+        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny",
+                                             "la ma ta wa ga ao a b c d e f g a be ae i foo bar foo bar"] * 25),
+        "phrase": ["foo", "bar"],
+        "expected": [1, 0, 0, 0, 2] * 25
+    },
     "10k_docs": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 10000),
         "phrase": ["foo", "bar"],
@@ -221,7 +227,6 @@ perf_scenarios = {
 # phrase_match_scan        took 4.758700999984285 seconds | 4000000 docs
 # phrase_match_scan        took 4.029075291007757 seconds | 4000000 docs
 
-@pytest.mark.skip("Performance test")
 @w_scenarios(perf_scenarios)
 def test_phrase_performance(docs, phrase, expected):
     start = perf_counter()
@@ -236,9 +241,6 @@ def test_phrase_performance(docs, phrase, expected):
     assert (matches == expected).all()
 
     start = perf_counter()
-    # Very slow for large sets of positions
-    # PosnsDiff Time: 41.99s
-    # Term Mask Time: 352.18s
     matches_every_diff = docs.phrase_freq_every_diff(phrase)
     print(f"phrase_match_every_diff  took {perf_counter() - start} seconds | {len(docs)} docs")
     assert (matches_every_diff == expected).all()

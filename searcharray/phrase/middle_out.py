@@ -70,16 +70,7 @@ def encode_posns(posns: np.ndarray, doc_ids: Optional[np.ndarray] = None):
     return np.bitwise_or.reduceat(encoded, change_indices)
 
 
-def groupby(docs_with_posns):
-    start = perf_counter()
-    unique_keys = np.unique(docs_with_posns[:, 0])
-    logger.debug(f"unique  took {perf_counter() - start:.2f} seconds")
-    grouped_array = [(key, docs_with_posns[docs_with_posns[:, 0] == key, 1]) for key in unique_keys]
-    logger.debug(f"grouped took {perf_counter() - start:.2f} seconds")
-    return grouped_array
-
-
-def decode_posns2(encoded):
+def decode_posns(encoded):
     start = perf_counter()
     doc_ids = (encoded & DOC_ID_MASK) >> (64 - DOC_ID_BITS)
     msbs = (encoded & POSN_MSB_MASK) >> POSN_MSB_BITS
@@ -103,36 +94,6 @@ def decode_posns2(encoded):
 
     logger.debug(f"groupby took {perf_counter() - start:.2f} seconds | got {len(as_list)}")
     return as_list
-
-
-def decode_posns(encoded: np.ndarray):
-    """Unpack bit packed positions into docids, position tuples."""
-    # Get 16 MSBs
-    doc_ids = (encoded & DOC_ID_MASK) >> (64 - DOC_ID_BITS)
-
-    docs_diff = np.diff(doc_ids)
-    split_at = np.argwhere(docs_diff > 0).flatten() + 1
-
-    enc_per_doc = np.split(encoded, split_at)
-
-    doc_posns = []
-    for idx, enc_in_doc in enumerate(enc_per_doc):
-        # Mask each lsb compute its actual position
-        # by adding the msb
-        posn_arrays = []
-        if len(enc_in_doc) == 0:
-            continue
-
-        doc_id = ((enc_in_doc & DOC_ID_MASK) >> (64 - DOC_ID_BITS))[0]
-        msbs = (enc_in_doc & POSN_MSB_MASK) >> POSN_MSB_BITS
-        for bit in range(POSN_LSB_BITS):
-            mask = 1 << bit
-            lsbs = enc_in_doc & mask
-            set_lsbs = lsbs != 0
-            posn_arrays.append(bit + (msbs[set_lsbs] * POSN_LSB_BITS))
-        all_posns = np.concatenate(posn_arrays)
-        doc_posns.append((doc_id, all_posns))
-    return doc_posns
 
 
 def intersect_msbs(lhs: np.ndarray, rhs: np.ndarray):
@@ -161,7 +122,8 @@ def get_docs(encoded: np.ndarray, doc_ids: np.ndarray):
     assert len(encoded.shape) == 1
     encoded_doc_ids = encoded.astype(np.uint64) >> (64 - DOC_ID_BITS)
     empty = doc_ids << (64 - DOC_ID_BITS)
-    _, (idx_docs, idx_enc) = snp.intersect(doc_ids, encoded_doc_ids, indices=True)
+    _, (idx_docs, idx_enc) = snp.intersect(doc_ids, encoded_doc_ids, indices=True,
+                                           duplicates=snp.KEEP_MAX_N)
 
     found = encoded[idx_enc]
     empties = empty[np.isin(doc_ids, found, invert=True)]
@@ -215,7 +177,7 @@ class PosnBitArrayBuilder:
     def ensure_capacity(self, doc_id):
         self.max_doc_id = max(self.max_doc_id, doc_id)
 
-    def build(self):
+    def build(self, check=True):
         encoded_term_posns = {}
         for term_id, posns in self.term_posns.items():
             if len(posns) == 0:
@@ -228,6 +190,17 @@ class PosnBitArrayBuilder:
             if isinstance(doc_ids, list):
                 doc_ids = np.asarray(doc_ids, dtype=np.uint32)
             encoded = encode_posns(doc_ids=doc_ids, posns=posns)
+            decode_again = decode_posns(encoded)
+            if check:
+                docs_to_posns = dict(decode_again)
+                doc_ids_again = []
+                posns_again = []
+                for doc_id, posns_dec in docs_to_posns.items():
+                    for posn in posns_dec:
+                        doc_ids_again.append(doc_id)
+                        posns_again.append(posn)
+                assert np.array_equal(doc_ids_again, doc_ids)
+                assert np.array_equal(posns, posns_again)
             encoded_term_posns[term_id] = encoded
 
         return PosnBitArray(encoded_term_posns, range(0, self.max_doc_id + 1))
@@ -305,7 +278,7 @@ class PosnBitArray:
                 r_val = r_val[0]
             logger.debug(f"positions exit(1) took {perf_counter() - start} seconds")
             return r_val
-        decoded = decode_posns2(term_posns)
+        decoded = decode_posns(term_posns)
         logger.debug(f"decode took {perf_counter() - start} seconds")
 
         if len(decoded) == 0:
@@ -320,7 +293,7 @@ class PosnBitArray:
                     decs.append(as_dict[doc_id])
                 else:
                     decs.append(np.array([], dtype=np.uint32))
-            logger.debug(f"positions exit(4) took {perf_counter() - start} seconds")
+            logger.debug(f"positions exit(3) took {perf_counter() - start} seconds")
             return decs
         else:
             decs = [dec[1] for dec in decoded]
@@ -331,7 +304,6 @@ class PosnBitArray:
 
     def insert(self, key, term_ids_to_posns):
         new_posns = PosnBitArrayBuilder()
-        # PROBABLY not doc id
         max_doc_id = 0
         for doc_id, new_posns_row in enumerate(term_ids_to_posns):
             for term_id, positions in new_posns_row:
@@ -350,3 +322,4 @@ class PosnBitArray:
 
     def phrase_freqs(self, terms: List[int]):
         """Return the phrase frequencies for a list of terms."""
+        raise NotImplementedError("Not yet implemented")
