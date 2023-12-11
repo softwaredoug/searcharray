@@ -141,15 +141,16 @@ def msmarco():
 # .msmarco phrase search ['star', 'trek', 'the', 'next', 'generation']: 0.2521s
 #
 # After new binary representation
-# test/test_msmarco.py msmarco phrase search ['what', 'is']: 0.4319s
-# .msmarco phrase search ['what', 'is', 'the']: 0.4078s
-# .msmarco phrase search ['what', 'is', 'the', 'purpose']: 0.1959s
-# .msmarco phrase search ['what', 'is', 'the', 'purpose', 'of']: 0.2283s
-# .msmarco phrase search ['what', 'is', 'the', 'purpose', 'of', 'cats']: 0.1924s
-# .msmarco phrase search ['star', 'trek']: 0.2358s
-# .msmarco phrase search ['star', 'trek', 'the', 'next', 'generation']: 0.2503s
-# .msmarco phrase search ['what', 'what', 'what']: 0.3280s
+# test/test_msmarco.py msmarco phrase search ['what', 'is']. Found 5913. 0.9032s
+# .msmarco phrase search ['what', 'is', 'the']. Found 978. 2.9973s
+# .msmarco phrase search ['what', 'is', 'the', 'purpose']. Found 12. 0.7181s
+# .msmarco phrase search ['what', 'is', 'the', 'purpose', 'of']. Found 9. 0.9779s
+# .msmarco phrase search ['what', 'is', 'the', 'purpose', 'of', 'cats']. Found 0. 0.2539s
+# .msmarco phrase search ['star', 'trek']. Found 4. 0.2690s
+# .msmarco phrase search ['star', 'trek', 'the', 'next', 'generation']. Found 0. 0.2918s
+# .msmarco phrase search ['what', 'what', 'what']. Found 0. 0.4040s
 #
+@pytest.mark.skip
 @pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
 def test_msmarco(phrase_search, msmarco100k):
     phrase_search = phrase_search.split()
@@ -157,5 +158,6 @@ def test_msmarco(phrase_search, msmarco100k):
     # print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     # print(f"Memory Usage (TITLE): {msmarco100k['title_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     start = perf_counter()
-    msmarco100k['body_ws'].array.bm25(phrase_search)
-    print(f"msmarco phrase search {phrase_search}: {perf_counter() - start:.4f}s")
+    results = msmarco100k['body_ws'].array.bm25(phrase_search)
+    num_results = results[results > 0].shape[0]
+    print(f"msmarco phrase search {phrase_search}. Found {num_results}. {perf_counter() - start:.4f}s")

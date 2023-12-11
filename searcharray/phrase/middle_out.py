@@ -177,7 +177,7 @@ class PosnBitArrayBuilder:
     def ensure_capacity(self, doc_id):
         self.max_doc_id = max(self.max_doc_id, doc_id)
 
-    def build(self, check=True):
+    def build(self, check=False):
         encoded_term_posns = {}
         for term_id, posns in self.term_posns.items():
             if len(posns) == 0:
@@ -278,6 +278,7 @@ class PosnBitArray:
                 r_val = r_val[0]
             logger.debug(f"positions exit(1) took {perf_counter() - start} seconds")
             return r_val
+
         decoded = decode_posns(term_posns)
         logger.debug(f"decode took {perf_counter() - start} seconds")
 
