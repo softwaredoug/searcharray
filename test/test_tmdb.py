@@ -1,10 +1,15 @@
 import pytest
 import gzip
-import resource
 from time import perf_counter
 import json
 import pandas as pd
+import numpy as np
+import sys
 from searcharray.postings import PostingsArray
+from test_utils import Profiler
+
+
+should_profile = '--benchmark-disable' in sys.argv
 
 
 @pytest.fixture(scope="session")
@@ -87,27 +92,37 @@ tmdb_phrase_matches = [
 
 
 @pytest.mark.parametrize("phrase,expected_matches", tmdb_phrase_matches)
-def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data):
-    mask = tmdb_data['title_tokens'].array.match(phrase)
+def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
+    prof = Profiler(benchmark)
+    mask = prof.run(tmdb_data['title_tokens'].array.match, phrase)
     matches = tmdb_data[mask].index.sort_values()
     assert (matches == expected_matches).all()
 
 
-def test_repr_tmdb(tmdb_data):
-    python_mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    print(f"Python memory usage: {python_mem}")
-    start = perf_counter()
-    repr_str_title = repr(tmdb_data['title_tokens'].array)
-    print(f"Repr (title) time: {perf_counter() - start}")
-    python_mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    print(f"Python memory usage: {python_mem}")
-    start = perf_counter()
-    repr_str_overview = repr(tmdb_data['overview_tokens'].array)
-    print(f"Repr (overview) time: {perf_counter() - start}")
-    python_mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    print(f"Python memory usage: {python_mem}")
-    start = perf_counter()
-    repr_df = repr(tmdb_data)
-    print(f"Repr (title) time: {perf_counter() - start}")
-    python_mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    print(f"Python memory usage: {python_mem}")
+def test_index_benchmark(benchmark, tmdb_data):
+    prof = Profiler(benchmark)
+    results = prof.run(PostingsArray.index, tmdb_data['overview'])
+    assert len(results) == len(tmdb_data)
+
+
+def test_copy_benchmark(benchmark, tmdb_data):
+    prof = Profiler(benchmark)
+    results = prof.run(tmdb_data['overview_tokens'].array.copy)
+    assert len(results) == len(tmdb_data)
+
+
+def test_slice_benchmark(benchmark, tmdb_data):
+    # Slice the first 1000 elements
+    prof = Profiler(benchmark)
+    results = prof.run(tmdb_data['overview_tokens'].array[:1000].copy)
+    assert len(results) == 1000
+
+
+def test_eq_benchmark(benchmark, tmdb_data):
+    prof = Profiler(benchmark)
+    idx_again = PostingsArray.index(tmdb_data['overview'])
+    compare_amount = 1000
+    results = prof.run(tmdb_data['overview_tokens'][:compare_amount].array.__eq__, idx_again[:compare_amount])
+    assert np.sum(results) == compare_amount
+
+    # eq = benchmark(tmdb_data['overview_tokens'].array.__eq__, idx_again)

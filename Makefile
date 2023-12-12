@@ -28,8 +28,14 @@ clean:
 
 test: deps
 	@echo "Running tests..."
-	python -m pytest test
+	python -m pytest -benchmark-skip test
 
+
+benchmark: deps
+	python -m pytest -x --benchmark-only --benchmark-autosave
+
+profile: deps
+	python -m pytest -x --benchmark-disable test
 
 build: deps test
 	@echo "Building..."

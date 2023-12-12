@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# Benchmarks
+.benchmarks
+
 # Distribution / packaging
 .Python
 build/
