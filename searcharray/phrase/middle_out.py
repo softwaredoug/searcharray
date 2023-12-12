@@ -70,7 +70,7 @@ def encode_posns(posns: np.ndarray, doc_ids: Optional[np.ndarray] = None):
     return np.bitwise_or.reduceat(encoded, change_indices)
 
 
-def decode_posns(encoded):
+def decode_posns(encoded, get_doc_ids=True):
     start = perf_counter()
     doc_ids = (encoded & DOC_ID_MASK) >> (64 - DOC_ID_BITS)
     msbs = (encoded & POSN_MSB_MASK) >> POSN_MSB_BITS
@@ -90,7 +90,10 @@ def decode_posns(encoded):
     sorted_posns = stacked[np.lexsort((stacked[:, 1], stacked[:, 0]))]
     doc_ids, idx = np.unique(sorted_posns[:, 0], return_index=True)
     grouped = np.split(sorted_posns[:, 1], idx[1:])
-    as_list = list(zip(doc_ids, grouped))
+    if get_doc_ids:
+        as_list = list(zip(doc_ids, grouped))
+    else:
+        as_list = grouped
 
     logger.debug(f"groupby took {perf_counter() - start:.2f} seconds | got {len(as_list)}")
     return as_list
@@ -190,8 +193,8 @@ class PosnBitArrayBuilder:
             if isinstance(doc_ids, list):
                 doc_ids = np.asarray(doc_ids, dtype=np.uint32)
             encoded = encode_posns(doc_ids=doc_ids, posns=posns)
-            decode_again = decode_posns(encoded)
             if check:
+                decode_again = decode_posns(encoded)
                 docs_to_posns = dict(decode_again)
                 doc_ids_again = []
                 posns_again = []
@@ -204,6 +207,22 @@ class PosnBitArrayBuilder:
             encoded_term_posns[term_id] = encoded
 
         return PosnBitArray(encoded_term_posns, range(0, self.max_doc_id + 1))
+
+
+class PosnBitArrayAlreadyEncBuilder:
+
+    def __init__(self):
+        self.encoded_term_posns = {}
+        self.max_doc_id = 0
+
+    def add_posns(self, doc_id: int, term_id: int, posns):
+        self.encoded_term_posns[term_id] = posns
+
+    def ensure_capacity(self, doc_id):
+        self.max_doc_id = max(self.max_doc_id, doc_id)
+
+    def build(self, check=False):
+        return PosnBitArray(self.encoded_term_posns, range(0, self.max_doc_id + 1))
 
 
 def index_range(rng, key):
@@ -254,37 +273,42 @@ class PosnBitArray:
         return self.slice(key)
 
     def merge(self, other):
-        for term_id, posns in self.encoded_term_posns.items():
+        # Unique terms
+        unique_terms = set(self.encoded_term_posns.keys()).union(set(other.encoded_term_posns.keys()))
+
+        for term_id in unique_terms:
             try:
+                posns_self = self.encoded_term_posns[term_id]
                 posns_other = other.encoded_term_posns[term_id]
-                self.encoded_term_posns[term_id] = snp.merge(posns, posns_other)
+                self.encoded_term_posns[term_id] = snp.merge(posns_self, posns_other)
             except KeyError:
                 pass
 
+    def doc_encoded_posns(self, term_id: int, doc_id: int) -> List:
+        # doc_ids = np.asarray([doc_id])
+        term_posns = get_docs(self.encoded_term_posns[term_id],
+                              doc_ids=np.asarray([100]))
+        return term_posns
+
     def positions(self, term_id: int, key) -> List:
         # Check if key is in doc ids?
-        start = perf_counter()
         doc_ids = index_range(self.doc_ids, key)
-        logger.debug(f"index_range took {perf_counter() - start} seconds")
         if isinstance(doc_ids, numbers.Number):
             doc_ids = np.asarray([doc_ids])
+
         try:
             term_posns = get_docs(self.encoded_term_posns[term_id],
                                   doc_ids=doc_ids)
-            logger.debug(f"get_docs took {perf_counter() - start} seconds")
         except KeyError:
             r_val = [np.array([], dtype=np.uint32) for doc_id in doc_ids]
             if len(r_val) == 1 and isinstance(key, numbers.Number):
                 r_val = r_val[0]
-            logger.debug(f"positions exit(1) took {perf_counter() - start} seconds")
             return r_val
 
-        decoded = decode_posns(term_posns)
-        logger.debug(f"decode took {perf_counter() - start} seconds")
+        decoded = decode_posns(term_posns, get_doc_ids=True)
 
         if len(decoded) == 0:
             return np.array([], dtype=np.uint32)
-            logger.debug(f"positions exit(2) took {perf_counter() - start} seconds")
         if len(decoded) != len(doc_ids):
             # Fill non matches
             as_dict = dict(decoded)
@@ -294,17 +318,17 @@ class PosnBitArray:
                     decs.append(as_dict[doc_id])
                 else:
                     decs.append(np.array([], dtype=np.uint32))
-            logger.debug(f"positions exit(3) took {perf_counter() - start} seconds")
             return decs
         else:
             decs = [dec[1] for dec in decoded]
             if len(decs) == 1 and isinstance(key, numbers.Number):
                 decs = decs[0]
-            logger.debug(f"positions exit(4) took {perf_counter() - start} seconds")
             return decs
 
-    def insert(self, key, term_ids_to_posns):
+    def insert(self, key, term_ids_to_posns, is_encoded=False):
         new_posns = PosnBitArrayBuilder()
+        if is_encoded:
+            new_posns = PosnBitArrayAlreadyEncBuilder()
         max_doc_id = 0
         for doc_id, new_posns_row in enumerate(term_ids_to_posns):
             for term_id, positions in new_posns_row:

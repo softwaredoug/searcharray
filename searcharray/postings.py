@@ -8,6 +8,7 @@ from pandas.api.extensions import take
 import json
 import warnings
 import logging
+from time import perf_counter
 
 
 import numpy as np
@@ -16,7 +17,7 @@ from searcharray.term_dict import TermDict, TermMissingError
 from searcharray.phrase.scan_merge import scan_merge_bigram, scan_merge_inplace, advance_after_binsearch
 from searcharray.phrase.wide_spans import all_wide_spans_of_slop
 from searcharray.phrase.posn_diffs import compute_phrase_freqs
-from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArray
+from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder, PosnBitArray
 
 # Doc,Term -> freq
 # Note scipy sparse switching to *_array, which is more numpy like
@@ -65,9 +66,10 @@ class PostingsRow:
     https://github.com/pandas-dev/pandas/issues/17777
     """
 
-    def __init__(self, postings, posns: dict = None):
+    def __init__(self, postings, posns: dict = None, encoded=False):
         self.postings = postings
         self.posns = None
+        self.encoded = encoded
 
         if posns is not None:
             for term, term_posns in posns.items():
@@ -75,11 +77,8 @@ class PostingsRow:
                     posns[term] = np.array(term_posns)
                     if len(posns[term].shape) != 1:
                         raise ValueError("Positions must be a 1D array.")
-        if self.posns is not None and len(self.postings) != len(self.posns):
-            raise ValueError("Postings and positions must be the same length.")
-        else:
-            self.posns = posns
-            self._validate_posns()
+        self.posns = posns
+        self._validate_posns()
 
     def _validate_posns(self):
         # Confirm every term in positions also in postings
@@ -124,7 +123,10 @@ class PostingsRow:
         return len(self.postings)
 
     def __repr__(self):
-        rval = f"PostingsRow({repr(self.postings)}, {repr(self.posns)})"
+        if self.encoded:
+            rval = f"PostingsRow({repr(self.postings)}, encoded=True)"
+        else:
+            rval = f"PostingsRow({repr(self.postings)})"
         return rval
 
     def __str__(self):
@@ -225,7 +227,6 @@ def ws_tokenizer(string):
 
 def _build_index_from_dict(postings):
     """Bulid an index from postings that are already tokenized and point at their term frequencies."""
-    from time import perf_counter
     start = perf_counter()
     term_dict = TermDict()
     freqs_table = defaultdict(int)
@@ -236,6 +237,7 @@ def _build_index_from_dict(postings):
     get_posns_time = 0
     set_posns_time = 0
     posns = PosnBitArrayBuilder()
+    posns_enc = PosnBitArrayAlreadyEncBuilder()
 
     # COPY 1
     # Consume generator (tokenized postings) into list
@@ -252,6 +254,10 @@ def _build_index_from_dict(postings):
             tokenized = PostingsRow(tokenized)
         elif not isinstance(tokenized, PostingsRow):
             raise TypeError("Expected a PostingsRow or a dict")
+
+        if tokenized.encoded:
+            posns = posns_enc
+
         avg_doc_length += len(tokenized)
         for token, term_freq in tokenized.terms():
             add_term_start = perf_counter()
@@ -307,10 +313,10 @@ def _row_to_postings_row(row, term_dict, posns: PosnBitArray):
     for row_idx, term_idx in zip(non_zeros[0], non_zeros[1]):
         term = term_dict.get_term(term_idx)
         tfs[term] = int(row[row_idx, term_idx])
-        term_posns = posns.positions(term_idx, key=row_idx)
-        labeled_posns[term] = term_posns
+        enc_term_posns = posns.doc_encoded_posns(term_idx, doc_id=row_idx)
+        labeled_posns[term] = enc_term_posns
 
-    result = PostingsRow(tfs, labeled_posns)
+    result = PostingsRow(tfs, labeled_posns, encoded=True)
     # TODO add positions
     return result
 
@@ -382,6 +388,9 @@ class PostingsArray(ExtensionArray):
     def nbytes(self):
         return self.term_freqs.nbytes + self.posns.nbytes
 
+    def size(self):
+        return self.term_freqs.shape[0]
+
     def __getitem__(self, key):
         key = pd.api.indexers.check_array_indexer(self, key)
         # Want to take rows of term freqs
@@ -422,21 +431,24 @@ class PostingsArray(ExtensionArray):
             raise ValueError("Cannot set a single value to an array")
 
         try:
+            is_encoded = False
             posns = None
             term_freqs = np.asarray([])
             if isinstance(value, float):
                 term_freqs = np.asarray([value])
             elif isinstance(value, PostingsRow):
                 term_freqs = np.asarray([value.tf_to_dense(self.term_dict)])
+                is_encoded = value.encoded
                 posns = [value.raw_positions(self.term_dict)]
             elif isinstance(value, np.ndarray):
                 term_freqs = np.asarray([x.tf_to_dense(self.term_dict) for x in value])
+                is_encoded = value[0].encoded
                 posns = [x.raw_positions(self.term_dict) for x in value]
             np.nan_to_num(term_freqs, copy=False, nan=0)
             self.term_freqs[key] = term_freqs
 
             if posns is not None:
-                self.posns.insert(key, posns)
+                self.posns.insert(key, posns, is_encoded)
 
             # Assume we have a positions for each term, doc pair. We can just update it.
             # Otherwise we would have added new terms
@@ -473,7 +485,8 @@ class PostingsArray(ExtensionArray):
         return pd.Series(counts)
 
     def __len__(self):
-        return len(self.term_freqs.rows)
+        len_rval = len(self.term_freqs.rows)
+        return len_rval
 
     def __ne__(self, other):
         if isinstance(other, pd.DataFrame) or isinstance(other, pd.Series) or isinstance(other, pd.Index):
@@ -530,7 +543,7 @@ class PostingsArray(ExtensionArray):
 
         if allow_fill and -1 in result_indices:
             if fill_value is None or pd.isna(fill_value):
-                fill_value = PostingsRow({})
+                fill_value = PostingsRow({}, encoded=True)
 
             to_fill_mask = result_indices == -1
             # This is slow as it rebuilds all the term dictionaries
@@ -579,6 +592,12 @@ class PostingsArray(ExtensionArray):
             return token
         else:
             raise TypeError("Expected a string or list of strings for phrases")
+
+    def __repr__(self):
+        return f"<PostingsArray: {len(self)} rows>"
+
+    def __str__(self):
+        return repr(self)
 
     # ***********************************************************
     # Naive implementations of search functions to clean up later

@@ -1,19 +1,20 @@
 import pytest
 import gzip
+import resource
 from time import perf_counter
 import json
 import pandas as pd
 from searcharray.postings import PostingsArray
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def tmdb_raw_data():
     path = 'fixtures/tmdb.json.gz'
     with gzip.open(path) as f:
         return json.load(f)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def tmdb_data(tmdb_raw_data):
     ids = tmdb_raw_data.keys()
     titles = []
@@ -90,3 +91,23 @@ def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data):
     mask = tmdb_data['title_tokens'].array.match(phrase)
     matches = tmdb_data[mask].index.sort_values()
     assert (matches == expected_matches).all()
+
+
+def test_repr_tmdb(tmdb_data):
+    python_mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    print(f"Python memory usage: {python_mem}")
+    start = perf_counter()
+    repr_str_title = repr(tmdb_data['title_tokens'].array)
+    print(f"Repr (title) time: {perf_counter() - start}")
+    python_mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    print(f"Python memory usage: {python_mem}")
+    start = perf_counter()
+    repr_str_overview = repr(tmdb_data['overview_tokens'].array)
+    print(f"Repr (overview) time: {perf_counter() - start}")
+    python_mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    print(f"Python memory usage: {python_mem}")
+    start = perf_counter()
+    repr_df = repr(tmdb_data)
+    print(f"Repr (title) time: {perf_counter() - start}")
+    python_mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    print(f"Python memory usage: {python_mem}")
