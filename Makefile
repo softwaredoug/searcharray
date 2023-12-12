@@ -28,7 +28,7 @@ clean:
 
 test: deps
 	@echo "Running tests..."
-	python -m pytest -benchmark-skip test
+	python -m pytest --benchmark-skip test
 
 
 benchmark: deps
