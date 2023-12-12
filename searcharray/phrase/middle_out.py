@@ -277,12 +277,14 @@ class PosnBitArray:
         unique_terms = set(self.encoded_term_posns.keys()).union(set(other.encoded_term_posns.keys()))
 
         for term_id in unique_terms:
-            try:
+            if term_id not in other.encoded_term_posns:
+                continue
+            elif term_id not in self.encoded_term_posns:
+                self.encoded_term_posns[term_id] = other.encoded_term_posns[term_id]
+            else:
                 posns_self = self.encoded_term_posns[term_id]
                 posns_other = other.encoded_term_posns[term_id]
                 self.encoded_term_posns[term_id] = snp.merge(posns_self, posns_other)
-            except KeyError:
-                pass
 
     def doc_encoded_posns(self, term_id: int, doc_id: int) -> List:
         # doc_ids = np.asarray([doc_id])

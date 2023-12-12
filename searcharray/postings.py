@@ -388,9 +388,6 @@ class PostingsArray(ExtensionArray):
     def nbytes(self):
         return self.term_freqs.nbytes + self.posns.nbytes
 
-    def size(self):
-        return self.term_freqs.shape[0]
-
     def __getitem__(self, key):
         key = pd.api.indexers.check_array_indexer(self, key)
         # Want to take rows of term freqs
@@ -442,7 +439,7 @@ class PostingsArray(ExtensionArray):
                 posns = [value.raw_positions(self.term_dict)]
             elif isinstance(value, np.ndarray):
                 term_freqs = np.asarray([x.tf_to_dense(self.term_dict) for x in value])
-                is_encoded = value[0].encoded
+                is_encoded = value[0].encoded if len(value) > 0 else False
                 posns = [x.raw_positions(self.term_dict) for x in value]
             np.nan_to_num(term_freqs, copy=False, nan=0)
             self.term_freqs[key] = term_freqs
@@ -592,12 +589,6 @@ class PostingsArray(ExtensionArray):
             return token
         else:
             raise TypeError("Expected a string or list of strings for phrases")
-
-    def __repr__(self):
-        return f"<PostingsArray: {len(self)} rows>"
-
-    def __str__(self):
-        return repr(self)
 
     # ***********************************************************
     # Naive implementations of search functions to clean up later
