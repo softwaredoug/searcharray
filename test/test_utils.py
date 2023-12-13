@@ -42,10 +42,3 @@ else:
 
 
 profile_enabled = '--benchmark-only' in sys.argv or '--benchmark-disable' in sys.argv
-
-
-def run_if_profiling_enabled(func):
-    if profile_enabled:
-        return func
-    else:
-        return pytest.skip("Profiling disabled")

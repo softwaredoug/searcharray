@@ -5,7 +5,7 @@ import requests
 import string
 from time import perf_counter
 from searcharray.postings import PostingsArray
-from test_utils import Profiler, run_if_profiling_enabled
+from test_utils import Profiler, profile_enabled
 
 
 def download_file(url):
@@ -39,6 +39,7 @@ def download_msmarco():
     pathlib.Path(path).rename(f"data/{path}")
 
 
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
 def msmarco100k():
     msmarco100k_path = pathlib.Path("data/msmarco100k.pkl")
@@ -71,6 +72,7 @@ def msmarco100k():
         return pd.read_pickle("data/msmarco100k.pkl")
 
 
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
 def msmarco():
     msmarco_path = pathlib.Path("data/msmarco.pkl")
@@ -151,7 +153,7 @@ def msmarco():
 # .msmarco phrase search ['star', 'trek', 'the', 'next', 'generation']. Found 0. 0.2918s
 # .msmarco phrase search ['what', 'what', 'what']. Found 0. 0.4040s
 #
-@run_if_profiling_enabled
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
 def test_msmarco(phrase_search, msmarco100k, benchmark):
     profiler = Profiler(benchmark)
