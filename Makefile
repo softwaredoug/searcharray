@@ -35,7 +35,8 @@ benchmark: deps
 	python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram.svg
 
 profile: deps
-	python -m pytest -x --benchmark-disable test
+	python -m pytest -x --benchmark-disable test/test_tmdb.py
+	python -m pytest -x --benchmark-disable test/test_msmarco.py
 
 build: deps test
 	@echo "Building..."

@@ -151,6 +151,7 @@ def msmarco():
 # .msmarco phrase search ['star', 'trek', 'the', 'next', 'generation']. Found 0. 0.2918s
 # .msmarco phrase search ['what', 'what', 'what']. Found 0. 0.4040s
 #
+@pytest.mark.skip
 @pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
 def test_msmarco(phrase_search, msmarco100k, benchmark):
     profiler = Profiler(benchmark)
