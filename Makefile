@@ -32,7 +32,7 @@ test: deps
 
 
 benchmark: deps
-	python -m pytest -x --benchmark-only --benchmark-autosave
+	python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram.svg
 
 profile: deps
 	python -m pytest -x --benchmark-disable test

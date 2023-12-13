@@ -114,8 +114,11 @@ def convert_doc_ids(doc_ids):
         return np.asarray(doc_ids, dtype=np.uint64)
     elif isinstance(doc_ids, np.ndarray):
         return doc_ids.astype(np.uint64)
+    elif isinstance(doc_ids, range) and len(doc_ids) > 0:
+        # return np.asarray(doc_ids, dtype=np.uint64)  # UNFORTUNATE COPY
+        return np.arange(doc_ids[0], doc_ids[-1] + 1, dtype=np.uint64) + doc_ids[0]
     elif isinstance(doc_ids, range):
-        return np.asarray(doc_ids, dtype=np.uint64)  # UNFORTUNATE COPY
+        return np.asarray([], dtype=np.uint64)
 
 
 def get_docs(encoded: np.ndarray, doc_ids: np.ndarray):
@@ -129,9 +132,8 @@ def get_docs(encoded: np.ndarray, doc_ids: np.ndarray):
                                            duplicates=snp.KEEP_MAX_N)
 
     found = encoded[idx_enc]
-    empties = empty[np.isin(doc_ids, found, invert=True)]
 
-    merged = snp.merge(found, empties, duplicates=snp.DROP)
+    merged = snp.merge(found, empty, duplicates=snp.DROP)
     return merged
 
 
@@ -287,9 +289,8 @@ class PosnBitArray:
                 self.encoded_term_posns[term_id] = snp.merge(posns_self, posns_other)
 
     def doc_encoded_posns(self, term_id: int, doc_id: int) -> List:
-        # doc_ids = np.asarray([doc_id])
         term_posns = get_docs(self.encoded_term_posns[term_id],
-                              doc_ids=np.asarray([100]))
+                              doc_ids=doc_id)
         return term_posns
 
     def positions(self, term_id: int, key) -> List:

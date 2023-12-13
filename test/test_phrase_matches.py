@@ -185,6 +185,8 @@ def test_phrase(docs, phrase, expected, algorithm):
         phrase_matches = getattr(docs, algorithm)(phrase)
         assert (expected == phrase_matches).all()
         assert (docs == docs_before).all()
+        phrase_matches2 = getattr(docs_before, algorithm)(phrase)
+        assert (expected == phrase_matches2).all()
 
 
 perf_scenarios = {
