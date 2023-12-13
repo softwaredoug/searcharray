@@ -5,7 +5,7 @@ import requests
 import string
 from time import perf_counter
 from searcharray.postings import PostingsArray
-from test_utils import Profiler, profile_enabled
+from test_utils import Profiler, run_if_profiling_enabled
 
 
 def download_file(url):
@@ -41,9 +41,6 @@ def download_msmarco():
 
 @pytest.fixture(scope="session")
 def msmarco100k():
-    if not profile_enabled:
-        return None
-
     msmarco100k_path = pathlib.Path("data/msmarco100k.pkl")
 
     if not msmarco100k_path.exists():
@@ -154,10 +151,9 @@ def msmarco():
 # .msmarco phrase search ['star', 'trek', 'the', 'next', 'generation']. Found 0. 0.2918s
 # .msmarco phrase search ['what', 'what', 'what']. Found 0. 0.4040s
 #
+@run_if_profiling_enabled
 @pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
 def test_msmarco(phrase_search, msmarco100k, benchmark):
-    if not profile_enabled:
-        return pytest.skip("Profiling disabled")
     profiler = Profiler(benchmark)
     phrase_search = phrase_search.split()
     # print(f"STARTING {phrase_search}")

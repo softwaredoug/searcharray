@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import sys
 from searcharray.postings import PostingsArray
-from test_utils import Profiler, profile_enabled
+from test_utils import Profiler, run_if_profiling_enabled
 
 
 should_profile = '--benchmark-disable' in sys.argv
@@ -91,6 +91,7 @@ tmdb_phrase_matches = [
 ]
 
 
+@run_if_profiling_enabled
 @pytest.mark.parametrize("phrase,expected_matches", tmdb_phrase_matches)
 def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
     prof = Profiler(benchmark)
@@ -99,34 +100,37 @@ def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
     assert (matches == expected_matches).all()
 
 
+@run_if_profiling_enabled
 def test_index_benchmark(benchmark, tmdb_data):
-    if not profile_enabled:
-        return pytest.skip("Profiling disabled")
     prof = Profiler(benchmark)
     results = prof.run(PostingsArray.index, tmdb_data['overview'])
     assert len(results) == len(tmdb_data)
 
 
+@run_if_profiling_enabled
 def test_copy_benchmark(benchmark, tmdb_data):
-    if not profile_enabled:
-        return pytest.skip("Profiling disabled")
     prof = Profiler(benchmark)
     results = prof.run(tmdb_data['overview_tokens'].array.copy)
     assert len(results) == len(tmdb_data)
 
 
+@run_if_profiling_enabled
 def test_slice_benchmark(benchmark, tmdb_data):
-    if not profile_enabled:
-        return pytest.skip("Profiling disabled")
     # Slice the first 1000 elements
     prof = Profiler(benchmark)
     results = prof.run(tmdb_data['overview_tokens'].array[:1000].copy)
     assert len(results) == 1000
 
 
+@run_if_profiling_enabled
+def test_repr_html_benchmark(benchmark, tmdb_data):
+    prof = Profiler(benchmark)
+    results = prof.run(tmdb_data._repr_html_)
+    assert len(results) > 0
+
+
+@run_if_profiling_enabled
 def test_eq_benchmark(benchmark, tmdb_data):
-    if not profile_enabled:
-        return pytest.skip("Profiling disabled")
     prof = Profiler(benchmark)
     idx_again = PostingsArray.index(tmdb_data['overview'])
     compare_amount = 1000
