@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import sys
 from searcharray.postings import PostingsArray
-from test_utils import Profiler
+from test_utils import Profiler, profile_enabled
 
 
 should_profile = '--benchmark-disable' in sys.argv
@@ -100,18 +100,24 @@ def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
 
 
 def test_index_benchmark(benchmark, tmdb_data):
+    if not profile_enabled:
+        return pytest.skip("Profiling disabled")
     prof = Profiler(benchmark)
     results = prof.run(PostingsArray.index, tmdb_data['overview'])
     assert len(results) == len(tmdb_data)
 
 
 def test_copy_benchmark(benchmark, tmdb_data):
+    if not profile_enabled:
+        return pytest.skip("Profiling disabled")
     prof = Profiler(benchmark)
     results = prof.run(tmdb_data['overview_tokens'].array.copy)
     assert len(results) == len(tmdb_data)
 
 
 def test_slice_benchmark(benchmark, tmdb_data):
+    if not profile_enabled:
+        return pytest.skip("Profiling disabled")
     # Slice the first 1000 elements
     prof = Profiler(benchmark)
     results = prof.run(tmdb_data['overview_tokens'].array[:1000].copy)
@@ -119,6 +125,8 @@ def test_slice_benchmark(benchmark, tmdb_data):
 
 
 def test_eq_benchmark(benchmark, tmdb_data):
+    if not profile_enabled:
+        return pytest.skip("Profiling disabled")
     prof = Profiler(benchmark)
     idx_again = PostingsArray.index(tmdb_data['overview'])
     compare_amount = 1000

@@ -39,3 +39,6 @@ if '--benchmark-disable' in sys.argv:
     Profiler = CProfileProfiler
 else:
     Profiler = JustBenchmarkProfiler
+
+
+profile_enabled = '--benchmark-only' in sys.argv or '--benchmark-disable' in sys.argv
