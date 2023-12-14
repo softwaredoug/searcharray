@@ -173,7 +173,7 @@ def test_phrase_api(docs, phrase, expected):
 
 @w_scenarios(scenarios)
 @pytest.mark.parametrize("algorithm", ["phrase_freq", "phrase_freq_scan_old",
-                                       "phrase_freq_scan", "phrase_freq_scan_inplace", "phrase_freq_wide_spans"])
+                                       "phrase_freq_every_diff"])
 def test_phrase(docs, phrase, expected, algorithm):
     # if np.all(expected[:5] == [0, 1, 1, 0, 0]) and algorithm in ["phrase_freq_scan", "phrase_freq_scan_inplace"]:
     #     pytest.skip("phrase_freq_scan known failure - different_num_posns_mixed_and_not_phrase")
@@ -252,26 +252,6 @@ def test_phrase_performance(docs, phrase, expected):
     matches_scan_old = docs.phrase_freq_scan_old(phrase)
     print(f"phrase_match_scan old    took {perf_counter() - start} seconds | {len(docs)} docs")
     assert (matches_scan_old == expected).all()
-
-    start = perf_counter()
-    matches_scan = docs.phrase_freq_scan(phrase)
-    print(f"phrase_match_scan        took {perf_counter() - start} seconds | {len(docs)} docs")
-    assert (matches_scan == expected).all()
-
-    start = perf_counter()
-    matches_scan_inplace = docs.phrase_freq_scan_inplace(phrase)
-    print(f"phrase_match_scan inplace took {perf_counter() - start} seconds | {len(docs)} docs")
-    assert (matches_scan_inplace == expected).all()
-
-    start = perf_counter()
-    matches_scan_inplace = docs.phrase_freq_wide_spans(phrase)
-    print(f"phrase_match_scan widespa took {perf_counter() - start} seconds | {len(docs)} docs")
-    assert (matches_scan_inplace == expected).all()
-
-    start = perf_counter()
-    matches_scan_inplace = docs.phrase_freq_scan_inplace_binsearch(phrase)
-    print(f"phrase_match_scan inplbin took {perf_counter() - start} seconds | {len(docs)} docs")
-    assert (matches_scan_inplace == expected).all()
 
 
 def test_positions():

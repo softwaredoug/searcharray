@@ -14,8 +14,7 @@ from time import perf_counter
 import numpy as np
 from searcharray.utils.row_viewable_matrix import RowViewableMatrix
 from searcharray.term_dict import TermDict, TermMissingError
-from searcharray.phrase.scan_merge import scan_merge_bigram, scan_merge_inplace, advance_after_binsearch, scan_merge_ins
-from searcharray.phrase.wide_spans import all_wide_spans_of_slop
+from searcharray.phrase.scan_merge import scan_merge_ins
 from searcharray.phrase.posn_diffs import compute_phrase_freqs
 from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder, PosnBitArray
 
@@ -664,93 +663,6 @@ class PostingsArray(ExtensionArray):
 
     def phrase_freq(self, tokens, slop=1):
         return self.phrase_freq_every_diff(tokens, slop=slop)
-
-    def phrase_freq_wide_spans(self, tokens, slop=1):
-        mask = self.and_query(tokens)
-
-        if np.sum(mask) == 0:
-            return mask
-
-        posns = [self.positions(token, mask) for token in tokens]
-        starts = [np.cumsum([lst.shape[0] for lst in posn]) for posn in posns]
-        posns = [np.concatenate(posn) for posn in posns]
-
-        phrase_freqs = np.zeros(len(self), dtype=np.uint32)
-        freqs = all_wide_spans_of_slop(posns, starts, slop=slop)
-        phrase_freqs[mask] = freqs
-
-        return phrase_freqs
-
-    def phrase_freq_scan_inplace(self, tokens, slop=1):
-        mask = self.and_query(tokens)
-
-        if np.sum(mask) == 0:
-            return mask
-
-        prior_term = tokens[0]
-
-        prior_posns = self.positions(prior_term, mask)
-        prior_starts = np.cumsum([lst.shape[0] for lst in prior_posns])
-        prior_posns = np.concatenate(prior_posns)
-
-        bigram_freqs = None
-
-        phrase_freqs = np.zeros(len(self))
-
-        for term_cnt, term in enumerate(tokens[1:]):
-            term_posns = self.positions(term, mask)
-            term_starts = np.cumsum([lst.shape[0] for lst in term_posns])
-            term_posns = np.concatenate(term_posns)
-            bigram_freqs, prior_posns, prior_starts =\
-                scan_merge_inplace(
-                    prior_posns, prior_starts, term_posns, term_starts, slop=slop)
-
-        phrase_freqs[mask] = bigram_freqs
-        return phrase_freqs
-
-    def phrase_freq_scan_inplace_binsearch(self, tokens, slop=1):
-        mask = self.and_query(tokens)
-
-        if np.sum(mask) == 0:
-            return mask
-
-        prior_term = tokens[0]
-
-        prior_posns = self.positions(prior_term, mask)
-        prior_starts = np.cumsum([lst.shape[0] for lst in prior_posns])
-        prior_posns = np.concatenate(prior_posns)
-
-        bigram_freqs = None
-
-        phrase_freqs = np.zeros(len(self))
-
-        for term_cnt, term in enumerate(tokens[1:]):
-            term_posns = self.positions(term, mask)
-            term_starts = np.cumsum([lst.shape[0] for lst in term_posns])
-            term_posns = np.concatenate(term_posns)
-            bigram_freqs, prior_posns, prior_starts =\
-                scan_merge_inplace(
-                    prior_posns, prior_starts, term_posns, term_starts,
-                    scan_algo=advance_after_binsearch,
-                    slop=slop)
-
-        phrase_freqs[mask] = bigram_freqs
-        return phrase_freqs
-
-    def phrase_freq_scan(self, tokens, slop=1):
-        mask = self.and_query(tokens)
-
-        if np.sum(mask) == 0:
-            return mask
-
-        prior_term = tokens[0]
-        prior_posns = self.positions(prior_term, mask)
-        phrase_freqs = np.zeros(len(self))
-        for term_cnt, term in enumerate(tokens[1:]):
-            term_posns = self.positions(term, mask)
-            bigram_freqs, prior_posns = scan_merge_bigram(prior_posns, term_posns, slop=slop)
-            phrase_freqs[mask] = bigram_freqs
-        return phrase_freqs
 
     def phrase_freq_scan_old(self, tokens, mask=None, slop=1):
         if mask is None:
