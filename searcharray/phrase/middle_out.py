@@ -115,7 +115,7 @@ def convert_doc_ids(doc_ids):
     elif isinstance(doc_ids, np.ndarray):
         return doc_ids.astype(np.uint64)
     elif isinstance(doc_ids, range) and len(doc_ids) > 0:
-        # return np.asarray(doc_ids, dtype=np.uint64)  # UNFORTUNATE COPY
+        # UNFORTUNATE COPY
         return np.arange(doc_ids[0], doc_ids[-1] + 1, dtype=np.uint64) + doc_ids[0]
     elif isinstance(doc_ids, range):
         return np.asarray([], dtype=np.uint64)
@@ -123,7 +123,6 @@ def convert_doc_ids(doc_ids):
 
 def get_docs(encoded: np.ndarray, doc_ids: np.ndarray):
     """Get list of encoded that have positions in doc_ids."""
-    doc_ids = convert_doc_ids(doc_ids)
     assert len(doc_ids.shape) == 1
     assert len(encoded.shape) == 1
     encoded_doc_ids = encoded.astype(np.uint64) >> (64 - DOC_ID_BITS)
@@ -260,10 +259,11 @@ class PosnBitArray:
     def slice(self, key):
         sliced_term_posns = {}
         doc_ids = index_range(self.doc_ids, key)
+        np_doc_ids = convert_doc_ids(doc_ids)
         for term_id, posns in self.encoded_term_posns.items():
             encoded = self.encoded_term_posns[term_id]
             assert len(encoded.shape) == 1
-            sliced_term_posns[term_id] = get_docs(encoded, doc_ids=doc_ids)
+            sliced_term_posns[term_id] = get_docs(encoded, doc_ids=np_doc_ids)
 
         return PosnBitArray(sliced_term_posns, doc_ids=doc_ids)
 
@@ -286,7 +286,7 @@ class PosnBitArray:
 
     def doc_encoded_posns(self, term_id: int, doc_id: int) -> List:
         term_posns = get_docs(self.encoded_term_posns[term_id],
-                              doc_ids=doc_id)
+                              doc_ids=np.asarray([doc_id], dtype=np.uint64))
         return term_posns
 
     def positions(self, term_id: int, key) -> List:
@@ -296,8 +296,9 @@ class PosnBitArray:
             doc_ids = np.asarray([doc_ids])
 
         try:
+            np_doc_ids = convert_doc_ids(doc_ids)
             term_posns = get_docs(self.encoded_term_posns[term_id],
-                                  doc_ids=doc_ids)
+                                  doc_ids=np_doc_ids)
         except KeyError:
             r_val = [np.array([], dtype=np.uint32) for doc_id in doc_ids]
             if len(r_val) == 1 and isinstance(key, numbers.Number):

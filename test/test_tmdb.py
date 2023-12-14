@@ -133,7 +133,7 @@ def test_repr_html_benchmark(benchmark, tmdb_data):
 def test_eq_benchmark(benchmark, tmdb_data):
     prof = Profiler(benchmark)
     idx_again = PostingsArray.index(tmdb_data['overview'])
-    compare_amount = 1000
+    compare_amount = 10000
     results = prof.run(tmdb_data['overview_tokens'][:compare_amount].array.__eq__, idx_again[:compare_amount])
     assert np.sum(results) == compare_amount
 
