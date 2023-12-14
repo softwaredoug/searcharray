@@ -127,14 +127,10 @@ def get_docs(encoded: np.ndarray, doc_ids: np.ndarray):
     assert len(doc_ids.shape) == 1
     assert len(encoded.shape) == 1
     encoded_doc_ids = encoded.astype(np.uint64) >> (64 - DOC_ID_BITS)
-    empty = doc_ids << (64 - DOC_ID_BITS)
     _, (idx_docs, idx_enc) = snp.intersect(doc_ids, encoded_doc_ids, indices=True,
                                            duplicates=snp.KEEP_MAX_N)
 
-    found = encoded[idx_enc]
-
-    merged = snp.merge(found, empty, duplicates=snp.DROP)
-    return merged
+    return encoded[idx_enc]
 
 
 def inner_bigram_match(lhs, rhs):
