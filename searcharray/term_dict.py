@@ -38,6 +38,14 @@ class TermDict:
         except KeyError:
             raise TermMissingError(f"Term at {term_id} not present in dictionary. Reindex to add.")
 
+    def compatible(self, other) -> bool:
+        # Intersect the terms in both dictionaries
+        terms_self = list(self.term_to_ids.keys())
+        terms_other = list(other.term_to_ids.keys())
+        shortest = min(len(terms_self), len(terms_other))
+        return terms_self[:shortest] == terms_other[:shortest]
+        # If the intersection is empty, the dictionaries are not compatible
+
     def __len__(self):
         return len(self.term_to_ids)
 

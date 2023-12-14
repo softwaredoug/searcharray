@@ -3,6 +3,18 @@ from scipy.sparse import csr_matrix
 import numpy as np
 
 
+def rowwise_eq(mat: csr_matrix, other: csr_matrix) -> np.ndarray:
+    """Check equals on a row-by-row basis."""
+    if mat.shape != other.shape:
+        return False
+    # Subtracting csr mats faster than eq, because
+    # eq seems to construct a coo matrix under the hood?
+    eq_mat = mat - other
+    num_cols_eq_per_row = np.sum(eq_mat, axis=1)
+    row_eq = (num_cols_eq_per_row == 0).flatten()
+    return np.squeeze(np.asarray(row_eq))
+
+
 class RowViewableMatrix:
     """A slicable matrix that can return views without copying."""
 
@@ -75,3 +87,6 @@ class RowViewableMatrix:
 
     def __str__(self):
         return f"RowViewableMatrix({str(self.mat)}, {str(self.rows)})"
+
+    def __eq__(self, other):
+        return rowwise_eq(self.mat[self.rows], other.mat[other.rows])

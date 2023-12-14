@@ -481,11 +481,19 @@ class PostingsArray(ExtensionArray):
                 return False
             elif len(other) == 0:
                 return np.array([], dtype=bool)
-            return np.array(self[:]) == np.array(other[:])
+            else:
+                # Compatible term dicts, and same term freqs
+                # (not looking at positions, maybe we should?)
+                if self.term_dict.compatible(other.term_dict):
+                    return self.term_freqs == other.term_freqs
+                else:
+                    return np.zeros(len(self), dtype=bool)
+            # return np.array(self[:]) == np.array(other[:])
 
         # When other is a scalar value
         elif isinstance(other, PostingsRow):
             other = PostingsArray([other], tokenizer=self.tokenizer)
+            warnings.warn("Comparing a scalar value to a PostingsArray. This is slow.")
             return np.array(self[:]) == np.array(other[:])
 
         # When other is a sequence but not an ExtensionArray
