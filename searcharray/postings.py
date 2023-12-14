@@ -664,7 +664,7 @@ class PostingsArray(ExtensionArray):
     def phrase_freq(self, tokens, slop=1):
         return self.phrase_freq_every_diff(tokens, slop=slop)
 
-    def phrase_freq_scan_old(self, tokens, mask=None, slop=1):
+    def phrase_freq_scan(self, tokens, mask=None, slop=1):
         if mask is None:
             mask = self.and_query(tokens)
 
@@ -696,6 +696,6 @@ class PostingsArray(ExtensionArray):
 
         remaining_mask = phrase_freqs == -1
         if np.any(remaining_mask):
-            remainder_freqs = self.phrase_freq_scan_old(tokens, mask=remaining_mask, slop=slop)
+            remainder_freqs = self.phrase_freq_scan(tokens, mask=remaining_mask, slop=slop)
             phrase_freqs[remaining_mask] = remainder_freqs[remaining_mask]
         return phrase_freqs

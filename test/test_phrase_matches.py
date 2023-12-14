@@ -172,7 +172,7 @@ def test_phrase_api(docs, phrase, expected):
 
 
 @w_scenarios(scenarios)
-@pytest.mark.parametrize("algorithm", ["phrase_freq", "phrase_freq_scan_old",
+@pytest.mark.parametrize("algorithm", ["phrase_freq", "phrase_freq_scan",
                                        "phrase_freq_every_diff"])
 def test_phrase(docs, phrase, expected, algorithm):
     # if np.all(expected[:5] == [0, 1, 1, 0, 0]) and algorithm in ["phrase_freq_scan", "phrase_freq_scan_inplace"]:
@@ -249,9 +249,9 @@ def test_phrase_performance(docs, phrase, expected):
     assert (matches_every_diff == expected).all()
 
     start = perf_counter()
-    matches_scan_old = docs.phrase_freq_scan_old(phrase)
+    matches_scan = docs.phrase_freq_scan(phrase)
     print(f"phrase_match_scan old    took {perf_counter() - start} seconds | {len(docs)} docs")
-    assert (matches_scan_old == expected).all()
+    assert (matches_scan == expected).all()
 
 
 def test_positions():
