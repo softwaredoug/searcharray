@@ -14,7 +14,7 @@ from time import perf_counter
 import numpy as np
 from searcharray.utils.row_viewable_matrix import RowViewableMatrix
 from searcharray.term_dict import TermDict, TermMissingError
-from searcharray.phrase.scan_merge import scan_merge_bigram, scan_merge_inplace, advance_after_binsearch
+from searcharray.phrase.scan_merge import scan_merge_bigram, scan_merge_inplace, advance_after_binsearch, scan_merge_ins
 from searcharray.phrase.wide_spans import all_wide_spans_of_slop
 from searcharray.phrase.posn_diffs import compute_phrase_freqs
 from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder, PosnBitArray
@@ -34,27 +34,6 @@ formatter = logging.Formatter("[%(filename)s:%(lineno)s - %(funcName)20s() ] %(m
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 logger.setLevel(logging.ERROR)
-
-
-def self_adjs(prior_posns, next_posns):
-    """Given two arrays of positions, return the self adjacencies.
-
-    Prior is a subset of next, find all the locations in next in prior,
-    then get all the adjacent positions, returning a numpy array.
-    """
-    in1d = np.in1d(next_posns, prior_posns)
-    if len(in1d) == 0:
-        return np.array([])
-
-    # Where there's an intersection
-    start_indices = np.argwhere(in1d).flatten()
-    # The adjacent to the intersections
-    adj_indices = np.argwhere(in1d).flatten() + 1
-    adj_indices = adj_indices[adj_indices < len(next_posns)]
-
-    arr = np.union1d(next_posns[start_indices], next_posns[adj_indices])
-    arr.sort()
-    return arr
 
 
 class PostingsRow:
@@ -774,69 +753,17 @@ class PostingsArray(ExtensionArray):
         return phrase_freqs
 
     def phrase_freq_scan_old(self, tokens, mask=None, slop=1):
-        from time import perf_counter
-        start = perf_counter()
-
         if mask is None:
             mask = self.and_query(tokens)
 
         if np.sum(mask) == 0:
             return mask
 
-        # Any identical terms, default to shitty algo for now
-        # if len(tokens) != len(set(tokens)):
-        #     return self.phrase_freq_shitty(tokens, slop=slop)
-
-        # Iterate each phrase with its next term
-        prior_term = tokens[0]
-        prior_posns = self.positions(prior_term, mask)
+        # Gather positions
+        posns = [self.positions(token, mask) for token in tokens]
         phrase_freqs = np.zeros(len(self))
-        for term_cnt, term in enumerate(tokens[1:]):
-            term_posns = self.positions(term, mask)
 
-            assert len(prior_posns) == len(term_posns)
-            # RIPE for optimization -> vectorize in C
-            bigram_freqs = np.zeros(len(term_posns))
-            cont_posns = []
-            term_start = perf_counter()
-            for idx in range(len(term_posns)):
-                # Find insert position of every next term in prior term's positions
-                # Intuition:
-                # https://colab.research.google.com/drive/1EeqHYuCiqyptd-awS67Re78pqVdTfH4A
-                if len(prior_posns[idx]) == 0:
-                    bigram_freqs[idx] = 0
-                    cont_posns.append([])
-                    continue
-                priors_in_self = self_adjs(prior_posns[idx], term_posns[idx])
-                takeaway = 0
-                satisfies_slop = None
-                cont_indices = None
-                # Different term
-                if len(priors_in_self) == 0:
-                    ins_posns = np.searchsorted(prior_posns[idx], term_posns[idx], side='right')
-                    prior_adjacents = prior_posns[idx][ins_posns - 1]
-                    adjacents = term_posns[idx] - prior_adjacents
-                    satisfies_slop = (adjacents <= slop) & ~(ins_posns == 0)
-                    cont_indices = np.argwhere(satisfies_slop).flatten()
-                # Overlapping term
-                else:
-                    adjacents = np.diff(priors_in_self)
-                    satisfies_slop = adjacents <= slop
-                    consecutive_slops = satisfies_slop[1:] & satisfies_slop[:-1]
-                    sum_consecutive = np.sum(consecutive_slops)
-                    takeaway = -np.floor_divide(sum_consecutive, -2)  # ceiling divide
-                    cont_indices = np.argwhere(satisfies_slop).flatten() + 1
-
-                bigram_freqs[idx] = np.sum(satisfies_slop) - takeaway
-                cont_posn = term_posns[idx][cont_indices]
-                cont_posns.append(cont_posn)
-            phrase_freqs[mask] = bigram_freqs
-            prior_term = term
-            prior_posns = cont_posns
-            logger.info(f"Term ({term_cnt}) Time: {perf_counter() - term_start:.4f}s")
-
-        logger.info(f"Phrase Search Time: {perf_counter() - start:.4f}s")
-
+        phrase_freqs[mask] = scan_merge_ins(posns, phrase_freqs[mask], slop=slop)
         return phrase_freqs
 
     def phrase_freq_every_diff(self, tokens, slop=1):
