@@ -25,13 +25,20 @@ class JustBenchmarkProfiler:
 class CProfileProfiler:
     def __init__(self, benchmark):
         self.benchmark = benchmark
+
+        def replace_all(text, replace_with='_'):
+            for char in ['/', ':', '.', '::', '[', ']', ' ']:
+                text = text.replace(char, replace_with)
+            return text
+
         self.name = benchmark.name
-        self.name = self.name.split('/')[-1].replace(':', '_').replace('.', '_').replace('::', '_').replace('[', '_').replace(']', '_').replace(' ', '_')
+        self.name = replace_all(self.name.split('/')[-1])
         self.cprofiler = cProfile.Profile()
 
     def run(self, func, *args, **kwargs):
         rval = self.cprofiler.runcall(func, *args, **kwargs)
         self.cprofiler.dump_stats(f".benchmarks/{self.name}.prof")
+        self.cprofiler.dump_stats(".benchmarks/last.prof")
         return rval
 
 

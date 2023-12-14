@@ -35,9 +35,10 @@ benchmark: deps
 	python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram
 	open ./.benchmarks/histogram.svg
 
-profile: deps
-	python -m pytest -x --benchmark-disable test/test_tmdb.py
-	python -m pytest -x --benchmark-disable test/test_msmarco.py
+profile:
+	python -m pytest -x --benchmark-disable $(TEST)
+	snakeviz ./.benchmarks/last.prof
+
 
 build: deps test
 	@echo "Building..."
