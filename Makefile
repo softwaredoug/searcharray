@@ -35,6 +35,9 @@ benchmark: deps
 	python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram
 	open ./.benchmarks/histogram.svg
 
+benchmark_graph: deps
+	python scripts/graph_benchmarks.py $(TEST)
+
 profile:
 	python -m pytest -x --benchmark-disable $(TEST)
 	snakeviz ./.benchmarks/last.prof
