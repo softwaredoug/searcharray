@@ -13,6 +13,8 @@ import numbers
 import logging
 from time import perf_counter
 
+from searcharray.utils.bitcount import bit_count64
+
 
 logger = logging.getLogger(__name__)
 
@@ -324,6 +326,18 @@ class PosnBitArray:
             if len(decs) == 1 and isinstance(key, numbers.Number):
                 decs = decs[0]
             return decs
+
+    def termfreqs(self, term_id: int) -> np.ndarray:
+        """Count term freqs using unique positions."""
+        encoded = self.encoded_term_posns[term_id]
+        doc_ids = (encoded & DOC_ID_MASK) >> (64 - DOC_ID_BITS)
+        change_indices = np.nonzero(np.diff(doc_ids))[0]
+        change_indices = np.concatenate(([0], change_indices + 1))
+        posns = encoded & POSN_LSB_MASK
+        bit_counts = bit_count64(posns)
+
+        term_freqs = np.add.reduceat(bit_counts, change_indices)
+        return np.unique(doc_ids), term_freqs
 
     def insert(self, key, term_ids_to_posns, is_encoded=False):
         new_posns = PosnBitArrayBuilder()

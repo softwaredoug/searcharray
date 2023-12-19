@@ -586,8 +586,9 @@ class PostingsArray(ExtensionArray):
 
         try:
             term_id = self.term_dict.get_term_id(token)
-            matches = self.term_freqs.copy_col_at(term_id).todense().flatten()
-            matches = np.asarray(matches).flatten()
+            matches = np.zeros(len(self), dtype=int)
+            doc_ids, termfreqs = self.posns.termfreqs(term_id)
+            matches[doc_ids] = termfreqs
             return matches
         except TermMissingError:
             return np.zeros(len(self), dtype=int)
