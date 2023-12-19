@@ -130,6 +130,14 @@ def test_repr_html_benchmark(benchmark, tmdb_data):
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("term", ['the', 'cat', 'star', 'skywalker'])
+def test_term_freq(benchmark, tmdb_data, term):
+    prof = Profiler(benchmark)
+    results = prof.run(tmdb_data['overview_tokens'].array.term_freq, term)
+    assert len(results) > 0
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 def test_eq_benchmark(benchmark, tmdb_data):
     prof = Profiler(benchmark)
     idx_again = PostingsArray.index(tmdb_data['overview'])
