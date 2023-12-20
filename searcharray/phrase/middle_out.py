@@ -8,10 +8,10 @@ https://colab.research.google.com/drive/10tIEkdlCE_1J_CcgEcV0jkLfBc-0H4am?authus
 import numpy as np
 import sortednp as snp
 from copy import deepcopy
-from typing import List, Optional
+from typing import List
+from searcharray.utils.roaringish import RoaringishEncoder, convert_keys
 import numbers
 import logging
-from time import perf_counter
 
 from searcharray.utils.bitcount import bit_count64
 
@@ -28,124 +28,21 @@ logger.addHandler(handler)
 logger.setLevel(logging.ERROR)
 
 
-DOC_ID_MASK = 0xFFFFFFF000000000
-DOC_ID_BITS = 28
-POSN_MSB_MASK = 0x0000000FFFFC0000
-POSN_MSB_BITS = 18
-POSN_LSB_MASK = 0x000000000003FFFF
-POSN_LSB_BITS = 18
-
-assert DOC_ID_BITS + POSN_MSB_BITS + POSN_LSB_BITS == 64
-assert DOC_ID_MASK | POSN_MSB_MASK | POSN_LSB_MASK == 0xFFFFFFFFFFFFFFFF
-
-
-def validate_posns(posns: np.ndarray):
-    if not np.all(posns < 2**POSN_LSB_BITS):
-        raise ValueError(f"Positions must be less than {2**POSN_LSB_BITS}")
-
-
-def encode_posns(posns: np.ndarray, doc_ids: Optional[np.ndarray] = None):
-    """Pack a sorted array of positions into compact bit array.
-
-    each returned array represents a single term, with doc_id as 32 MSBs
-
-    | 32 MSBs | 16 LSBs | 16 LSBs |
-      doc_id    bits msbs posns
-
-    for later easy intersection of 32+16 msbs, then checking for adjacent
-    positions
-
-    """
-    validate_posns(posns)
-    cols = posns // POSN_LSB_BITS    # Header of bit to use
-    cols = cols.astype(np.uint64) << POSN_MSB_BITS
-    if doc_ids is not None:
-        cols |= doc_ids.astype(np.uint64) << (64 - DOC_ID_BITS)
-    values = posns % POSN_LSB_BITS   # Value to encode
-
-    change_indices = np.nonzero(np.diff(cols))[0] + 1
-    change_indices = np.insert(change_indices, 0, 0)
-
-    encoded = cols | (1 << values)
-    if len(encoded) == 0:
-        return encoded
-    return np.bitwise_or.reduceat(encoded, change_indices)
-
-
-def decode_posns(encoded, get_doc_ids=True):
-    start = perf_counter()
-    doc_ids = (encoded & DOC_ID_MASK) >> (64 - DOC_ID_BITS)
-    msbs = (encoded & POSN_MSB_MASK) >> POSN_MSB_BITS
-    to_concat = []
-    for bit in range(POSN_LSB_BITS):
-        mask = 1 << bit
-        lsbs = encoded & mask
-        set_lsbs = (lsbs != 0)
-        this_doc_ids = doc_ids[set_lsbs]
-        posns = bit + (msbs[set_lsbs] * POSN_LSB_BITS)
-        doc_with_posn = np.dstack([this_doc_ids, posns])[0]
-        to_concat.append(doc_with_posn)
-
-    logger.debug(f"loop took {perf_counter() - start:.2f} seconds")
-    stacked = np.vstack(to_concat)
-    # Sort by doc_id, then posn
-    sorted_posns = stacked[np.lexsort((stacked[:, 1], stacked[:, 0]))]
-    doc_ids, idx = np.unique(sorted_posns[:, 0], return_index=True)
-    grouped = np.split(sorted_posns[:, 1], idx[1:])
-    if get_doc_ids:
-        as_list = list(zip(doc_ids, grouped))
-    else:
-        as_list = grouped
-
-    logger.debug(f"groupby took {perf_counter() - start:.2f} seconds | got {len(as_list)}")
-    return as_list
-
-
-def intersect_msbs(lhs: np.ndarray, rhs: np.ndarray):
-    """Return the MSBs that are common to both lhs and rhs."""
-    # common = np.intersect1d(lhs_msbs, rhs_msbs)
-    _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> POSN_LSB_BITS, rhs >> POSN_LSB_BITS, indices=True)
-    # With large arrays np.isin becomes a bottleneck
-    return lhs[lhs_idx], rhs[rhs_idx]
-
-
-def convert_doc_ids(doc_ids):
-    if isinstance(doc_ids, numbers.Number):
-        return np.asarray([doc_ids], dtype=np.uint64)
-    elif isinstance(doc_ids, list):
-        return np.asarray(doc_ids, dtype=np.uint64)
-    elif isinstance(doc_ids, np.ndarray):
-        return doc_ids.astype(np.uint64)
-    elif isinstance(doc_ids, range) and len(doc_ids) > 0:
-        # UNFORTUNATE COPY
-        return np.arange(doc_ids[0], doc_ids[-1] + 1, dtype=np.uint64) + doc_ids[0]
-    elif isinstance(doc_ids, range):
-        return np.asarray([], dtype=np.uint64)
-
-
-def get_docs(encoded: np.ndarray, doc_ids: np.ndarray):
-    """Get list of encoded that have positions in doc_ids."""
-    assert len(doc_ids.shape) == 1
-    assert len(encoded.shape) == 1
-    encoded_doc_ids = encoded.astype(np.uint64) >> (64 - DOC_ID_BITS)
-    _, (idx_docs, idx_enc) = snp.intersect(doc_ids, encoded_doc_ids, indices=True,
-                                           duplicates=snp.KEEP_MAX_N)
-
-    return encoded[idx_enc]
+encoder = RoaringishEncoder()
 
 
 def inner_bigram_match(lhs, rhs):
     """Count bigram matches between two encoded arrays."""
-    lhs, rhs = intersect_msbs(lhs, rhs)
+    lhs, rhs = encoder.intersect(lhs, rhs)
     if len(lhs) != len(rhs):
         raise ValueError("Encoding error, MSBs apparently are duplicated among your encoded posn arrays.")
-    rhs_next = (rhs & DOC_ID_MASK)
+    rhs_next = (rhs & encoder.key_mask)
     rhs_next_mask = np.zeros(len(rhs), dtype=bool)
     counts = []
     # With popcount soon to be in numpy, this could potentially
     # be simply a left shift of the RHS LSB poppcount, and and a popcount
     # to count the overlaps
-    for bit in range(1, POSN_LSB_BITS - 1):
+    for bit in range(1, encoder.payload_lsb_bits - 1):
         lhs_mask = 1 << bit
         rhs_mask = 1 << (bit + 1)
         lhs_set = (lhs & lhs_mask) != 0
@@ -191,9 +88,9 @@ class PosnBitArrayBuilder:
             doc_ids = self.term_posn_doc_ids[term_id]
             if isinstance(doc_ids, list):
                 doc_ids = np.asarray(doc_ids, dtype=np.uint32)
-            encoded = encode_posns(doc_ids=doc_ids, posns=posns)
+            encoded = encoder.encode(keys=doc_ids, payload=posns)
             if check:
-                decode_again = decode_posns(encoded)
+                decode_again = encoder.decode(encoded)
                 docs_to_posns = dict(decode_again)
                 doc_ids_again = []
                 posns_again = []
@@ -261,11 +158,11 @@ class PosnBitArray:
     def slice(self, key):
         sliced_term_posns = {}
         doc_ids = index_range(self.doc_ids, key)
-        np_doc_ids = convert_doc_ids(doc_ids)
+        np_doc_ids = convert_keys(doc_ids)
         for term_id, posns in self.encoded_term_posns.items():
             encoded = self.encoded_term_posns[term_id]
             assert len(encoded.shape) == 1
-            sliced_term_posns[term_id] = get_docs(encoded, doc_ids=np_doc_ids)
+            sliced_term_posns[term_id] = encoder.slice(encoded, keys=np_doc_ids)
 
         return PosnBitArray(sliced_term_posns, doc_ids=doc_ids)
 
@@ -287,8 +184,8 @@ class PosnBitArray:
                 self.encoded_term_posns[term_id] = snp.merge(posns_self, posns_other)
 
     def doc_encoded_posns(self, term_id: int, doc_id: int) -> List:
-        term_posns = get_docs(self.encoded_term_posns[term_id],
-                              doc_ids=np.asarray([doc_id], dtype=np.uint64))
+        term_posns = encoder.slice(self.encoded_term_posns[term_id],
+                                   keys=np.asarray([doc_id], dtype=np.uint64))
         return term_posns
 
     def positions(self, term_id: int, key) -> List:
@@ -298,16 +195,16 @@ class PosnBitArray:
             doc_ids = np.asarray([doc_ids])
 
         try:
-            np_doc_ids = convert_doc_ids(doc_ids)
-            term_posns = get_docs(self.encoded_term_posns[term_id],
-                                  doc_ids=np_doc_ids)
+            np_doc_ids = convert_keys(doc_ids)
+            term_posns = encoder.slice(self.encoded_term_posns[term_id],
+                                       keys=np_doc_ids)
         except KeyError:
             r_val = [np.array([], dtype=np.uint32) for doc_id in doc_ids]
             if len(r_val) == 1 and isinstance(key, numbers.Number):
                 r_val = r_val[0]
             return r_val
 
-        decoded = decode_posns(term_posns, get_doc_ids=True)
+        decoded = encoder.decode(encoded=term_posns, get_keys=True)
 
         if len(decoded) == 0:
             return np.array([], dtype=np.uint32)
@@ -330,10 +227,10 @@ class PosnBitArray:
     def termfreqs(self, term_id: int) -> np.ndarray:
         """Count term freqs using unique positions."""
         encoded = self.encoded_term_posns[term_id]
-        doc_ids = (encoded & DOC_ID_MASK) >> (64 - DOC_ID_BITS)
+        doc_ids = encoder.keys(encoded)
         change_indices = np.nonzero(np.diff(doc_ids))[0]
         change_indices = np.concatenate(([0], change_indices + 1))
-        posns = encoded & POSN_LSB_MASK
+        posns = encoded & encoder.payload_lsb_mask
         bit_counts = bit_count64(posns)
 
         term_freqs = np.add.reduceat(bit_counts, change_indices)
