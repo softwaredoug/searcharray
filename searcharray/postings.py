@@ -603,8 +603,7 @@ class PostingsArray(ExtensionArray):
             term_id = self.term_dict.get_term_id(token)
             matches = np.zeros(len(self), dtype=int)
             doc_ids, termfreqs = self.posns.termfreqs(term_id)
-            doc_ids_in_matches = np.intersect1d(self.term_freqs.rows, doc_ids).astype(np.uint32)
-            mask = np.isin(self.term_freqs.rows, doc_ids_in_matches)
+            mask = np.isin(self.term_freqs.rows, doc_ids)
             matches[mask] = termfreqs
             return matches
         except TermMissingError:
