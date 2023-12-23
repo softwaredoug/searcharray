@@ -84,6 +84,13 @@ def test_tokenize_tmdb(tmdb_raw_data):
     assert len(df) == len(ids)
 
 
+def test_slice_then_search(tmdb_data):
+    star_wars_in_title = tmdb_data['title_tokens'].array.match(["Star", "Wars"])
+    star_wars_in_title = tmdb_data[star_wars_in_title]
+    skywalker_bm25 = star_wars_in_title['overview_tokens'].array.bm25(["Skywalker"])
+    assert skywalker_bm25.shape[0] == 3
+
+
 tmdb_phrase_matches = [
     (["Star", "Wars"], ['11', '330459', '76180']),
     (["Black", "Mirror:"], ['374430']),
