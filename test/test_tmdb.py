@@ -37,7 +37,7 @@ def tmdb_data(tmdb_raw_data):
 
     assert len(ids) == len(titles) == len(overviews)
 
-    df = pd.DataFrame({'title': titles, 'overview': overviews}, index=ids)
+    df = pd.DataFrame({'title': titles, 'overview': overviews, 'doc_id': ids}, index=ids)
     indexed = PostingsArray.index(df['title'])
     df['title_tokens'] = indexed
 
@@ -141,6 +141,27 @@ def test_repr_html_benchmark(benchmark, tmdb_data):
 def test_term_freq(benchmark, tmdb_data, term):
     prof = Profiler(benchmark)
     results = prof.run(tmdb_data['overview_tokens'].array.term_freq, term)
+    assert len(results) > 0
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_gather_results(benchmark, tmdb_data):
+    """Gathering results typical of a search operation."""
+    def gather_multiple_results():
+        N = 10
+        all_results = []
+        for keywords in [['Star', 'Wars'], ['Black', 'Mirror:'], ['rambo']]:
+            score = tmdb_data['title_tokens'].array.bm25(keywords)
+            score += tmdb_data['overview_tokens'].array.bm25(keywords)
+            tmdb_data['score'] = score
+            top_n = tmdb_data.sort_values('score', ascending=False)[:N].copy()
+            top_n.loc[:, 'doc_id'] = top_n['doc_id'].astype(int)
+            top_n.loc[:, 'rank'] = np.arange(N) + 1
+            top_n.loc[:, 'keywords'] = " ".join(keywords)
+            all_results.append(top_n)
+        return pd.concat(all_results)
+    prof = Profiler(benchmark)
+    results = prof.run(gather_multiple_results)
     assert len(results) > 0
 
 

@@ -388,7 +388,7 @@ class PostingsArray(ExtensionArray):
         else:
             # Construct a sliced view of this array
             sliced_tfs = self.term_freqs.slice(key)
-            sliced_posns = self.posns.slice(key)
+            sliced_posns = self.posns
             arr = PostingsArray([], tokenizer=self.tokenizer)
             arr.term_freqs = sliced_tfs
             arr.doc_lens = self.doc_lens[key]
@@ -602,7 +602,8 @@ class PostingsArray(ExtensionArray):
         try:
             term_id = self.term_dict.get_term_id(token)
             matches = np.zeros(len(self), dtype=int)
-            doc_ids, termfreqs = self.posns.termfreqs(term_id)
+            doc_ids, termfreqs = self.posns.termfreqs(term_id,
+                                                      doc_ids=self.term_freqs.rows)
             mask = np.isin(self.term_freqs.rows, doc_ids)
             matches[mask] = termfreqs
             return matches

@@ -224,17 +224,19 @@ class PosnBitArray:
                 decs = decs[0]
             return decs
 
-    def termfreqs(self, term_id: int) -> np.ndarray:
+    def termfreqs(self, term_id: int, doc_ids: np.ndarray) -> np.ndarray:
         """Count term freqs using unique positions."""
         encoded = self.encoded_term_posns[term_id]
-        doc_ids = encoder.keys(encoded)
+        term_posns = encoder.slice(encoded,
+                                   keys=doc_ids.astype(np.uint64))
+        doc_ids = encoder.keys(term_posns)
         change_indices = np.nonzero(np.diff(doc_ids))[0]
         change_indices = np.concatenate(([0], change_indices + 1))
         posns = encoded & encoder.payload_lsb_mask
         bit_counts = bit_count64(posns)
 
         term_freqs = np.add.reduceat(bit_counts, change_indices)
-        return np.unique(doc_ids), term_freqs
+        return doc_ids, term_freqs
 
     def insert(self, key, term_ids_to_posns, is_encoded=False):
         new_posns = PosnBitArrayBuilder()
