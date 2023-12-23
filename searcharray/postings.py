@@ -369,7 +369,7 @@ class PostingsArray(ExtensionArray):
 
     @property
     def nbytes(self):
-        return self.term_freqs.nbytes + self.posns.nbytes + self.doc_lens.nbytes
+        return self.term_freqs.nbytes + self.posns.nbytes + self.doc_lens.nbytes + self.term_dict.nbytes
 
     def __getitem__(self, key):
         key = pd.api.indexers.check_array_indexer(self, key)

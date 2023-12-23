@@ -1,3 +1,4 @@
+import sys
 
 
 class TermMissingError(KeyError):
@@ -51,3 +52,8 @@ class TermDict:
 
     def __repr__(self):
         return repr(self.term_to_ids)
+
+    @property
+    def nbytes(self):
+        bytes_used = sys.getsizeof(self.term_to_ids) + sys.getsizeof(self.id_to_terms)
+        return bytes_used
