@@ -62,6 +62,7 @@ def msmarco100k():
         print("Indexing...")
         msmarco["title_ws"] = PostingsArray.index(msmarco["title"])
         print(f"Indexed in {perf_counter() - start:.4f}s")
+        print("Indexing...")
         msmarco["body_ws"] = PostingsArray.index(msmarco["body"])
         print(f"Indexed in {perf_counter() - start:.4f}s")
 
@@ -95,6 +96,7 @@ def msmarco():
         print("Indexing...")
         msmarco["title_ws"] = PostingsArray.index(msmarco["title"])
         print(f"Indexed title in {perf_counter() - start:.4f}s")
+        print("Indexing...")
         msmarco["body_ws"] = PostingsArray.index(msmarco["body"])
         print(f"Indexed body in {perf_counter() - start:.4f}s")
         msmarco.to_pickle("data/msmarco.pkl")

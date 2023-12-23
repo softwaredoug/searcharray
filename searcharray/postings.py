@@ -17,11 +17,7 @@ from searcharray.term_dict import TermDict, TermMissingError
 from searcharray.phrase.scan_merge import scan_merge_ins
 from searcharray.phrase.posn_diffs import compute_phrase_freqs
 from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder, PosnBitArray
-
-# Doc,Term -> freq
-# Note scipy sparse switching to *_array, which is more numpy like
-# However, as of now, these don't seem fully baked
-from searcharray.utils.mat_set import SparseMatSet
+from searcharray.utils.mat_set import SparseMatSetBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -214,7 +210,7 @@ def _build_index_from_dict(postings):
     """Bulid an index from postings that are already tokenized and point at their term frequencies."""
     start = perf_counter()
     term_dict = TermDict()
-    term_doc = SparseMatSet()
+    term_doc = SparseMatSetBuilder()
     doc_lens = []
     avg_doc_length = 0
     num_postings = 0
@@ -236,7 +232,6 @@ def _build_index_from_dict(postings):
     # this is faster that directly using the matrix
     # https://www.austintripp.ca/blog/2018/09/12/sparse-matrices-tips1
     for doc_id, tokenized in enumerate(postings):
-        term_doc.ensure_capacity(doc_id)
         if isinstance(tokenized, dict):
             tokenized = PostingsRow(tokenized, doc_len=len(tokenized))
         elif not isinstance(tokenized, PostingsRow):
@@ -247,13 +242,14 @@ def _build_index_from_dict(postings):
 
         doc_lens.append(tokenized.doc_len)
         avg_doc_length += doc_lens[-1]
+        terms = []
         for token, term_freq in tokenized.terms():
             add_term_start = perf_counter()
             term_id = term_dict.add_term(token)
             add_term_time += perf_counter() - add_term_start
 
             set_time_start = perf_counter()
-            term_doc[doc_id, term_id] = 1
+            terms.append(term_id)
             set_time += perf_counter() - set_time_start
 
             get_posns_start = perf_counter()
@@ -265,6 +261,10 @@ def _build_index_from_dict(postings):
                 posns.add_posns(doc_id, term_id, positions)
 
             set_posns_time += perf_counter() - set_posns_start
+
+        set_time_start = perf_counter()
+        term_doc.append(terms)
+        set_time += perf_counter() - set_time_start
 
         if doc_id % 1000 == 0:
             logger.debug(f"Indexed {doc_id} documents in {perf_counter() - start} seconds")
@@ -283,7 +283,7 @@ def _build_index_from_dict(postings):
     bit_posns = posns.build()
     logger.info(f"Bitwis Posn memory usage: {bit_posns.nbytes / 1024 / 1024} MB")
 
-    return RowViewableMatrix(term_doc), bit_posns, term_dict, avg_doc_length, np.array(doc_lens)
+    return RowViewableMatrix(term_doc.build()), bit_posns, term_dict, avg_doc_length, np.array(doc_lens)
 
 
 def _row_to_postings_row(doc_id, row, doc_len, term_dict, posns: PosnBitArray):

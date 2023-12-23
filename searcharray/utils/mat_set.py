@@ -3,6 +3,21 @@ import pandas as pd
 import numbers
 
 
+class SparseMatSetBuilder:
+
+    def __init__(self):
+        self.cols = []
+        self.rows = [0]
+
+    def append(self, cols):
+        self.cols.extend(cols)
+        self.rows.append(len(self.cols))
+
+    def build(self):
+        return SparseMatSet(cols=np.asarray(self.cols, dtype=np.uint32),
+                            rows=np.asarray(self.rows, dtype=np.uint32))
+
+
 class SparseMatSet:
     """Sparse matrix that only stores the set of row/col indices that are set to 1."""
 
@@ -39,7 +54,7 @@ class SparseMatSet:
             new_row_ptrs = [len(self.cols)] * append_amt
             self.rows = np.concatenate([self.rows, new_row_ptrs])
 
-    def _set_cols(self, row, cols, overwrite=False):
+    def set_cols(self, row, cols, overwrite=False):
         row = np.int32(row)
         self.ensure_capacity(row)
 
@@ -75,14 +90,14 @@ class SparseMatSet:
             set_rows, set_cols = value.nonzero()
             if not (value[set_rows, set_cols] == 1).all():
                 raise ValueError("This sparse matrix only supports setting 1")
-            self._set_cols(index, set_cols, overwrite=True)
+            self.set_cols(index, set_cols, overwrite=True)
 
         # Multidimensional indexing
         elif isinstance(index, tuple):
             row, col = index
             if value != 1:
                 raise ValueError("This sparse matrix only supports setting 1")
-            self._set_cols(row, np.asarray([col]))
+            self.set_cols(row, np.asarray([col]))
         # Multiple rows
         elif pd.api.types.is_list_like(index):
             if len(index) == len(value):
