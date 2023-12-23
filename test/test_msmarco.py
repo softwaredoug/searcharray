@@ -66,7 +66,9 @@ def msmarco100k():
         print(f"Indexed in {perf_counter() - start:.4f}s")
 
         # Save as pickle
+        print("Saving...")
         msmarco.to_pickle("data/msmarco100k.pkl")
+        print(f"Saved in {perf_counter() - start:.4f}s")
         return msmarco
     else:
         return pd.read_pickle("data/msmarco100k.pkl")
@@ -92,10 +94,11 @@ def msmarco():
 
         print("Indexing...")
         msmarco["title_ws"] = PostingsArray.index(msmarco["title"])
-        print(f"Indexed in {perf_counter() - start:.4f}s")
+        print(f"Indexed title in {perf_counter() - start:.4f}s")
         msmarco["body_ws"] = PostingsArray.index(msmarco["body"])
-        print(f"Indexed in {perf_counter() - start:.4f}s")
+        print(f"Indexed body in {perf_counter() - start:.4f}s")
         msmarco.to_pickle("data/msmarco.pkl")
+        print(f"Saved in {perf_counter() - start:.4f}s")
         return msmarco
     else:
         return pd.read_pickle("data/msmarco.pkl")
@@ -153,13 +156,13 @@ def msmarco():
 # .msmarco phrase search ['star', 'trek', 'the', 'next', 'generation']. Found 0. 0.2918s
 # .msmarco phrase search ['what', 'what', 'what']. Found 0. 0.4040s
 #
-@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+# @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
 def test_msmarco(phrase_search, msmarco100k, benchmark):
     profiler = Profiler(benchmark)
     phrase_search = phrase_search.split()
-    # print(f"STARTING {phrase_search}")
-    # print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+    print(f"STARTING {phrase_search}")
+    print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     # print(f"Memory Usage (TITLE): {msmarco100k['title_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     start = perf_counter()
     results = profiler.run(msmarco100k['body_ws'].array.bm25, phrase_search)

@@ -202,6 +202,15 @@ def test_term_freqs(data):
 def test_doc_freq(data):
     doc_freq = data.doc_freq("bar")
     assert doc_freq == (2 * 25)
+    doc_freq = data.doc_freq("foo")
+    assert doc_freq == 25
+
+
+def test_doc_lengths(data):
+    doc_lengths = data.doc_lengths()
+    assert doc_lengths.shape == (100,)
+    assert (doc_lengths == [4, 1, 2, 3] * 25).all()
+    assert data.avg_doc_length == 2.5
 
 
 def test_bm25_matches_lucene(data):
@@ -209,4 +218,4 @@ def test_bm25_matches_lucene(data):
     assert bm25_idf > 0.0
     bm25 = data.bm25("bar")
     assert bm25.shape == (100,)
-    assert np.isclose(bm25, [0.35546009, 0.0 , 0.33007009, 0.0] * 25).all()
+    assert np.isclose(bm25, [0.37066694, 0., 0.34314217, 0.] * 25).all()

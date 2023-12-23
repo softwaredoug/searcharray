@@ -1,25 +1,24 @@
 import numbers
-from scipy.sparse import csr_matrix
 import numpy as np
+from searcharray.utils.mat_set import SparseMatSet
 
 
-def rowwise_eq(mat: csr_matrix, other: csr_matrix) -> np.ndarray:
+def rowwise_eq(mat: SparseMatSet, other: SparseMatSet) -> np.ndarray:
     """Check equals on a row-by-row basis."""
-    if mat.shape != other.shape:
+    if len(mat) != len(other):
         return False
-    # Subtracting csr mats faster than eq, because
-    # eq seems to construct a coo matrix under the hood?
-    eq_mat = mat - other
-    num_cols_eq_per_row = np.sum(eq_mat, axis=1)
-    row_eq = (num_cols_eq_per_row == 0).flatten()
-    return np.squeeze(np.asarray(row_eq))
+    row_eq = np.zeros(mat.shape[0], dtype=np.dtype('bool'))
+    for row_idx in range(len(mat)):
+        if np.all(mat[row_idx] == other[row_idx]):
+            row_eq[row_idx] = True
+    return row_eq
 
 
 class RowViewableMatrix:
     """A slicable matrix that can return views without copying."""
 
-    def __init__(self, csr_mat: csr_matrix, rows: np.ndarray = None):
-        self.mat = csr_mat
+    def __init__(self, mat: SparseMatSet, rows: np.ndarray = None):
+        self.mat = mat
         self.col_cache = {}
         self.cols_cached = []
         if rows is None:
@@ -48,8 +47,8 @@ class RowViewableMatrix:
     def copy(self):
         return RowViewableMatrix(self.mat.copy(), self.rows.copy())
 
-    def sum(self, axis=0):
-        return self.mat[self.rows].sum(axis=axis)
+    def cols_per_row(self):
+        return self.mat[self.rows].num_cols_per_row()
 
     def copy_col_at(self, col):
         if col not in self.col_cache:
@@ -67,9 +66,7 @@ class RowViewableMatrix:
 
     @property
     def nbytes(self):
-        return self.mat.data.nbytes + \
-            self.mat.indptr.nbytes + \
-            self.mat.indices.nbytes + \
+        return self.mat.nbytes + \
             self.rows.nbytes
 
     @property
@@ -77,7 +74,7 @@ class RowViewableMatrix:
         return (len(self.rows), self.mat.shape[1])
 
     def resize(self, shape):
-        self.mat.resize(shape)
+        self.mat.ensure_capacity(shape[0] - 1)
 
     def __len__(self):
         return len(self.rows)
