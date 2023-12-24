@@ -108,7 +108,7 @@ def msmarco():
 
 # Memory usage
 #
-#Indexed in 14.7362s
+# Indexed in 14.7362s
 # [postings.py:303 - _build_index_from_dict() ] Padded Posn memory usage: 4274.036334991455 MB
 # [postings.py:304 - _build_index_from_dict() ] Bitwis Posn memory usage: 800.7734680175781 MB
 
