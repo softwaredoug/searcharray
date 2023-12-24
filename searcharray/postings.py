@@ -33,13 +33,7 @@ logger.setLevel(logging.ERROR)
 
 
 class PostingsRow:
-    """Wrapper around a row of a postings matrix.
-
-    We can't easily directly use a dictionary as a cell type in pandas.
-    See:
-
-    https://github.com/pandas-dev/pandas/issues/17777
-    """
+    """An indexed search doc - a row of postings, with bag of tokenized words and positions."""
 
     def __init__(self,
                  postings,
@@ -160,9 +154,10 @@ class PostingsRow:
 
 
 class PostingsDtype(ExtensionDtype):
+
     name = 'tokenized_text'
     type = PostingsRow
-    kind = 'O'  # Object kind
+    kind = 'O'
 
     @classmethod
     def construct_from_string(cls, string):
@@ -201,10 +196,6 @@ def ws_tokenizer(string):
     if not isinstance(string, str):
         raise ValueError("Expected a string")
     return string.split()
-
-# To add positions
-# Row/Col -> index to roaring bitmap
-# Must be slicable
 
 
 def _build_index_from_dict(postings):
@@ -302,16 +293,9 @@ def _row_to_postings_row(doc_id, row, doc_len, term_dict, posns: PosnBitArray):
     return result
 
 
-# Logically a PostingsArray is a document represented as follows:
-#
-#   docs = [
-#       {"foo": 1, "bar": 2, "baz": 1}, # doc 0 term->freq
-#       {"foo": 2, "bar": 4, "baz": 8, "the"}, # doc 0 term->freq
-#       ...
-#   ]
-#
-# This postings will build its own term_dict and term_freqs
 class PostingsArray(ExtensionArray):
+    """An array of tokenized text (PostingsRows)."""
+
     dtype = PostingsDtype()
 
     def __init__(self, postings, tokenizer=ws_tokenizer):
@@ -320,7 +304,7 @@ class PostingsArray(ExtensionArray):
             raise TypeError("Expected list-like object, got {}".format(type(postings)))
 
         self.tokenizer = tokenizer
-        self.term_freqs, self.posns, \
+        self.term_mat, self.posns, \
             self.term_dict, self.avg_doc_length, \
             self.doc_lens = _build_index_from_dict(postings)
 
@@ -366,18 +350,19 @@ class PostingsArray(ExtensionArray):
         return cls(scalars)
 
     def memory_usage(self, deep=False):
+        """Return memory usage of this array in bytes."""
         return self.nbytes
 
     @property
     def nbytes(self):
-        return self.term_freqs.nbytes + self.posns.nbytes + self.doc_lens.nbytes + self.term_dict.nbytes
+        return self.term_mat.nbytes + self.posns.nbytes + self.doc_lens.nbytes + self.term_dict.nbytes
 
     def __getitem__(self, key):
         key = pd.api.indexers.check_array_indexer(self, key)
         # Want to take rows of term freqs
         if isinstance(key, numbers.Integral):
             try:
-                rows = self.term_freqs[key]
+                rows = self.term_mat[key]
                 doc_len = self.doc_lens[key]
                 doc_id = key
                 if doc_id < 0:
@@ -388,10 +373,10 @@ class PostingsArray(ExtensionArray):
                 raise IndexError("index out of bounds")
         else:
             # Construct a sliced view of this array
-            sliced_tfs = self.term_freqs.slice(key)
+            sliced_tfs = self.term_mat.slice(key)
             sliced_posns = self.posns
             arr = PostingsArray([], tokenizer=self.tokenizer)
-            arr.term_freqs = sliced_tfs
+            arr.term_mat = sliced_tfs
             arr.doc_lens = self.doc_lens[key]
             arr.posns = sliced_posns
             arr.term_dict = self.term_dict
@@ -420,23 +405,23 @@ class PostingsArray(ExtensionArray):
         try:
             is_encoded = False
             posns = None
-            term_freqs = np.asarray([])
+            term_mat = np.asarray([])
             doc_lens = np.asarray([])
             if isinstance(value, float):
-                term_freqs = np.asarray([value])
+                term_mat = np.asarray([value])
                 doc_lens = np.asarray([0])
             elif isinstance(value, PostingsRow):
-                term_freqs = np.asarray([value.tf_to_dense(self.term_dict)])
+                term_mat = np.asarray([value.tf_to_dense(self.term_dict)])
                 doc_lens = np.asarray([value.doc_len])
                 is_encoded = value.encoded
                 posns = [value.raw_positions(self.term_dict)]
             elif isinstance(value, np.ndarray):
-                term_freqs = np.asarray([x.tf_to_dense(self.term_dict) for x in value])
+                term_mat = np.asarray([x.tf_to_dense(self.term_dict) for x in value])
                 doc_lens = np.asarray([x.doc_len for x in value])
                 is_encoded = value[0].encoded if len(value) > 0 else False
                 posns = [x.raw_positions(self.term_dict) for x in value]
-            np.nan_to_num(term_freqs, copy=False, nan=0)
-            self.term_freqs[key] = term_freqs
+            np.nan_to_num(term_mat, copy=False, nan=0)
+            self.term_mat[key] = term_mat
             self.doc_lens[key] = doc_lens
 
             if posns is not None:
@@ -461,7 +446,7 @@ class PostingsArray(ExtensionArray):
             for term in row.terms():
                 self.term_dict.add_term(term[0])
 
-        self.term_freqs.resize((self.term_freqs.shape[0], len(self.term_dict)))
+        self.term_mat.resize((self.term_mat.shape[0], len(self.term_dict)))
         # Ensure posns_lookup has at least max self.posns
         self[key] = value
 
@@ -477,7 +462,7 @@ class PostingsArray(ExtensionArray):
         return pd.Series(counts)
 
     def __len__(self):
-        len_rval = len(self.term_freqs.rows)
+        len_rval = len(self.term_mat.rows)
         return len_rval
 
     def __ne__(self, other):
@@ -502,7 +487,7 @@ class PostingsArray(ExtensionArray):
                 # Compatible term dicts, and same term freqs
                 # (not looking at positions, maybe we should?)
                 if self.term_dict.compatible(other.term_dict):
-                    return (self.term_freqs == other.term_freqs) & (self.doc_lens == other.doc_lens)
+                    return (self.term_mat == other.term_mat) & (self.doc_lens == other.doc_lens)
                 else:
                     return np.zeros(len(self), dtype=bool)
             # return np.array(self[:]) == np.array(other[:])
@@ -535,7 +520,7 @@ class PostingsArray(ExtensionArray):
 
     def take(self, indices, allow_fill=False, fill_value=None):
         # Want to take rows of term freqs
-        row_indices = np.arange(len(self.term_freqs.rows))
+        row_indices = np.arange(len(self.term_mat.rows))
         # Take within the row indices themselves
         result_indices = take(row_indices, indices, allow_fill=allow_fill, fill_value=-1)
 
@@ -560,7 +545,7 @@ class PostingsArray(ExtensionArray):
         postings_arr = PostingsArray([], tokenizer=self.tokenizer)
         postings_arr.doc_lens = self.doc_lens.copy()
         postings_arr.posns = self.posns.copy()
-        postings_arr.term_freqs = self.term_freqs.copy()
+        postings_arr.term_mat = self.term_mat.copy()
         postings_arr.term_dict = self.term_dict.copy()
         postings_arr.avg_doc_length = self.avg_doc_length
         return postings_arr
@@ -579,9 +564,6 @@ class PostingsArray(ExtensionArray):
         arr = np.asarray(self[:], dtype=object)
         return arr, PostingsRow({})
 
-    # One way to stack
-    #  np.array_split(posns_mat[[1,2]].indices, posns_mat[[1,2]].indptr)
-
     def _check_token_arg(self, token):
         if isinstance(token, str):
             return token
@@ -593,7 +575,7 @@ class PostingsArray(ExtensionArray):
             raise TypeError("Expected a string or list of strings for phrases")
 
     # ***********************************************************
-    # Naive implementations of search functions to clean up later
+    # Search functionality
     # ***********************************************************
     def term_freq(self, token: Union[List[str], str]) -> np.ndarray:
         token = self._check_token_arg(token)
@@ -604,8 +586,8 @@ class PostingsArray(ExtensionArray):
             term_id = self.term_dict.get_term_id(token)
             matches = np.zeros(len(self), dtype=int)
             doc_ids, termfreqs = self.posns.termfreqs(term_id,
-                                                      doc_ids=self.term_freqs.rows)
-            mask = np.isin(self.term_freqs.rows, doc_ids)
+                                                      doc_ids=self.term_mat.rows)
+            mask = np.isin(self.term_mat.rows, doc_ids)
             matches[mask] = termfreqs
             return matches
         except TermMissingError:
@@ -706,7 +688,6 @@ class PostingsArray(ExtensionArray):
         return phrase_freqs
 
     def phrase_freq_every_diff(self, tokens: List[str], slop=1) -> np.ndarray:
-        """Batch up calls to _phrase_freq_every_diff."""
         phrase_freqs = -np.ones(len(self))
 
         mask = self.and_query(tokens)

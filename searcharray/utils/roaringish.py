@@ -31,6 +31,16 @@ def n_msb_mask(n: np.uint64) -> np.uint64:
 
 
 class RoaringishEncoder:
+    """An encoder for key->integer sets as a numpy array.
+
+    Each returned array represents a single term, with key as MSBS, ie:
+
+        | 32 MSBs | 16 LSBs   | 16 LSBs |
+          key     | bits msbs | payload
+
+    (different number of MSBs / payload bits can be specified)
+
+    """
 
     def __init__(self, key_bits: int = DEFAULT_KEY_BITS):
         payload_bits = 64 - key_bits
