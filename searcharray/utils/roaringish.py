@@ -82,6 +82,8 @@ class RoaringishEncoder:
         change_indices = np.nonzero(np.diff(cols))[0] + 1
         change_indices = np.insert(change_indices, 0, 0)
 
+        # 0 as a position, goes in bit 1,
+        # 1 as a position, goes in bit 2, etc
         encoded = cols | (1 << values)
         if len(encoded) == 0:
             return encoded
@@ -117,11 +119,26 @@ class RoaringishEncoder:
         """Return keys from encoded."""
         return (encoded & self.key_mask) >> (64 - self.key_bits)
 
-    def intersect(self, lhs: np.ndarray, rhs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Return the MSBs that are common to both lhs and rhs."""
-        # common = np.intersect1d(lhs_msbs, rhs_msbs)
-        _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits, rhs >> self.payload_lsb_bits, indices=True)
-        # With large arrays np.isin becomes a bottleneck
+    def payload_msb(self, encoded: np.ndarray) -> np.ndarray:
+        """Return payload MSBs from encoded."""
+        return (encoded & self.payload_msb_mask) >> self.payload_msb_bits
+
+    def payload_lsb(self, encoded: np.ndarray) -> np.ndarray:
+        """Return payload LSBs from encoded."""
+        return encoded & self.payload_lsb_mask
+
+    def intersect(self, lhs: np.ndarray, rhs: np.ndarray, rshift=0) -> Tuple[np.ndarray, np.ndarray]:
+        """Return the MSBs that are common to both lhs and rhs.
+
+        Parameters
+        ----------
+        lhs : np.ndarray of uint64 (encoded) values
+        rhs : np.ndarray of uint64 (encoded) values
+        rshift : int - right shift rhs by this many bits before intersecting (ie to find adjacent)
+        """
+        _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits,
+                                              ((rhs >> self.payload_lsb_bits) + np.int64(rshift)).astype(np.int64).astype(np.uint64),
+                                              indices=True)
         return lhs[lhs_idx], rhs[rhs_idx]
 
     def slice(self, encoded: np.ndarray, keys: np.ndarray) -> np.ndarray:

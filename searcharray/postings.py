@@ -676,7 +676,15 @@ class PostingsArray(ExtensionArray):
         return mask
 
     def phrase_freq(self, tokens: List[str], slop=1) -> np.ndarray:
-        return self.phrase_freq_every_diff(tokens, slop=slop)
+        if slop == 1:
+            phrase_freqs = np.zeros(len(self))
+            try:
+                term_ids = [self.term_dict.get_term_id(token) for token in tokens]
+                return self.posns.phrase_freqs(term_ids, phrase_freqs)
+            except TermMissingError:
+                return phrase_freqs
+        else:
+            return self.phrase_freq_every_diff(tokens, slop=slop)
 
     def phrase_freq_scan(self, tokens: List[str], mask=None, slop=1) -> np.ndarray:
         if mask is None:
