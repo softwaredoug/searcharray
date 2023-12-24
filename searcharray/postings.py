@@ -298,11 +298,12 @@ class PostingsArray(ExtensionArray):
 
     dtype = PostingsDtype()
 
-    def __init__(self, postings, tokenizer=ws_tokenizer):
+    def __init__(self, postings, tokenizer=ws_tokenizer, avoid_copies=True):
         # Check dtype, raise TypeError
         if not is_list_like(postings):
             raise TypeError("Expected list-like object, got {}".format(type(postings)))
 
+        self.avoid_copies = avoid_copies
         self.tokenizer = tokenizer
         self.term_mat, self.posns, \
             self.term_dict, self.avg_doc_length, \
@@ -544,10 +545,14 @@ class PostingsArray(ExtensionArray):
     def copy(self):
         postings_arr = PostingsArray([], tokenizer=self.tokenizer)
         postings_arr.doc_lens = self.doc_lens.copy()
-        postings_arr.posns = self.posns.copy()
         postings_arr.term_mat = self.term_mat.copy()
-        postings_arr.term_dict = self.term_dict.copy()
+        postings_arr.posns = self.posns
+        postings_arr.term_dict = self.term_dict
         postings_arr.avg_doc_length = self.avg_doc_length
+
+        if not self.avoid_copies:
+            postings_arr.posns = self.posns.copy()
+            postings_arr.term_dict = self.term_dict.copy()
         return postings_arr
 
     @classmethod

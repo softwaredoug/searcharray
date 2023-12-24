@@ -40,10 +40,10 @@ benchmark: deps
 	open ./.benchmarks/histogram.svg
 
 benchmark_graph: deps
-	python scripts/graph_benchmarks.py $(TEST)
+	python scripts/graph_benchmarks.py "$(TEST)"
 
 profile:
-	python -m pytest -x --benchmark-disable $(TEST)
+	python -m pytest -x --benchmark-disable "$(TEST)"
 	snakeviz ./.benchmarks/last.prof
 
 
