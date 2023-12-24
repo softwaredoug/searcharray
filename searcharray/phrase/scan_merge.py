@@ -24,7 +24,7 @@ def _self_adjs(prior_posns, next_posns):
 
 
 def scan_merge_ins(term_posns: List[np.ndarray],
-                   phrase_freqs: np.ndarray, slop=1):
+                   phrase_freqs: np.ndarray, slop=1) -> np.ndarray:
     """Merge bigram, by bigram, using np.searchsorted to find if insert posns match slop.
 
     See https://colab.research.google.com/drive/1EeqHYuCiqyptd-awS67Re78pqVdTfH4A
@@ -40,6 +40,7 @@ def scan_merge_ins(term_posns: List[np.ndarray],
         bigram_freqs = np.zeros(len(curr_posns))
         cont_posns = []
         for idx in range(len(curr_posns)):
+
             # Find insert position of every next term in prior term's positions
             # Intuition:
             # https://colab.research.google.com/drive/1EeqHYuCiqyptd-awS67Re78pqVdTfH4A

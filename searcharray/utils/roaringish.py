@@ -3,7 +3,7 @@ import numpy as np
 import sortednp as snp
 import logging
 import numbers
-from typing import Optional
+from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ def n_msb_mask(n: np.uint64) -> np.uint64:
 
 class RoaringishEncoder:
 
-    def __init__(self, key_bits=DEFAULT_KEY_BITS):
+    def __init__(self, key_bits: int = DEFAULT_KEY_BITS):
         payload_bits = 64 - key_bits
         self.payload_msb_bits = payload_bits // 2
         self.payload_lsb_bits = payload_bits - self.payload_msb_bits
@@ -50,7 +50,7 @@ class RoaringishEncoder:
         if not np.all(payload < 2**self.payload_lsb_bits):
             raise ValueError(f"Positions must be less than {2**self.payload_lsb_bits}")
 
-    def encode(self, payload: np.ndarray, keys: Optional[np.ndarray] = None):
+    def encode(self, payload: np.ndarray, keys: Optional[np.ndarray] = None) -> np.ndarray:
         """Pack a sorted array of integers into compact bit numpy array.
 
         each returned array represents a single term, with doc_id as MSBS, ie:
@@ -77,7 +77,8 @@ class RoaringishEncoder:
             return encoded
         return np.bitwise_or.reduceat(encoded, change_indices)
 
-    def decode(self, encoded, get_keys=True):
+    def decode(self, encoded: np.ndarray, get_keys: bool = True) -> np.ndarray:
+        """Decode an encoded bit array into keys / payloads."""
         keys = (encoded & self.key_mask) >> (64 - self.key_bits)
         msbs = (encoded & self.payload_msb_mask) >> self.payload_msb_bits
         to_concat = []
@@ -102,18 +103,18 @@ class RoaringishEncoder:
 
         return as_list
 
-    def keys(self, encoded):
+    def keys(self, encoded: np.ndarray) -> np.ndarray:
         """Return keys from encoded."""
         return (encoded & self.key_mask) >> (64 - self.key_bits)
 
-    def intersect(self, lhs: np.ndarray, rhs: np.ndarray):
+    def intersect(self, lhs: np.ndarray, rhs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Return the MSBs that are common to both lhs and rhs."""
         # common = np.intersect1d(lhs_msbs, rhs_msbs)
         _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits, rhs >> self.payload_lsb_bits, indices=True)
         # With large arrays np.isin becomes a bottleneck
         return lhs[lhs_idx], rhs[rhs_idx]
 
-    def slice(self, encoded: np.ndarray, keys: np.ndarray):
+    def slice(self, encoded: np.ndarray, keys: np.ndarray) -> np.ndarray:
         """Get list of encoded that have values in keys."""
         assert len(keys.shape) == 1
         assert len(encoded.shape) == 1
@@ -124,7 +125,7 @@ class RoaringishEncoder:
         return encoded[idx_enc]
 
 
-def convert_keys(keys):
+def convert_keys(keys) -> np.ndarray:
     """Convert keys to range or np.ndarray of uint64."""
     if isinstance(keys, numbers.Number):
         return np.asarray([keys], dtype=np.uint64)
