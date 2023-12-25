@@ -41,19 +41,32 @@ def inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     rhs_next: the next rhs array to continue matching
 
     """
-    lhs, rhs = encoder.intersect(lhs, rhs)
-    lhs_doc_ids = encoder.keys(lhs)
-    if len(lhs) != len(rhs):
+    lhs_int, rhs_int = encoder.intersect(lhs, rhs)
+    lhs_doc_ids = encoder.keys(lhs_int)
+    if len(lhs_int) != len(rhs_int):
         raise ValueError("Encoding error, MSBs apparently are duplicated among your encoded posn arrays.")
-    rhs_next = (rhs & encoder.key_mask)
+    if len(lhs_int) == 0:
+        return phrase_freqs, rhs_int
+    same_term = (len(lhs_int) == len(rhs_int) and lhs_int[0] == rhs_int[0])
+    if same_term:
+        # Find adjacent matches
+        rhs_shift = rhs_int << 1
+        overlap = lhs_int & rhs_shift
+        overlap = encoder.payload_lsb(overlap)
+        adjacents = bit_count64(overlap).astype(np.int64)
+        adjacents -= -np.floor_divide(adjacents, -2)  # ceiling divide
+        phrase_freqs[lhs_doc_ids] += adjacents
+        return phrase_freqs, rhs_int
+
+    rhs_next = (rhs_int & encoder.key_mask)
     # With popcount soon to be in numpy, this could potentially
     # be simply a left shift of the RHS LSB poppcount, and and a popcount
     # to count the overlaps
     for bit in range(0, encoder.payload_lsb_bits - 1):
         lhs_mask = 1 << bit
         rhs_mask = 1 << (bit + 1)
-        lhs_set = (lhs & lhs_mask) != 0
-        rhs_set = (rhs & rhs_mask) != 0
+        lhs_set = (lhs_int & lhs_mask) != 0
+        rhs_set = (rhs_int & rhs_mask) != 0
 
         matches = lhs_set & rhs_set
         rhs_next[matches] |= rhs_mask
@@ -75,7 +88,7 @@ def adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     lhs_doc_ids = encoder.keys(lhs_int)
     # lhs lsb set and rhs lsb's most significant bit set
     upper_bit = 1 << (encoder.payload_lsb_bits - 1)
-    matches = ((lhs_int & upper_bit) & ((rhs_int & 1) != 0))
+    matches = ((lhs_int & upper_bit) != 0) & ((rhs_int & 1) != 0)
     phrase_freqs[lhs_doc_ids[matches]] += 1
     return phrase_freqs
 
@@ -133,7 +146,7 @@ class PosnBitArrayBuilder:
     def ensure_capacity(self, doc_id):
         self.max_doc_id = max(self.max_doc_id, doc_id)
 
-    def build(self, check=True):
+    def build(self, check=False):
         encoded_term_posns = {}
         for term_id, posns in self.term_posns.items():
             if len(posns) == 0:

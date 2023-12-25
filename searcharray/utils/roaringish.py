@@ -136,10 +136,18 @@ class RoaringishEncoder:
         rhs : np.ndarray of uint64 (encoded) values
         rshift : int - right shift rhs by this many bits before intersecting (ie to find adjacent)
         """
+        rhs_int = rhs
+        if rshift >= 0:
+            rhs_shifted = (rhs_int >> self.payload_lsb_bits) + np.int64(rshift)
+        else:
+            rhs_int = rhs[self.payload_msb(rhs) >= np.abs(rshift)]
+            rhs_shifted = (rhs_int >> self.payload_lsb_bits) + np.int64(rshift).astype(np.uint64)
+
+        assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
         _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits,
-                                              ((rhs >> self.payload_lsb_bits) + np.int64(rshift)).astype(np.int64).astype(np.uint64),
+                                              rhs_shifted.astype(np.int64).astype(np.uint64),
                                               indices=True)
-        return lhs[lhs_idx], rhs[rhs_idx]
+        return lhs[lhs_idx], rhs_int[rhs_idx]
 
     def slice(self, encoded: np.ndarray, keys: np.ndarray) -> np.ndarray:
         """Get list of encoded that have values in keys."""

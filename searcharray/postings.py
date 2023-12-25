@@ -676,7 +676,7 @@ class PostingsArray(ExtensionArray):
         return mask
 
     def phrase_freq(self, tokens: List[str], slop=1) -> np.ndarray:
-        if slop == 1:
+        if slop == 1 and len(tokens) == len(set(tokens)):
             phrase_freqs = np.zeros(len(self))
             try:
                 term_ids = [self.term_dict.get_term_id(token) for token in tokens]
