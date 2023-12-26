@@ -83,6 +83,21 @@ edismax_scenarios = {
                      0],
         "params": {'q': "foo bar", 'qf': ["title", "body"]},
     },
+    "pf_title": {
+        "frame": {
+            'title': lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
+            'body': lambda: PostingsArray.index(["buzz", "data2", "data3 bar", "bunny funny wunny"])
+        },
+        "expected": [lambda frame: sum([frame['title'].array.bm25(["foo", "bar"])[0],
+                                        frame['title'].array.bm25("foo")[0],
+                                        frame['title'].array.bm25("bar")[0]]),
+                     0,
+                     lambda frame: max(frame['title'].array.bm25("bar")[2],
+                                       frame['body'].array.bm25("bar")[2]),
+                     0],
+        "params": {'q': "foo bar", 'qf': ["title", "body"],
+                   'pf': ["title"]}
+    },
 }
 
 

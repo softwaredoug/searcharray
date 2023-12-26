@@ -107,8 +107,11 @@ def edismax(frame: pd.DataFrame,
         The search results
     """
     terms = q.split()
-    query_fields = parse_field_boosts(qf)
-    phrase_fields = parse_field_boosts(pf) if pf else {}
+
+    def listify(x):
+        return x if isinstance(x, list) else [x]
+    query_fields = parse_field_boosts(listify(qf))
+    phrase_fields = parse_field_boosts(listify(pf)) if pf else {}
     # bigram_fields = parse_field_boosts(pf2) if pf2 else {}
     # trigram_fields = parse_field_boosts(pf3) if pf3 else {}
 
