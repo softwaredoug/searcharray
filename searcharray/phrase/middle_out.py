@@ -8,7 +8,7 @@ https://colab.research.google.com/drive/10tIEkdlCE_1J_CcgEcV0jkLfBc-0H4am?authus
 import numpy as np
 import sortednp as snp
 from copy import deepcopy
-from typing import List, Tuple, Dict, Union
+from typing import List, Tuple, Dict, Union, cast
 from searcharray.utils.roaringish import RoaringishEncoder, convert_keys
 import numbers
 import logging
@@ -293,6 +293,7 @@ class PosnBitArray:
             return [np.array([], dtype=np.uint32)]
         if len(decoded) != len(doc_ids):
             # Fill non matches
+            decoded = cast(List[Tuple[np.uint64, np.ndarray]], decoded)
             as_dict: Dict[np.uint64, np.ndarray] = dict(decoded)
             decs = []
             for doc_id in doc_ids:

@@ -1,0 +1,13 @@
+[flake8]
+ignore =
+    # https://github.com/psf/black#slices
+    E203,
+    # https://github.com/psf/black#line-length
+    E501,
+    # https://github.com/psf/black#line-breaks--binary-operators
+    W503,
+    # we don't require docstrings by default
+    D100, D101, D102, D103, D104, D105, D106, D107,
+    # this check is overly picky about RNG usage when it might not matter
+    # https://github.snooguts.net/reddit/docker-reddit-lint.py/pull/2
+    DUO102,

@@ -1,5 +1,5 @@
 import pytest
-from typing import Dict, Any
+from typing import Dict, Any, cast, Sequence, Type, Union
 import cProfile
 import sys
 
@@ -7,7 +7,7 @@ import sys
 def w_scenarios(scenarios: Dict[str, Dict[str, Any]]):
     """Decorate for parametrizing tests that names the scenarios and params."""
     return pytest.mark.parametrize(
-        [key for key in scenarios.values()][0].keys(),
+        cast(Sequence[str], [key for key in scenarios.values()][0].keys()),
         [tuple(scenario.values()) for scenario in scenarios.values()],
         ids=list(scenarios.keys())
     )
@@ -41,6 +41,8 @@ class CProfileProfiler:
         self.cprofiler.dump_stats(".benchmarks/last.prof")
         return rval
 
+
+Profiler: Union[Type[JustBenchmarkProfiler], Type[CProfileProfiler]]
 
 if '--benchmark-disable' in sys.argv:
     Profiler = CProfileProfiler

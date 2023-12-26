@@ -603,7 +603,8 @@ class PostingsArray(ExtensionArray):
             raise TypeError("Expected a string")
         # Count number of rows where the term appears
         term_freq = self.term_freq(token)
-        return np.sum(term_freq > 0)
+        gt_0 = term_freq > 0
+        return np.sum(gt_0).astype(int)
 
     def doc_lengths(self) -> np.ndarray:
         return self.doc_lens
