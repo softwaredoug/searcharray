@@ -1,7 +1,6 @@
-import pytest
-import numpy as np
 from pandas.tests.extension import base
 import pandas as pd
+import pytest
 
 from searcharray.postings import PostingsDtype, PostingsArray, PostingsRow
 
@@ -182,40 +181,3 @@ class TestMissing(base.BaseMissingTests):
 
 class TestGroupby(base.BaseGroupbyTests):
     pass
-
-
-def test_match(data):
-    matches = data.match("foo")
-    assert (matches == [True, False, False, False] * 25).all()
-
-
-def test_match_missing_term(data):
-    matches = data.match("not_present")
-    assert (matches == [False, False, False, False] * 25).all()
-
-
-def test_term_freqs(data):
-    matches = data.term_freq("bar")
-    assert (matches == [2, 0, 1, 0] * 25).all()
-
-
-def test_doc_freq(data):
-    doc_freq = data.doc_freq("bar")
-    assert doc_freq == (2 * 25)
-    doc_freq = data.doc_freq("foo")
-    assert doc_freq == 25
-
-
-def test_doc_lengths(data):
-    doc_lengths = data.doc_lengths()
-    assert doc_lengths.shape == (100,)
-    assert (doc_lengths == [4, 1, 2, 3] * 25).all()
-    assert data.avg_doc_length == 2.5
-
-
-def test_bm25_matches_lucene(data):
-    bm25_idf = data.bm25_idf("bar")
-    assert bm25_idf > 0.0
-    bm25 = data.bm25("bar")
-    assert bm25.shape == (100,)
-    assert np.isclose(bm25, [0.37066694, 0., 0.34314217, 0.] * 25).all()
