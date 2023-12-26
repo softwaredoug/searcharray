@@ -1,9 +1,10 @@
 import numbers
 import numpy as np
 from searcharray.utils.mat_set import SparseMatSet
+from typing import Optional, Union, Dict, List
 
 
-def rowwise_eq(mat: SparseMatSet, other: SparseMatSet) -> np.ndarray:
+def rowwise_eq(mat: SparseMatSet, other: SparseMatSet) -> Union[bool, np.ndarray]:
     """Check equals on a row-by-row basis."""
     if len(mat) != len(other):
         return False
@@ -17,10 +18,10 @@ def rowwise_eq(mat: SparseMatSet, other: SparseMatSet) -> np.ndarray:
 class RowViewableMatrix:
     """A slicable matrix that can return views without copying."""
 
-    def __init__(self, mat: SparseMatSet, rows: np.ndarray = None):
+    def __init__(self, mat: SparseMatSet, rows: Optional[np.ndarray] = None):
         self.mat = mat
-        self.col_cache = {}
-        self.cols_cached = []
+        self.col_cache: Dict[int, np.ndarray] = {}
+        self.cols_cached: List[int] = []
         if rows is None:
             self.rows = np.arange(self.mat.shape[0])
         elif isinstance(rows, numbers.Integral):

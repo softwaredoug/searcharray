@@ -31,6 +31,12 @@ test: deps
 	python -m pytest --benchmark-skip test
 
 
+lint: deps
+	@echo "Linting..."
+	python -m flake8 --max-line-length=120 --ignore=E203,W503,E501,E722,E731,W605 --exclude=venv,build,dist,docs,*.egg-info,*.egg,*.pyc,*.pyo,*.git,__pycache__,.pytest_cache,.benchmarks
+	mypy searcharray tests
+
+
 benchmark_dry_run: deps
 	python -m pytest -x --benchmark-only
 

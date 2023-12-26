@@ -3,7 +3,7 @@ import numpy as np
 import sortednp as snp
 import logging
 import numbers
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Union
 
 logger = logging.getLogger(__name__)
 
@@ -18,16 +18,22 @@ logger.setLevel(logging.ERROR)
 
 
 DEFAULT_KEY_MASK = np.uint64(0xFFFFFFF000000000)
-DEFAULT_KEY_BITS = 28
+DEFAULT_KEY_BITS = np.uint64(28)
 DEFAULT_PAYLOAD_MSB_MASK = np.uint64(0x0000000FFFFC0000)
-DEFAULT_PAYLOAD_MSB_BITS = 18
+DEFAULT_PAYLOAD_MSB_BITS = np.uint64(18)
 DEFAULT_PAYLOAD_LSB_MASK = np.uint64(0x000000000003FFFF)
-DEFAULT_PAYLOAD_LSB_BITS = 18
+DEFAULT_PAYLOAD_LSB_BITS = np.uint64(18)
+
+# To not constantly type coerce
+_64 = np.uint64(64)
+_2 = np.uint64(2)
+_1 = np.uint64(1)
+_0 = np.uint64(0)
 
 
 def n_msb_mask(n: np.uint64) -> np.uint64:
     """Return the n most significant bits of num."""
-    return ~(np.uint64(1 << (64 - n))) + np.uint64(1)
+    return np.uint64(~(np.uint64(_1 << (_64 - n))) + _1)
 
 
 class RoaringishEncoder:
@@ -42,15 +48,20 @@ class RoaringishEncoder:
 
     """
 
-    def __init__(self, key_bits: int = DEFAULT_KEY_BITS):
-        payload_bits = 64 - key_bits
-        self.payload_msb_bits = payload_bits // 2
-        self.payload_lsb_bits = payload_bits - self.payload_msb_bits
+    def __init__(self, key_bits: np.uint64 = DEFAULT_KEY_BITS):
+        payload_bits = _64 - key_bits
+        self.payload_msb_bits = payload_bits // _2
+        self.payload_lsb_bits = np.uint64(payload_bits - self.payload_msb_bits)
         self.key_bits = key_bits
+        assert self.key_bits.dtype == np.uint64
         # key bits MSB of 64 bits
         self.key_mask = n_msb_mask(key_bits)
-        self.payload_msb_mask = n_msb_mask(self.payload_msb_bits + key_bits) & ~self.key_mask
-        self.payload_lsb_mask = (1 << self.payload_lsb_bits) - 1
+        self.payload_msb_mask = n_msb_mask(np.uint64(self.payload_msb_bits + key_bits)) & ~self.key_mask
+        assert self.payload_msb_bits.dtype == np.uint64, f"MSB bits dtype was {self.payload_msb_bits.dtype}"
+        assert self.payload_msb_mask.dtype == np.uint64, f"MSB mask dtype was {self.payload_msb_mask.dtype}"
+        self.payload_lsb_mask = (_1 << self.payload_lsb_bits) - np.uint64(1)
+        assert self.payload_lsb_bits.dtype == np.uint64, f"LSB bits dtype was {self.payload_lsb_bits.dtype}"
+        assert self.payload_lsb_mask.dtype == np.uint64, f"LSB mask dtype was {self.payload_lsb_mask.dtype}"
         if key_bits == DEFAULT_KEY_BITS:
             assert self.key_mask == DEFAULT_KEY_MASK
             assert self.payload_msb_mask == DEFAULT_PAYLOAD_MSB_MASK
@@ -76,7 +87,7 @@ class RoaringishEncoder:
         cols = payload // self.payload_lsb_bits    # Header of bit to use
         cols = cols.astype(np.uint64) << self.payload_msb_bits
         if keys is not None:
-            cols |= keys.astype(np.uint64) << (64 - self.key_bits)
+            cols |= keys.astype(np.uint64) << (_64 - self.key_bits)
         values = payload % self.payload_lsb_bits   # Value to encode
 
         change_indices = np.nonzero(np.diff(cols))[0] + 1
@@ -89,9 +100,9 @@ class RoaringishEncoder:
             return encoded
         return np.bitwise_or.reduceat(encoded, change_indices)
 
-    def decode(self, encoded: np.ndarray, get_keys: bool = True) -> np.ndarray:
+    def decode(self, encoded: np.ndarray, get_keys: bool = True) -> Union[List[Tuple[np.uint64, np.ndarray]], List[np.ndarray]]:
         """Decode an encoded bit array into keys / payloads."""
-        keys = (encoded & self.key_mask) >> (64 - self.key_bits)
+        keys = (encoded & self.key_mask) >> (_64 - self.key_bits)
         msbs = (encoded & self.payload_msb_mask) >> self.payload_msb_bits
         to_concat = []
         for bit in range(self.payload_lsb_bits):
@@ -109,15 +120,13 @@ class RoaringishEncoder:
         keys, idx = np.unique(sorted_payload[:, 0], return_index=True)
         grouped = np.split(sorted_payload[:, 1], idx[1:])
         if get_keys:
-            as_list = list(zip(keys, grouped))
+            return list(zip(keys, grouped))
         else:
-            as_list = grouped
-
-        return as_list
+            return grouped
 
     def keys(self, encoded: np.ndarray) -> np.ndarray:
         """Return keys from encoded."""
-        return (encoded & self.key_mask) >> (64 - self.key_bits)
+        return (encoded & self.key_mask) >> (_64 - self.key_bits)
 
     def payload_msb(self, encoded: np.ndarray) -> np.ndarray:
         """Return payload MSBs from encoded."""
@@ -136,24 +145,25 @@ class RoaringishEncoder:
         rhs : np.ndarray of uint64 (encoded) values
         rshift : int - right shift rhs by this many bits before intersecting (ie to find adjacent)
         """
-        rhs_int = rhs
+        rhs_int = rhs.astype(np.int64)
         if rshift >= 0:
             rhs_shifted = (rhs_int >> self.payload_lsb_bits) + np.int64(rshift)
         else:
             rhs_int = rhs[self.payload_msb(rhs) >= np.abs(rshift)]
-            rhs_shifted = (rhs_int >> self.payload_lsb_bits) + np.int64(rshift).astype(np.uint64)
+            rshft = np.int64(rshift).astype(np.uint64)
+            rhs_shifted = (rhs_int >> self.payload_lsb_bits) + rshft
 
         assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
         _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits,
                                               rhs_shifted.astype(np.int64).astype(np.uint64),
                                               indices=True)
-        return lhs[lhs_idx], rhs_int[rhs_idx]
+        return lhs[lhs_idx], rhs_int[rhs_idx].astype(np.uint64)
 
     def slice(self, encoded: np.ndarray, keys: np.ndarray) -> np.ndarray:
         """Get list of encoded that have values in keys."""
         assert len(keys.shape) == 1
         assert len(encoded.shape) == 1
-        encoded_keys = encoded.astype(np.uint64) >> (64 - self.key_bits)
+        encoded_keys = encoded.astype(np.uint64) >> (_64 - self.key_bits)
         _, (idx_docs, idx_enc) = snp.intersect(keys, encoded_keys, indices=True,
                                                duplicates=snp.KEEP_MAX_N)
 
@@ -173,3 +183,4 @@ def convert_keys(keys) -> np.ndarray:
         return np.arange(keys[0], keys[-1] + 1, dtype=np.uint64) + keys[0]
     elif isinstance(keys, range):
         return np.asarray([], dtype=np.uint64)
+    raise ValueError(f"Unknown type for keys: {type(keys)}")

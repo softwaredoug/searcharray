@@ -30,7 +30,7 @@ def vstack_with_mask(posns: List[np.ndarray], phrase_freqs: np.ndarray, width: i
     return vstacked
 
 
-def stack_term_posns(term_posns: List[np.ndarray], phrase_freqs: np.ndarray, width: int = 10):
+def stack_term_posns(term_posns: List[List[np.ndarray]], phrase_freqs: np.ndarray, width: int = 10):
     # Pad for easy difference computation
     keep_term_posns = []
     # keep_mask = np.ones(len(self), dtype=bool)

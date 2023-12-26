@@ -9,7 +9,7 @@ import json
 import warnings
 import logging
 from time import perf_counter
-from typing import List, Union
+from typing import List, Union, Optional
 
 
 import numpy as np
@@ -38,7 +38,7 @@ class PostingsRow:
     def __init__(self,
                  postings,
                  doc_len: int = 0,
-                 posns: dict = None,
+                 posns: Optional[dict] = None,
                  encoded=False):
         self.postings = postings
         self.posns = None
@@ -340,13 +340,13 @@ class PostingsArray(ExtensionArray):
         if dtype is not None:
             if not isinstance(dtype, PostingsDtype):
                 return scalars
-        if type(scalars) == np.ndarray and scalars.dtype == PostingsDtype():
+        if isinstance(scalars, np.ndarray) and scalars.dtype == PostingsDtype():
             return cls(scalars)
         # String types
-        elif type(scalars) == np.ndarray and scalars.dtype.kind in 'US':
+        elif isinstance(scalars, np.ndarray) and scalars.dtype.kind in 'US':
             return cls(scalars)
         # Other objects
-        elif type(scalars) == np.ndarray and scalars.dtype != object:
+        elif isinstance(scalars, np.ndarray) and scalars.dtype != object:
             return scalars
         return cls(scalars)
 
@@ -668,6 +668,14 @@ class PostingsArray(ExtensionArray):
         return posns
 
     def and_query(self, tokens: List[str]) -> np.ndarray:
+        """Return a mask on the postings array indicating which elements contain all terms."""
+        masks = [self.match(term) for term in tokens]
+        mask = np.ones(len(self), dtype=bool)
+        for curr_mask in masks:
+            mask = mask & curr_mask
+        return mask
+
+    def or_query(self, tokens: List[str]) -> np.ndarray:
         """Return a mask on the postings array indicating which elements contain all terms."""
         masks = [self.match(term) for term in tokens]
         mask = np.ones(len(self), dtype=bool)

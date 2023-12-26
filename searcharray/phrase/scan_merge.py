@@ -23,22 +23,30 @@ def _self_adjs(prior_posns, next_posns):
     return arr
 
 
-def scan_merge_ins(term_posns: List[np.ndarray],
+def scan_merge_ins(term_posns: List[List[np.ndarray]],
                    phrase_freqs: np.ndarray, slop=1) -> np.ndarray:
     """Merge bigram, by bigram, using np.searchsorted to find if insert posns match slop.
 
+    Description:
+    ------------
     See https://colab.research.google.com/drive/1EeqHYuCiqyptd-awS67Re78pqVdTfH4A
+
+    Parameters:
+    -----------
+    term_posns: List[List[np.ndarray]] - for each term, a list of positions
+    phrase_freqs: np.ndarray - the frequency of each phrase, the output buffer
+    slop: int - allowed distance between terms
     """
     # Any identical terms, default to shitty algo for now
     # if len(tokens) != len(set(tokens)):
     #     return self.phrase_freq_shitty(tokens, slop=slop)
 
     # Iterate each phrase with its next term
-    prior_posns = term_posns[0]
+    prior_posns: List[np.ndarray] = term_posns[0]
     for term_cnt, curr_posns in enumerate(term_posns[1:]):
         assert len(prior_posns) == len(curr_posns)
         bigram_freqs = np.zeros(len(curr_posns))
-        cont_posns = []
+        cont_posns: List[np.ndarray] = []
         for idx in range(len(curr_posns)):
 
             # Find insert position of every next term in prior term's positions
@@ -46,7 +54,7 @@ def scan_merge_ins(term_posns: List[np.ndarray],
             # https://colab.research.google.com/drive/1EeqHYuCiqyptd-awS67Re78pqVdTfH4A
             if len(prior_posns[idx]) == 0:
                 bigram_freqs[idx] = 0
-                cont_posns.append([])
+                cont_posns.append(np.asarray([]))
                 continue
             priors_in_self = _self_adjs(prior_posns[idx], curr_posns[idx])
             takeaway = 0

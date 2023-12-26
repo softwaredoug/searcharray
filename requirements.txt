@@ -55,3 +55,5 @@ tzdata==2023.3
 urllib3==2.1.0
 wcwidth==0.2.9
 zipp==3.17.0
+flake8==6.1.0
+mypy==1.8.0

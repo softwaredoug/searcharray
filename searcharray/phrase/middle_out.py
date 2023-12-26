@@ -8,7 +8,7 @@ https://colab.research.google.com/drive/10tIEkdlCE_1J_CcgEcV0jkLfBc-0H4am?authus
 import numpy as np
 import sortednp as snp
 from copy import deepcopy
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Union
 from searcharray.utils.roaringish import RoaringishEncoder, convert_keys
 import numbers
 import logging
@@ -30,6 +30,12 @@ logger.setLevel(logging.ERROR)
 
 encoder = RoaringishEncoder()
 
+# To not constantly type coerce
+_64 = np.uint64(64)
+_2 = np.uint64(2)
+_1 = np.uint64(1)
+_0 = np.uint64(0)
+
 
 def inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
                        phrase_freqs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -50,7 +56,7 @@ def inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     same_term = (len(lhs_int) == len(rhs_int) and lhs_int[0] == rhs_int[0])
     if same_term:
         # Find adjacent matches
-        rhs_shift = rhs_int << 1
+        rhs_shift = rhs_int << _1
         overlap = lhs_int & rhs_shift
         overlap = encoder.payload_lsb(overlap)
         adjacents = bit_count64(overlap).astype(np.int64)
@@ -62,11 +68,12 @@ def inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     # With popcount soon to be in numpy, this could potentially
     # be simply a left shift of the RHS LSB poppcount, and and a popcount
     # to count the overlaps
-    for bit in range(0, encoder.payload_lsb_bits - 1):
-        lhs_mask = 1 << bit
-        rhs_mask = 1 << (bit + 1)
-        lhs_set = (lhs_int & lhs_mask) != 0
-        rhs_set = (rhs_int & rhs_mask) != 0
+    for bit in range(_0, encoder.payload_lsb_bits - _1):
+        bit64 = np.uint64(bit)
+        lhs_mask = _1 << bit64
+        rhs_mask = _1 << (bit64 + _1)
+        lhs_set = (lhs_int & lhs_mask) != _0
+        rhs_set = (rhs_int & rhs_mask) != _0
 
         matches = lhs_set & rhs_set
         rhs_next[matches] |= rhs_mask
@@ -87,13 +94,13 @@ def adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     lhs_int, rhs_int = encoder.intersect(lhs, rhs, rshift=-1)
     lhs_doc_ids = encoder.keys(lhs_int)
     # lhs lsb set and rhs lsb's most significant bit set
-    upper_bit = 1 << (encoder.payload_lsb_bits - 1)
-    matches = ((lhs_int & upper_bit) != 0) & ((rhs_int & 1) != 0)
+    upper_bit = _1 << (encoder.payload_lsb_bits - _1)
+    matches = ((lhs_int & upper_bit) != 0) & ((rhs_int & _1) != 0)
     phrase_freqs[lhs_doc_ids[matches]] += 1
-    return phrase_freqs
+    return phrase_freqs, rhs_int
 
 
-def bigram_freqs(lhs: np.ndarray, rhs: np.ndarray, phrase_freqs: np.ndarray) -> Tuple[int, np.ndarray]:
+def bigram_freqs(lhs: np.ndarray, rhs: np.ndarray, phrase_freqs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Count bigram matches between two encoded arrays.
 
     Returns:
@@ -104,12 +111,12 @@ def bigram_freqs(lhs: np.ndarray, rhs: np.ndarray, phrase_freqs: np.ndarray) -> 
     """
     # Combine lhs and rhs matches from two strategies
     phrase_freqs, rhs_next_inner = inner_bigram_freqs(lhs, rhs, phrase_freqs)
-    phrase_freqs = adjacent_bigram_freqs(lhs, rhs, phrase_freqs)
+    phrase_freqs, _ = adjacent_bigram_freqs(lhs, rhs, phrase_freqs)
     # Combine
     return phrase_freqs, rhs_next_inner
 
 
-def compute_phrase_freqs(encoded_posns: np.ndarray, phrase_freqs: np.ndarray) -> np.ndarray:
+def compute_phrase_freqs(encoded_posns: List[np.ndarray], phrase_freqs: np.ndarray) -> np.ndarray:
     """Count phrase matches of all encoded posns."""
     if len(encoded_posns) < 2:
         raise ValueError("phrase must have at least two terms")
@@ -253,7 +260,7 @@ class PosnBitArray:
                 posns_other = other.encoded_term_posns[term_id]
                 self.encoded_term_posns[term_id] = snp.merge(posns_self, posns_other)
 
-    def doc_encoded_posns(self, term_id: int, doc_id: int) -> List:
+    def doc_encoded_posns(self, term_id: int, doc_id: int) -> np.ndarray:
         term_posns = encoder.slice(self.encoded_term_posns[term_id],
                                    keys=np.asarray([doc_id], dtype=np.uint64))
         return term_posns
@@ -264,7 +271,7 @@ class PosnBitArray:
         enc_term_posns = [self.encoded_term_posns[term_id] for term_id in term_ids]
         return compute_phrase_freqs(enc_term_posns, phrase_freqs)
 
-    def positions(self, term_id: int, key) -> List:
+    def positions(self, term_id: int, key) -> Union[List[np.ndarray], np.ndarray]:
         # Check if key is in doc ids?
         doc_ids = index_range(self.doc_ids, key)
         if isinstance(doc_ids, numbers.Number):
@@ -277,16 +284,16 @@ class PosnBitArray:
         except KeyError:
             r_val = [np.array([], dtype=np.uint32) for doc_id in doc_ids]
             if len(r_val) == 1 and isinstance(key, numbers.Number):
-                r_val = r_val[0]
+                return [r_val[0]]
             return r_val
 
         decoded = encoder.decode(encoded=term_posns, get_keys=True)
 
         if len(decoded) == 0:
-            return np.array([], dtype=np.uint32)
+            return [np.array([], dtype=np.uint32)]
         if len(decoded) != len(doc_ids):
             # Fill non matches
-            as_dict = dict(decoded)
+            as_dict: Dict[np.uint64, np.ndarray] = dict(decoded)
             decs = []
             for doc_id in doc_ids:
                 if doc_id in as_dict:
@@ -297,17 +304,17 @@ class PosnBitArray:
         else:
             decs = [dec[1] for dec in decoded]
             if len(decs) == 1 and isinstance(key, numbers.Number):
-                decs = decs[0]
+                return decs[0]
             return decs
 
-    def termfreqs(self, term_id: int, doc_ids: np.ndarray) -> np.ndarray:
+    def termfreqs(self, term_id: int, doc_ids: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Count term freqs using unique positions."""
         encoded = self.encoded_term_posns[term_id]
         term_posns = encoder.slice(encoded,
                                    keys=doc_ids.astype(np.uint64))
         doc_ids = encoder.keys(term_posns)
         change_indices = np.nonzero(np.diff(doc_ids))[0]
-        change_indices = np.concatenate(([0], change_indices + 1))
+        change_indices = np.concatenate((np.asarray([0]), change_indices + 1))
         posns = encoded & encoder.payload_lsb_mask
         bit_counts = bit_count64(posns)
 
