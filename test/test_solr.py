@@ -3,7 +3,6 @@ import pytest
 from test_utils import w_scenarios
 import pandas as pd
 import numpy as np
-import numbers
 
 from searcharray.solr import parse_min_should_match, edismax
 from searcharray.postings import PostingsArray
