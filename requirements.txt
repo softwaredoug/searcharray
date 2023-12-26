@@ -68,6 +68,7 @@ tornado==6.4
 traitlets==5.13.0
 twine==4.0.2
 types-pytz==2023.3.1.1
+types-requests==2.31.0.10
 typing_extensions==4.9.0
 tzdata==2023.3
 urllib3==2.1.0
