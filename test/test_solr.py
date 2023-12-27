@@ -1,5 +1,6 @@
 """Tests for solr dsl helpers."""
 import pytest
+from typing import List
 from test_utils import w_scenarios
 import pandas as pd
 import numpy as np
@@ -68,6 +69,11 @@ def test_complex_conditional_spec_with_percentage():
     assert parse_min_should_match(10, "2<2 5<3 7<40%") == 4
 
 
+def everythings_a_b_tokenizer(text: str) -> List[str]:
+    """Split on whitespace and return a list of tokens."""
+    return ["b"] * len(text.split())
+
+
 edismax_scenarios = {
     "base": {
         "frame": {
@@ -96,6 +102,23 @@ edismax_scenarios = {
                      0],
         "params": {'q': "foo bar", 'qf': ["title", "body"],
                    'pf': ["title"]}
+    },
+    "different_analyzers": {
+        "frame": {
+            'title': lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
+            'body': lambda: PostingsArray.index(["buzz", "data2", "data3 bar", "bunny funny wunny"],
+                                                tokenizer=everythings_a_b_tokenizer)
+        },
+        "expected": [lambda frame: max(frame['title'].array.bm25("bar")[0],
+                                       frame['body'].array.bm25("b")[0]),
+
+                     lambda frame: frame['body'].array.bm25("b")[1],
+
+                     lambda frame: max(frame['title'].array.bm25("bar")[2],
+                                       frame['body'].array.bm25("b")[2]),
+
+                     lambda frame: frame['body'].array.bm25("b")[3]],
+        "params": {'q': "bar", 'qf': ["title", "body"]},
     },
 }
 

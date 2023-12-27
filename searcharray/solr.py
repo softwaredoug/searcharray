@@ -2,7 +2,7 @@
 import re
 import pandas as pd
 import numpy as np
-from typing import List, Optional
+from typing import List, Optional, Dict
 from searcharray.postings import PostingsArray
 
 
@@ -74,6 +74,38 @@ def parse_field_boosts(field_lists: List[str]) -> dict:
     return out
 
 
+def get_field(frame, field) -> PostingsArray:
+    if field not in frame.columns:
+        raise ValueError(f"Field {field} not in dataframe")
+    if not isinstance(frame[field].array, PostingsArray):
+        raise ValueError(f"Field {field} is not a searcharray field")
+    return frame[field].array
+
+
+def parse_query_terms(frame: pd.DataFrame,
+                      query: str,
+                      query_fields: List[str]):
+
+    search_terms: Dict[str, List[str]] = {}
+    num_search_terms = 0
+
+    for field in query_fields:
+        arr = get_field(frame, field)
+
+        tokenizer = arr.tokenizer
+        search_terms[field] = []
+        field_num_search_terms = 0
+        for posn, term in enumerate(tokenizer(query)):
+            search_terms[field].append(term)
+            field_num_search_terms += 1
+        if num_search_terms == 0:
+            num_search_terms = field_num_search_terms
+        elif field_num_search_terms != num_search_terms:
+            raise ValueError("All qf field tokenizers must emit the same number of terms")
+
+    return num_search_terms, search_terms
+
+
 def edismax(frame: pd.DataFrame,
             q: str,
             qf: List[str],
@@ -106,26 +138,22 @@ def edismax(frame: pd.DataFrame,
     np.ndarray
         The search results
     """
-    terms = q.split()
-
     def listify(x):
         return x if isinstance(x, list) else [x]
+
     query_fields = parse_field_boosts(listify(qf))
     phrase_fields = parse_field_boosts(listify(pf)) if pf else {}
+
     # bigram_fields = parse_field_boosts(pf2) if pf2 else {}
     # trigram_fields = parse_field_boosts(pf3) if pf3 else {}
 
-    def check_field(frame, field):
-        if field not in frame.columns:
-            raise ValueError(f"Field {field} not in dataframe")
-        if not isinstance(frame[field].array, PostingsArray):
-            raise ValueError(f"Field {field} is not a searcharray field")
+    num_search_terms, search_terms = parse_query_terms(frame, q, qf)
 
     term_scores = []
-    for term in terms:
+    for term_posn in range(num_search_terms):
         max_scores = np.zeros(len(frame))
         for field, boost in query_fields.items():
-            check_field(frame, field)
+            term = search_terms[field][term_posn]
             field_term_score = frame[field].array.bm25(term) * (1 if boost is None else boost)
             max_scores = np.maximum(max_scores, field_term_score)
         term_scores.append(max_scores)
@@ -135,7 +163,7 @@ def edismax(frame: pd.DataFrame,
     if q_op == "AND":
         mm = "100%"
 
-    min_should_match = parse_min_should_match(len(terms), spec=mm)
+    min_should_match = parse_min_should_match(num_search_terms, spec=mm)
     qf_scores = np.asarray(term_scores)
     matches_gt_mm = np.sum(qf_scores > 0, axis=0) >= min_should_match
     qf_scores = np.sum(term_scores, axis=0)
@@ -143,8 +171,9 @@ def edismax(frame: pd.DataFrame,
 
     phrase_scores = []
     for field, boost in phrase_fields.items():
-        check_field(frame, field)
-        field_phrase_score = frame[field].array.bm25(terms) * (1 if boost is None else boost)
+        arr = get_field(frame, field)
+        terms = search_terms[field]
+        field_phrase_score = arr.bm25(terms) * (1 if boost is None else boost)
         phrase_scores.append(field_phrase_score)
 
     if len(phrase_scores) > 0:
