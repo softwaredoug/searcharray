@@ -147,7 +147,7 @@ def edismax(frame: pd.DataFrame,
     # bigram_fields = parse_field_boosts(pf2) if pf2 else {}
     # trigram_fields = parse_field_boosts(pf3) if pf3 else {}
 
-    num_search_terms, search_terms = parse_query_terms(frame, q, qf)
+    num_search_terms, search_terms = parse_query_terms(frame, q, list(query_fields.keys()))
 
     term_scores = []
     for term_posn in range(num_search_terms):
