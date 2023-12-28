@@ -190,5 +190,5 @@ def compute_expected(expected, frame):
 def test_edismax(frame, expected, params):
     frame = build_df(frame)
     expected = list(compute_expected(expected, frame))
-    scores = edismax(frame, **params)
+    scores, explain = edismax(frame, **params)
     assert np.allclose(scores, expected)
