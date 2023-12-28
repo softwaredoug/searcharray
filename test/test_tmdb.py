@@ -91,6 +91,19 @@ def test_slice_then_search(tmdb_data):
     assert skywalker_bm25.shape[0] == 3
 
 
+tmdb_term_matches = [
+    ("Star", ['11', '330459', '76180']),
+    ("Black", ['374430']),
+]
+
+
+@pytest.mark.parametrize("term,expected_matches", tmdb_term_matches)
+def test_term_freqs(tmdb_data, term, expected_matches):
+    sliced = tmdb_data[tmdb_data['doc_id'].isin(expected_matches)]
+    term_freqs = sliced['title_tokens'].array.term_freq(term)
+    assert np.all(term_freqs == 1)
+
+
 tmdb_phrase_matches = [
     (["Star", "Wars"], ['11', '330459', '76180']),
     (["Black", "Mirror:"], ['374430']),

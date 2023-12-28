@@ -316,7 +316,7 @@ class PosnBitArray:
         doc_ids = encoder.keys(term_posns)
         change_indices = np.nonzero(np.diff(doc_ids))[0]
         change_indices = np.concatenate((np.asarray([0]), change_indices + 1))
-        posns = encoded & encoder.payload_lsb_mask
+        posns = term_posns & encoder.payload_lsb_mask
         bit_counts = bit_count64(posns)
 
         term_freqs = np.add.reduceat(bit_counts, change_indices)
