@@ -148,7 +148,6 @@ def _edismax_field_centric(frame: pd.DataFrame,
         boost_exp = f"{boost}" if boost is not None else "1"
         exp = "(" + exp + f")~{min(min_should_match, len(search_terms[field]))}"
         exp = "(" + exp + f")^{boost_exp}"
-        explain.append(exp)
         matches_gt_mm = np.sum(term_scores > 0, axis=0) >= min(min_should_match, len(search_terms[field]))
         sum_terms_bm25 = np.sum(term_scores, axis=0)
         sum_terms_bm25[~matches_gt_mm] = 0
