@@ -74,6 +74,11 @@ def everythings_a_b_tokenizer(text: str) -> List[str]:
     return ["b"] * len(text.split())
 
 
+def just_lowercasing_tokenizer(text: str) -> List[str]:
+    """Lowercase and return a list of tokens."""
+    return [text.lower()]
+
+
 edismax_scenarios = {
     "base": {
         "frame": {
@@ -85,6 +90,20 @@ edismax_scenarios = {
                      0,
                      lambda frame: max(frame['title'].array.bm25("bar")[2],
                                        frame['body'].array.bm25("bar")[2]),
+                     0],
+        "params": {'q': "foo bar", 'qf': ["title", "body"]},
+    },
+    "field_centric": {
+        "frame": {
+            'title': lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
+            'body': lambda: PostingsArray.index(["foo bar", "data2", "data3 bar", "bunny funny wunny"],
+                                                tokenizer=just_lowercasing_tokenizer)
+        },
+        "expected": [lambda frame: max(sum([frame['title'].array.bm25("foo")[0],
+                                           frame['title'].array.bm25("bar")[0]]),
+                                       frame['body'].array.bm25("foo bar")[0]),
+                     0,
+                     lambda frame: frame['title'].array.bm25("bar")[2],
                      0],
         "params": {'q': "foo bar", 'qf': ["title", "body"]},
     },

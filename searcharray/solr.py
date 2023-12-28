@@ -88,6 +88,7 @@ def parse_query_terms(frame: pd.DataFrame,
 
     search_terms: Dict[str, List[str]] = {}
     num_search_terms = 0
+    term_centric = True
 
     for field in query_fields:
         arr = get_field(frame, field)
@@ -101,9 +102,50 @@ def parse_query_terms(frame: pd.DataFrame,
         if num_search_terms == 0:
             num_search_terms = field_num_search_terms
         elif field_num_search_terms != num_search_terms:
-            raise ValueError("All qf field tokenizers must emit the same number of terms")
+            term_centric = False
 
-    return num_search_terms, search_terms
+    return num_search_terms, search_terms, term_centric
+
+
+def _edismax_term_centric(frame: pd.DataFrame,
+                          query_fields: Dict[str, float],
+                          num_search_terms: int,
+                          search_terms: Dict[str, List[str]],
+                          min_should_match: int):
+    term_scores = []
+    for term_posn in range(num_search_terms):
+        max_scores = np.zeros(len(frame))
+        for field, boost in query_fields.items():
+            term = search_terms[field][term_posn]
+            post_arr = get_field(frame, field)
+            field_term_score = post_arr.bm25(term) * (1 if boost is None else boost)
+            max_scores = np.maximum(max_scores, field_term_score)
+        term_scores.append(max_scores)
+
+    qf_scores = np.asarray(term_scores)
+    matches_gt_mm = np.sum(qf_scores > 0, axis=0) >= min_should_match
+    qf_scores = np.sum(term_scores, axis=0)
+    qf_scores[~matches_gt_mm] = 0
+    return qf_scores
+
+
+def _edismax_field_centric(frame: pd.DataFrame,
+                           query_fields: Dict[str, float],
+                           num_search_terms: int,
+                           search_terms: Dict[str, List[str]],
+                           min_should_match: int) -> np.ndarray:
+    field_scores = []
+    for field, boost in query_fields.items():
+        post_arr = get_field(frame, field)
+        term_scores = np.array([post_arr.bm25(term) for term in search_terms[field]])
+        matches_gt_mm = np.sum(term_scores > 0, axis=1) >= min_should_match
+        term_scores[~matches_gt_mm] = 0
+        sum_terms_bm25 = np.sum(term_scores, axis=0)
+        field_scores.append(sum_terms_bm25 * (1 if boost is None else boost))
+    # Take maximum field scores as qf
+    qf_scores = np.asarray(field_scores)
+    qf_scores = np.max(qf_scores, axis=0)
+    return qf_scores
 
 
 def edismax(frame: pd.DataFrame,
@@ -143,31 +185,20 @@ def edismax(frame: pd.DataFrame,
 
     query_fields = parse_field_boosts(listify(qf))
     phrase_fields = parse_field_boosts(listify(pf)) if pf else {}
-
-    # bigram_fields = parse_field_boosts(pf2) if pf2 else {}
-    # trigram_fields = parse_field_boosts(pf3) if pf3 else {}
-
-    num_search_terms, search_terms = parse_query_terms(frame, q, list(query_fields.keys()))
-
-    term_scores = []
-    for term_posn in range(num_search_terms):
-        max_scores = np.zeros(len(frame))
-        for field, boost in query_fields.items():
-            term = search_terms[field][term_posn]
-            field_term_score = frame[field].array.bm25(term) * (1 if boost is None else boost)
-            max_scores = np.maximum(max_scores, field_term_score)
-        term_scores.append(max_scores)
-
     if mm is None:
         mm = "1"
     if q_op == "AND":
         mm = "100%"
 
+    # bigram_fields = parse_field_boosts(pf2) if pf2 else {}
+    # trigram_fields = parse_field_boosts(pf3) if pf3 else {}
+
+    num_search_terms, search_terms, term_centric = parse_query_terms(frame, q, list(query_fields.keys()))
     min_should_match = parse_min_should_match(num_search_terms, spec=mm)
-    qf_scores = np.asarray(term_scores)
-    matches_gt_mm = np.sum(qf_scores > 0, axis=0) >= min_should_match
-    qf_scores = np.sum(term_scores, axis=0)
-    qf_scores[~matches_gt_mm] = 0
+    if term_centric:
+        qf_scores = _edismax_term_centric(frame, query_fields, num_search_terms, search_terms, min_should_match)
+    else:
+        qf_scores = _edismax_field_centric(frame, query_fields, num_search_terms, search_terms, min_should_match)
 
     phrase_scores = []
     for field, boost in phrase_fields.items():
