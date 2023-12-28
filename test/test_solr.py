@@ -121,6 +121,20 @@ edismax_scenarios = {
                      0],
         "params": {'q': "foo bar", 'qf': ["title", "body"], 'mm': "2"},
     },
+    "field_centric_mm_opp": {
+        "frame": {
+            'title': lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
+            'body': lambda: PostingsArray.index(["foo bar", "data2", "data3 bar", "bunny funny wunny"],
+                                                tokenizer=just_lowercasing_tokenizer)
+        },
+        "expected": [lambda frame: max(sum([frame['title'].array.bm25("foo")[0],
+                                           frame['title'].array.bm25("bar")[0]]),
+                                       frame['body'].array.bm25("foo bar")[0]),
+                     0,
+                     0,
+                     0],
+        "params": {'q': "foo bar", 'qf': ["body", "title"], 'mm': "2"},
+    },
     "boost_title": {
         "frame": {
             'title': lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),

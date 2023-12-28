@@ -111,7 +111,7 @@ def _edismax_term_centric(frame: pd.DataFrame,
                           query_fields: Dict[str, float],
                           num_search_terms: int,
                           search_terms: Dict[str, List[str]],
-                          min_should_match: int) -> Tuple[np.ndarray, str]:
+                          mm: str) -> Tuple[np.ndarray, str]:
     explain = []
     term_scores = []
     for term_posn in range(num_search_terms):
@@ -127,6 +127,7 @@ def _edismax_term_centric(frame: pd.DataFrame,
         term_scores.append(max_scores)
         explain.append("(" + " | ".join(term_explain) + ")")
 
+    min_should_match = parse_min_should_match(num_search_terms, spec=mm)
     qf_scores = np.asarray(term_scores)
     matches_gt_mm = np.sum(qf_scores > 0, axis=0) >= min_should_match
     qf_scores = np.sum(term_scores, axis=0)
@@ -138,16 +139,18 @@ def _edismax_field_centric(frame: pd.DataFrame,
                            query_fields: Dict[str, float],
                            num_search_terms: int,
                            search_terms: Dict[str, List[str]],
-                           min_should_match: int) -> Tuple[np.ndarray, str]:
+                           mm: str) -> Tuple[np.ndarray, str]:
     field_scores = []
     explain = []
     for field, boost in query_fields.items():
         post_arr = get_field(frame, field)
         term_scores = np.array([post_arr.bm25(term) for term in search_terms[field]])
+        min_should_match = parse_min_should_match(len(search_terms[field]), spec=mm)
         exp = " ".join([f"{field}:{term}" for term in search_terms[field]])
         boost_exp = f"{boost}" if boost is not None else "1"
         exp = "(" + exp + f")~{min(min_should_match, len(search_terms[field]))}"
         exp = "(" + exp + f")^{boost_exp}"
+
         matches_gt_mm = np.sum(term_scores > 0, axis=0) >= min(min_should_match, len(search_terms[field]))
         sum_terms_bm25 = np.sum(term_scores, axis=0)
         sum_terms_bm25[~matches_gt_mm] = 0
@@ -205,11 +208,10 @@ def edismax(frame: pd.DataFrame,
     # trigram_fields = parse_field_boosts(pf3) if pf3 else {}
 
     num_search_terms, search_terms, term_centric = parse_query_terms(frame, q, list(query_fields.keys()))
-    min_should_match = parse_min_should_match(num_search_terms, spec=mm)
     if term_centric:
-        qf_scores, explain = _edismax_term_centric(frame, query_fields, num_search_terms, search_terms, min_should_match)
+        qf_scores, explain = _edismax_term_centric(frame, query_fields, num_search_terms, search_terms, mm)
     else:
-        qf_scores, explain = _edismax_field_centric(frame, query_fields, num_search_terms, search_terms, min_should_match)
+        qf_scores, explain = _edismax_field_centric(frame, query_fields, num_search_terms, search_terms, mm)
 
     phrase_scores = []
     for field, boost in phrase_fields.items():
