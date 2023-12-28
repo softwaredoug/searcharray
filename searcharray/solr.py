@@ -138,9 +138,9 @@ def _edismax_field_centric(frame: pd.DataFrame,
     for field, boost in query_fields.items():
         post_arr = get_field(frame, field)
         term_scores = np.array([post_arr.bm25(term) for term in search_terms[field]])
-        matches_gt_mm = np.sum(term_scores > 0, axis=1) >= min_should_match
-        term_scores[~matches_gt_mm] = 0
+        matches_gt_mm = np.sum(term_scores > 0, axis=0) >= min(min_should_match, len(search_terms[field]))
         sum_terms_bm25 = np.sum(term_scores, axis=0)
+        sum_terms_bm25[~matches_gt_mm] = 0
         field_scores.append(sum_terms_bm25 * (1 if boost is None else boost))
     # Take maximum field scores as qf
     qf_scores = np.asarray(field_scores)
