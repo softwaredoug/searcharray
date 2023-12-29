@@ -120,7 +120,7 @@ def _edismax_term_centric(frame: pd.DataFrame,
         for field, boost in query_fields.items():
             term = search_terms[field][term_posn]
             post_arr = get_field(frame, field)
-            field_term_score = post_arr.bm25(term) * (1 if boost is None else boost)
+            field_term_score = post_arr.score(term) * (1 if boost is None else boost)
             boost_exp = f"{boost}" if boost is not None else "1"
             term_explain.append(f"{field}:{term}^{boost_exp}")
             max_scores = np.maximum(max_scores, field_term_score)
@@ -144,7 +144,7 @@ def _edismax_field_centric(frame: pd.DataFrame,
     explain = []
     for field, boost in query_fields.items():
         post_arr = get_field(frame, field)
-        term_scores = np.array([post_arr.bm25(term) for term in search_terms[field]])
+        term_scores = np.array([post_arr.score(term) for term in search_terms[field]])
         min_should_match = parse_min_should_match(len(search_terms[field]), spec=mm)
         exp = " ".join([f"{field}:{term}" for term in search_terms[field]])
         boost_exp = f"{boost}" if boost is not None else "1"
@@ -217,7 +217,7 @@ def edismax(frame: pd.DataFrame,
     for field, boost in phrase_fields.items():
         arr = get_field(frame, field)
         terms = search_terms[field]
-        field_phrase_score = arr.bm25(terms) * (1 if boost is None else boost)
+        field_phrase_score = arr.score(terms) * (1 if boost is None else boost)
         boost_exp = f"{boost}" if boost is not None else "1"
         explain += f" ({field}:\"{' '.join(terms)}\")^{boost_exp}"
         phrase_scores.append(field_phrase_score)

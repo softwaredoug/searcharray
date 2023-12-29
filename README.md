@@ -8,7 +8,7 @@ Think Lucene, but as a Pandas column.
 
 ```python
 In[3]:  df['title_indexed'] = PostingsArray.index(df['title'])
-        np.sort(df['title_indexed'].array.bm25('Cat'))
+        np.sort(df['title_indexed'].array.score('Cat'))
 Out[3]: array([ 0.        ,  0.        ,  0.        , ..., 15.84568033,
                 15.84568033, 15.84568033])
 ```
@@ -71,11 +71,11 @@ Out[2]:
 Then search, getting top N with `Cat`
 
 ```
-In[3]: np.sort(df['title_indexed'].array.bm25('Cat'))
+In[3]: np.sort(df['title_indexed'].array.score('Cat'))
 Out[3]: array([ 0.        ,  0.        ,  0.        , ..., 15.84568033,
                 15.84568033, 15.84568033])
 
-In[4]: df['title_indexed'].bm25('Cat').argsort()
+In[4]: df['title_indexed'].score('Cat').argsort()
 Out[4]: 
 
 array([0, 18561, 18560, ..., 15038, 19012,  4392])
@@ -160,7 +160,7 @@ df['hrs_into_past'] = (now - df['timestamp']).dt.total_seconds() / 3600
 Then multiply by BM25 if you want:
 
 ```
-df['score'] = df['title_indexed'].bm25('Cat') * df['hrs_into_past']
+df['score'] = df['title_indexed'].score('Cat') * df['hrs_into_past']
 ```
 
 ## TODOs / Future Work / Known issues

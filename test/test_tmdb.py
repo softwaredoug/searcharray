@@ -87,7 +87,7 @@ def test_tokenize_tmdb(tmdb_raw_data):
 def test_slice_then_search(tmdb_data):
     star_wars_in_title = tmdb_data['title_tokens'].array.match(["Star", "Wars"])
     star_wars_in_title = tmdb_data[star_wars_in_title]
-    skywalker_bm25 = star_wars_in_title['overview_tokens'].array.bm25(["Skywalker"])
+    skywalker_bm25 = star_wars_in_title['overview_tokens'].array.score(["Skywalker"])
     assert skywalker_bm25.shape[0] == 3
 
 
@@ -164,8 +164,8 @@ def test_gather_results(benchmark, tmdb_data):
         N = 10
         all_results = []
         for keywords in [['Star', 'Wars'], ['Black', 'Mirror:'], ['rambo']]:
-            score = tmdb_data['title_tokens'].array.bm25(keywords)
-            score += tmdb_data['overview_tokens'].array.bm25(keywords)
+            score = tmdb_data['title_tokens'].array.score(keywords)
+            score += tmdb_data['overview_tokens'].array.score(keywords)
             tmdb_data['score'] = score
             top_n = tmdb_data.sort_values('score', ascending=False)[:N].copy()
             top_n.loc[:, 'doc_id'] = top_n['doc_id'].astype(int)

@@ -19,6 +19,7 @@ from searcharray.phrase.scan_merge import scan_merge_ins
 from searcharray.phrase.posn_diffs import compute_phrase_freqs
 from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder, PosnBitArray
 from searcharray.utils.mat_set import SparseMatSetBuilder
+from searcharray.similarity import Similarity, default_bm25
 
 logger = logging.getLogger(__name__)
 
@@ -618,49 +619,26 @@ class PostingsArray(ExtensionArray):
             term_freq = self.term_freq(token)
         return term_freq > 0
 
-    def bm25_idf(self, token: Union[List[str], str], doc_stats=None) -> float:
-        """Calculate the (Lucene) idf for a term.
-
-        idf, computed as log(1 + (N - n + 0.5) / (n + 0.5))
-        """
-        token = self._check_token_arg(token)
-        if isinstance(token, list):
-            return self.bm25_phrase_idf(token)
-
-        df = self.doc_freq(token)
-        num_docs = len(self)
-        return np.log(1 + (num_docs - df + 0.5) / (df + 0.5))
-
-    def bm25_phrase_idf(self, tokens: List[str]) -> float:
-        """Calculate the idf for a phrase.
-
-        This is the sum of the idfs of the individual terms.
-        """
-        idfs = [self.bm25_idf(term) for term in tokens]
-        return np.sum(idfs)
-
-    def bm25_tf(self, token: Union[List[str], str], k1=1.2, b=0.75, slop=1) -> float:
-        """Calculate the (Lucene) BM25 tf for a term or phrase.
-
-        tf, computed as freq / (freq + k1 * (1 - b + b * dl / avgdl))
-        """
-        tf = self.term_freq(token)
-        score = tf / (tf + k1 * (1 - b + b * self.doc_lengths() / self.avg_doc_length))
-        return score
-
-    def bm25(self, token: Union[str, List[str]], doc_stats=None, k1=1.2, b=0.75):
-        """Score each doc using BM25.
+    def score(self, token: Union[str, List[str]], similarity: Similarity = default_bm25) -> np.ndarray:
+        """Score each doc using a similarity function.
 
         Parameters
         ----------
         token : str or list of str of what to search (already tokenized)
-        doc_stats : tuple of doc stats to use (avg_doc_length, num_docs, doc_count). Defaults to index stats.
-        k1 : float, optional BM25 param. Defaults to 1.2.
-        b : float, optional BM25 param. Defaults to 0.75.
+        similarity : How to score the documents. Default is BM25.
         """
         # Get term freqs per token
         token = self._check_token_arg(token)
-        return self.bm25_idf(token, doc_stats=doc_stats) * self.bm25_tf(token)
+
+        tfs = self.term_freq(token)
+        token = self._check_token_arg(token)
+        tokens_l = [token] if isinstance(token, str) else token
+        all_dfs = np.asarray([self.doc_freq(token) for token in tokens_l])
+        doc_lens = self.doc_lengths()
+        scores = similarity(term_freqs=tfs, doc_freqs=all_dfs,
+                            doc_lens=doc_lens, avg_doc_lens=self.avg_doc_length,
+                            num_docs=len(self))
+        return scores
 
     def positions(self, token: str, key=None) -> List[np.ndarray]:
         """Return a list of lists of positions of the given term."""

@@ -40,10 +40,8 @@ def test_doc_lengths(data):
     assert data.avg_doc_length == 2.5
 
 
-def test_bm25_matches_lucene(data):
-    bm25_idf = data.bm25_idf("bar")
-    assert bm25_idf > 0.0
-    bm25 = data.bm25("bar")
+def test_default_score_matches_lucene(data):
+    bm25 = data.score("bar")
     assert bm25.shape == (100,)
     assert np.isclose(bm25, [0.37066694, 0., 0.34314217, 0.] * 25).all()
 
