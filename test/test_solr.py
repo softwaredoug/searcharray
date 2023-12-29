@@ -206,3 +206,17 @@ def test_edismax(frame, expected, params):
     expected = list(compute_expected(expected, frame))
     scores, explain = edismax(frame, **params)
     assert np.allclose(scores, expected)
+
+
+def always_one_similarity(*args, **kwargs) -> np.ndarray:
+    term_freqs = kwargs['term_freqs']
+    return term_freqs > 0
+
+
+@w_scenarios(edismax_scenarios)
+def test_edismax_custom_similarity(frame, expected, params):
+    frame = build_df(frame)
+    expected = list(compute_expected(expected, frame))
+    params['similarity'] = always_one_similarity
+    scores, explain = edismax(frame, **params)
+    assert np.all(scores.astype(np.int64) == scores)
