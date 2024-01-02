@@ -35,6 +35,7 @@ _64 = np.uint64(64)
 _2 = np.uint64(2)
 _1 = np.uint64(1)
 _0 = np.uint64(0)
+_neg1 = np.int64(-1)
 
 
 def inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
@@ -89,7 +90,7 @@ def adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     rhs_next: the next rhs array to continue matching
 
     """
-    lhs_int, rhs_int = encoder.intersect(lhs, rhs, rshift=-1)
+    lhs_int, rhs_int = encoder.intersect_rshift(lhs, rhs, rshift=_neg1)
     lhs_doc_ids = encoder.keys(lhs_int)
     # lhs lsb set and rhs lsb's most significant bit set
     upper_bit = _1 << (encoder.payload_lsb_bits - _1)

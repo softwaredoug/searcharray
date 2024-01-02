@@ -29,6 +29,7 @@ _64 = np.uint64(64)
 _2 = np.uint64(2)
 _1 = np.uint64(1)
 _0 = np.uint64(0)
+_neg1 = np.int64(-1)
 
 
 def n_msb_mask(n: np.uint64) -> np.uint64:
@@ -136,28 +137,41 @@ class RoaringishEncoder:
         """Return payload LSBs from encoded."""
         return encoded & self.payload_lsb_mask
 
-    def intersect(self, lhs: np.ndarray, rhs: np.ndarray, rshift=0) -> Tuple[np.ndarray, np.ndarray]:
-        """Return the MSBs that are common to both lhs and rhs.
+    def intersect_rshift(self, lhs: np.ndarray, rhs: np.ndarray,
+                         rshift: np.int64 = _neg1) -> Tuple[np.ndarray, np.ndarray]:
+        """Return the MSBs that are common to both lhs and rhs (same keys, same MSBs)
 
         Parameters
         ----------
         lhs : np.ndarray of uint64 (encoded) values
         rhs : np.ndarray of uint64 (encoded) values
-        rshift : int - right shift rhs by this many bits before intersecting (ie to find adjacent)
+        rshift : int how much to shift rhs by to the right
         """
         rhs_int = rhs
-        if rshift >= 0:
-            rhs_shifted = (rhs_int >> self.payload_lsb_bits) + rshift
-        else:
-            rhs_int = rhs[self.payload_msb(rhs) >= np.abs(rshift)]
-            rshft = np.int64(rshift).astype(np.uint64)
-            rhs_shifted = (rhs_int >> self.payload_lsb_bits) + rshft
+        assert rshift < 0, "rshift must be negative"
+        rhs_int = rhs[self.payload_msb(rhs) >= np.abs(rshift)]
+        rshft = rshift.astype(np.uint64)
+        rhs_shifted = (rhs_int >> self.payload_lsb_bits) + rshft
 
-        assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
+        # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
         _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits,
-                                              rhs_shifted.astype(np.int64).astype(np.uint64),
+                                              rhs_shifted,
                                               indices=True)
         return lhs[lhs_idx], rhs_int[rhs_idx]
+
+    def intersect(self, lhs: np.ndarray, rhs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Return the MSBs that are common to both lhs and rhs (same keys, same MSBs)
+
+        Parameters
+        ----------
+        lhs : np.ndarray of uint64 (encoded) values
+        rhs : np.ndarray of uint64 (encoded) values
+        """
+        # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
+        _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits,
+                                              rhs >> self.payload_lsb_bits,
+                                              indices=True)
+        return lhs[lhs_idx], rhs[rhs_idx]
 
     def slice(self, encoded: np.ndarray, keys: np.ndarray) -> np.ndarray:
         """Get list of encoded that have values in keys."""
