@@ -150,7 +150,7 @@ class RoaringishEncoder:
         rhs_int = rhs
         assert rshift < 0, "rshift must be negative"
         rhs_int = rhs[self.payload_msb(rhs) >= np.abs(rshift)]
-        rshft = rshift.astype(np.uint64)
+        rshft = rshift.view(np.uint64)
         rhs_shifted = (rhs_int >> self.payload_lsb_bits) + rshft
 
         # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
@@ -177,7 +177,7 @@ class RoaringishEncoder:
         """Get list of encoded that have values in keys."""
         assert len(keys.shape) == 1
         assert len(encoded.shape) == 1
-        encoded_keys = encoded.astype(np.uint64) >> (_64 - self.key_bits)
+        encoded_keys = encoded.view(np.uint64) >> (_64 - self.key_bits)
         _, (idx_docs, idx_enc) = snp.intersect(keys, encoded_keys, indices=True,
                                                duplicates=snp.KEEP_MAX_N)
 
