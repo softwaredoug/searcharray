@@ -199,6 +199,17 @@ def test_phrase_different_posns(posn_offset):
     assert (expected == phrase_matches).all()
 
 
+@pytest.mark.parametrize("posn_offset", range(100))
+def test_phrase_scattered_posns(posn_offset):
+    scattered = "foo bar " + " ".join(["dummy"] * posn_offset) + " foo bar baz"
+    docs = PostingsArray.index([scattered,
+                                "not match"])
+    phrase = ["foo", "bar"]
+    expected = [2, 0]
+    phrase_matches = docs.phrase_freq(phrase)
+    assert (expected == phrase_matches).all()
+
+
 perf_scenarios = {
     "4m_docs": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 1000000),

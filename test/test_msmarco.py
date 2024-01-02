@@ -173,6 +173,6 @@ def test_msmarco(phrase_search, msmarco100k, benchmark):
     print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     # print(f"Memory Usage (TITLE): {msmarco100k['title_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     start = perf_counter()
-    results = profiler.run(msmarco100k['body_ws'].array.bm25, phrase_search)
+    results = profiler.run(msmarco100k['body_ws'].array.score, phrase_search)
     num_results = results[results > 0].shape[0]
     print(f"msmarco phrase search {phrase_search}. Found {num_results}. {perf_counter() - start:.4f}s")

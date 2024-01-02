@@ -64,21 +64,21 @@ def inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
         phrase_freqs[lhs_doc_ids] += adjacents
         return phrase_freqs, rhs_int
 
-    rhs_next = (rhs_int & encoder.key_mask)
-    # With popcount soon to be in numpy, this could potentially
-    # be simply a left shift of the RHS LSB poppcount, and and a popcount
-    # to count the overlaps
-    for bit in range(_0, encoder.payload_lsb_bits - _1):
-        bit64 = np.uint64(bit)
-        lhs_mask = _1 << bit64
-        rhs_mask = _1 << (bit64 + _1)
-        lhs_set = (lhs_int & lhs_mask) != _0
-        rhs_set = (rhs_int & rhs_mask) != _0
-
-        matches = lhs_set & rhs_set
-        rhs_next[matches] |= rhs_mask
-        phrase_freqs[lhs_doc_ids[matches]] += 1
-    return phrase_freqs, rhs_next
+    overlap_bits = (lhs_int & encoder.payload_lsb_mask) & ((rhs_int & encoder.payload_lsb_mask) >> _1)
+    rhs_next2 = (overlap_bits << _1) & encoder.payload_lsb_mask
+    rhs_next2 |= (rhs_int & encoder.key_mask)
+    phrase_freqs2 = phrase_freqs.copy()
+    matches2 = overlap_bits > 0
+    if np.any(matches2):
+        transitions = np.argwhere(np.diff(lhs_doc_ids[matches2]) != 0).flatten() + 1
+        transitions = np.insert(transitions, 0, 0)
+        counted_bits = bit_count64(overlap_bits[matches2])
+        reduced = np.add.reduceat(counted_bits,
+                                  transitions)
+        phrase_freqs2[lhs_doc_ids[matches2]] += reduced
+    # assert np.all(phrase_freqs == phrase_freqs2)
+    # assert np.all(rhs_next2 == rhs_next)
+    return phrase_freqs2, rhs_next2
 
 
 def adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
