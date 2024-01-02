@@ -66,7 +66,7 @@ def inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
 
     overlap_bits = (lhs_int & encoder.payload_lsb_mask) & ((rhs_int & encoder.payload_lsb_mask) >> _1)
     rhs_next2 = (overlap_bits << _1) & encoder.payload_lsb_mask
-    rhs_next2 |= (rhs_int & encoder.key_mask)
+    rhs_next2 |= (rhs_int & (encoder.key_mask | encoder.payload_msb_mask))
     phrase_freqs2 = phrase_freqs.copy()
     matches2 = overlap_bits > 0
     if np.any(matches2):
@@ -97,7 +97,10 @@ def adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     upper_bit = _1 << (encoder.payload_lsb_bits - _1)
     matches = ((lhs_int & upper_bit) != 0) & ((rhs_int & _1) != 0)
     phrase_freqs[lhs_doc_ids[matches]] += 1
-    return phrase_freqs, rhs_int
+    rhs_next = rhs_int
+    rhs_next[~matches] |= ~encoder.payload_lsb_mask
+    rhs_next[matches] |= (encoder.payload_lsb_mask & _1)
+    return phrase_freqs, rhs_next
 
 
 def bigram_freqs(lhs: np.ndarray, rhs: np.ndarray, phrase_freqs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -111,9 +114,11 @@ def bigram_freqs(lhs: np.ndarray, rhs: np.ndarray, phrase_freqs: np.ndarray) -> 
     """
     # Combine lhs and rhs matches from two strategies
     phrase_freqs, rhs_next_inner = inner_bigram_freqs(lhs, rhs, phrase_freqs)
-    phrase_freqs, _ = adjacent_bigram_freqs(lhs, rhs, phrase_freqs)
+    phrase_freqs, rhs_next_adj = adjacent_bigram_freqs(lhs, rhs, phrase_freqs)
+    rhs_next = np.sort(np.concatenate([rhs_next_inner, rhs_next_adj]))
+
     # Combine
-    return phrase_freqs, rhs_next_inner
+    return phrase_freqs, rhs_next
 
 
 def compute_phrase_freqs(encoded_posns: List[np.ndarray], phrase_freqs: np.ndarray) -> np.ndarray:
