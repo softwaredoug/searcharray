@@ -75,9 +75,7 @@ def inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
         counted_bits = bit_count64(overlap_bits[matches2])
         reduced = np.add.reduceat(counted_bits,
                                   transitions)
-        phrase_freqs2[lhs_doc_ids[matches2]] += reduced
-    # assert np.all(phrase_freqs == phrase_freqs2)
-    # assert np.all(rhs_next2 == rhs_next)
+        phrase_freqs2[np.unique(lhs_doc_ids[matches2])] += reduced
     return phrase_freqs2, rhs_next2
 
 
@@ -96,7 +94,8 @@ def adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     # lhs lsb set and rhs lsb's most significant bit set
     upper_bit = _1 << (encoder.payload_lsb_bits - _1)
     matches = ((lhs_int & upper_bit) != 0) & ((rhs_int & _1) != 0)
-    phrase_freqs[lhs_doc_ids[matches]] += 1
+    unique, counts = np.unique(lhs_doc_ids[matches], return_counts=True)
+    phrase_freqs[unique] += counts
     rhs_next = rhs_int
     rhs_next[~matches] |= ~encoder.payload_lsb_mask
     rhs_next[matches] |= (encoder.payload_lsb_mask & _1)

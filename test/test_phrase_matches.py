@@ -151,6 +151,13 @@ scenarios = {
         "phrase": ["foo", "bar"],
         "expected": [1, 0, 0, 0, 2] * 25
     },
+    "many_phrases": {
+        "docs": lambda: PostingsArray.index(["foo bar bar baz "
+                                             + " ".join([" dummy foo bar baz"] * 100),
+                                             "data2", "data3 bar", "bunny funny wunny foo bar"] * 25),
+        "phrase": ["foo", "bar"],
+        "expected": [101, 0, 0, 1] * 25,
+    },
     "10k_docs": {
         "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 10000),
         "phrase": ["foo", "bar"],
