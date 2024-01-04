@@ -274,7 +274,7 @@ class PosnBitArray:
                      doc_ids: Optional[np.ndarray] = None) -> np.ndarray:
         if len(term_ids) < 2:
             raise ValueError("Must have at least two terms")
-        if doc_ids is None:
+        if (doc_ids is None) or (len(doc_ids) == len(self.doc_ids) and np.all(doc_ids == self.doc_ids)):
             enc_term_posns = [self.encoded_term_posns[term_id] for term_id in term_ids]
         else:
             enc_term_posns = [encoder.slice(self.encoded_term_posns[term_id],
