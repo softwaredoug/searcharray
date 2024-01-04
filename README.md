@@ -2,7 +2,7 @@
 
 [![Python package](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml/badge.svg)](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml)
 
-SearchArray turns Pandas string columns into a term index. It alows efficient BM25 scoring of phrases and individual tokens.
+SearchArray turns Pandas string columns into a term index. It alows efficient BM25 / TFIDF scoring of phrases and individual tokens.
 
 Think Lucene, but as a Pandas column.
 
