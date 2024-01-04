@@ -2,7 +2,7 @@ from pandas.tests.extension import base
 import pandas as pd
 import pytest
 
-from searcharray.postings import PostingsDtype, PostingsRow
+from searcharray.postings import PostingsDtype, Terms
 from searcharray import SearchArray
 
 
@@ -25,12 +25,12 @@ def data_missing():
 
 @pytest.fixture
 def na_cmp():
-    return lambda x, y: x == PostingsRow({}) or y == PostingsRow({})
+    return lambda x, y: x == Terms({}) or y == Terms({})
 
 
 @pytest.fixture
 def na_value():
-    return PostingsRow({})
+    return Terms({})
 
 
 @pytest.fixture(params=[True, False])

@@ -33,7 +33,7 @@ logger.addHandler(handler)
 logger.setLevel(logging.ERROR)
 
 
-class PostingsRow:
+class Terms:
     """An indexed search doc - a row of postings, with bag of tokenized words and positions."""
 
     def __init__(self,
@@ -99,9 +99,9 @@ class PostingsRow:
 
     def __repr__(self):
         if self.encoded:
-            rval = f"PostingsRow({repr(self.postings)}, encoded=True)"
+            rval = f"Terms({repr(self.postings)}, encoded=True)"
         else:
-            rval = f"PostingsRow({repr(self.postings)})"
+            rval = f"Terms({repr(self.postings)})"
         return rval
 
     def __str__(self):
@@ -112,12 +112,12 @@ class PostingsRow:
         # to get a boolean array back
         if isinstance(other, SearchArray):
             return other == self
-        same_postings = isinstance(other, PostingsRow) and self.postings == other.postings
+        same_postings = isinstance(other, Terms) and self.postings == other.postings
         if same_postings and self.doc_len == other.doc_len:
             return True
 
     def __lt__(self, other):
-        # return isinstance(other, PostingsRow) and hash(self) < hash(other)
+        # return isinstance(other, Terms) and hash(self) < hash(other)
         keys_both = set(self.postings.keys()).union(set(other.postings.keys()))
         # Sort lexically
         keys_both = sorted(keys_both)
@@ -157,7 +157,7 @@ class PostingsRow:
 class PostingsDtype(ExtensionDtype):
 
     name = 'tokenized_text'
-    type = PostingsRow
+    type = Terms
     kind = 'O'
 
     @classmethod
@@ -182,10 +182,10 @@ class PostingsDtype(ExtensionDtype):
 
     @property
     def na_value(self):
-        return PostingsRow({})
+        return Terms({})
 
     def valid_value(self, value):
-        return isinstance(value, dict) or pd.isna(value) or isinstance(value, PostingsRow)
+        return isinstance(value, dict) or pd.isna(value) or isinstance(value, Terms)
 
 
 register_extension_dtype(PostingsDtype)
@@ -226,9 +226,9 @@ def _build_index_from_dict(postings):
     # https://www.austintripp.ca/blog/2018/09/12/sparse-matrices-tips1
     for doc_id, tokenized in enumerate(postings):
         if isinstance(tokenized, dict):
-            tokenized = PostingsRow(tokenized, doc_len=len(tokenized))
-        elif not isinstance(tokenized, PostingsRow):
-            raise TypeError("Expected a PostingsRow or a dict")
+            tokenized = Terms(tokenized, doc_len=len(tokenized))
+        elif not isinstance(tokenized, Terms):
+            raise TypeError("Expected a Terms or a dict")
 
         if tokenized.encoded:
             posns = posns_enc
@@ -288,14 +288,14 @@ def _row_to_postings_row(doc_id, row, doc_len, term_dict, posns: PosnBitArray):
         enc_term_posns = posns.doc_encoded_posns(term_idx, doc_id=doc_id)
         labeled_posns[term] = enc_term_posns
 
-    result = PostingsRow(tfs, posns=labeled_posns,
-                         doc_len=doc_len, encoded=True)
+    result = Terms(tfs, posns=labeled_posns,
+                   doc_len=doc_len, encoded=True)
     # TODO add positions
     return result
 
 
 class SearchArray(ExtensionArray):
-    """An array of tokenized text (PostingsRows)."""
+    """An array of tokenized text (Termss)."""
 
     dtype = PostingsDtype()
 
@@ -322,16 +322,16 @@ class SearchArray(ExtensionArray):
         def tokenized_docs(docs):
             for doc_id, doc in enumerate(docs):
                 if pd.isna(doc):
-                    yield PostingsRow({})
+                    yield Terms({})
                 else:
                     token_stream = tokenizer(doc)
                     term_freqs = Counter(token_stream)
                     positions = defaultdict(list)
                     for posn in range(len(token_stream)):
                         positions[token_stream[posn]].append(posn)
-                    yield PostingsRow(term_freqs,
-                                      doc_len=len(token_stream),
-                                      posns=positions)
+                    yield Terms(term_freqs,
+                                doc_len=len(token_stream),
+                                posns=positions)
 
         return cls(tokenized_docs(array), tokenizer)
 
@@ -412,7 +412,7 @@ class SearchArray(ExtensionArray):
             if isinstance(value, float):
                 term_mat = np.asarray([value])
                 doc_lens = np.asarray([0])
-            elif isinstance(value, PostingsRow):
+            elif isinstance(value, Terms):
                 term_mat = np.asarray([value.tf_to_dense(self.term_dict)])
                 doc_lens = np.asarray([value.doc_len])
                 is_encoded = value.encoded
@@ -442,7 +442,7 @@ class SearchArray(ExtensionArray):
         warnings.warn(msg)
 
         scan_value = value
-        if isinstance(value, PostingsRow):
+        if isinstance(value, Terms):
             scan_value = np.asarray([value])
         for row in scan_value:
             for term in row.terms():
@@ -458,7 +458,7 @@ class SearchArray(ExtensionArray):
     ):
         if dropna:
             counts = Counter(self[:])
-            counts.pop(PostingsRow({}), None)
+            counts.pop(Terms({}), None)
         else:
             counts = Counter(self[:])
         return pd.Series(counts)
@@ -495,7 +495,7 @@ class SearchArray(ExtensionArray):
             # return np.array(self[:]) == np.array(other[:])
 
         # When other is a scalar value
-        elif isinstance(other, PostingsRow):
+        elif isinstance(other, Terms):
             other = SearchArray([other], tokenizer=self.tokenizer)
             warnings.warn("Comparing a scalar value to a SearchArray. This is slow.")
             return np.array(self[:]) == np.array(other[:])
@@ -528,7 +528,7 @@ class SearchArray(ExtensionArray):
 
         if allow_fill and -1 in result_indices:
             if fill_value is None or pd.isna(fill_value):
-                fill_value = PostingsRow({}, encoded=True)
+                fill_value = Terms({}, encoded=True)
 
             to_fill_mask = result_indices == -1
             # This is slow as it rebuilds all the term dictionaries
@@ -568,7 +568,7 @@ class SearchArray(ExtensionArray):
     def _values_for_factorize(self):
         """Return an array and missing value suitable for factorization (ie grouping)."""
         arr = np.asarray(self[:], dtype=object)
-        return arr, PostingsRow({})
+        return arr, Terms({})
 
     def _check_token_arg(self, token):
         if isinstance(token, str):
