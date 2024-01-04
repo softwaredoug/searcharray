@@ -664,8 +664,10 @@ class PostingsArray(ExtensionArray):
         if slop == 1 and len(tokens) == len(set(tokens)):
             phrase_freqs = np.zeros(len(self))
             try:
+                doc_ids = self.term_mat.rows
                 term_ids = [self.term_dict.get_term_id(token) for token in tokens]
-                return self.posns.phrase_freqs(term_ids, phrase_freqs)
+                return self.posns.phrase_freqs(term_ids, doc_ids=doc_ids,
+                                               phrase_freqs=phrase_freqs)
             except TermMissingError:
                 return phrase_freqs
         else:

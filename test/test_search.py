@@ -117,3 +117,13 @@ def test_or_query(data, docs, keywords, expected, min_should_match):
     docs = docs()
     matches = data.or_query(keywords, min_should_match=min_should_match)
     assert (expected == matches).all()
+
+
+@w_scenarios(or_scenarios)
+def test_or_query_sliced(data, docs, keywords, expected, min_should_match):
+    docs = docs()
+    num_docs = len(docs)
+    sliced = data[:num_docs // 2]
+    expected_sliced = expected[:num_docs // 2]
+    matches = sliced.or_query(keywords, min_should_match=min_should_match)
+    assert (expected_sliced == matches).all()

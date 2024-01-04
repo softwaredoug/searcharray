@@ -8,7 +8,7 @@ https://colab.research.google.com/drive/10tIEkdlCE_1J_CcgEcV0jkLfBc-0H4am?authus
 import numpy as np
 import sortednp as snp
 from copy import deepcopy
-from typing import List, Tuple, Dict, Union, cast
+from typing import List, Tuple, Dict, Union, cast, Optional
 from searcharray.utils.roaringish import RoaringishEncoder, convert_keys
 import numbers
 import logging
@@ -270,10 +270,15 @@ class PosnBitArray:
                                    keys=np.asarray([doc_id], dtype=np.uint64))
         return term_posns
 
-    def phrase_freqs(self, term_ids: List[int], phrase_freqs: np.ndarray) -> np.ndarray:
+    def phrase_freqs(self, term_ids: List[int], phrase_freqs: np.ndarray,
+                     doc_ids: Optional[np.ndarray] = None) -> np.ndarray:
         if len(term_ids) < 2:
             raise ValueError("Must have at least two terms")
-        enc_term_posns = [self.encoded_term_posns[term_id] for term_id in term_ids]
+        if doc_ids is None:
+            enc_term_posns = [self.encoded_term_posns[term_id] for term_id in term_ids]
+        else:
+            enc_term_posns = [encoder.slice(self.encoded_term_posns[term_id],
+                                            keys=doc_ids.view(np.uint64)) for term_id in term_ids]
         return compute_phrase_freqs(enc_term_posns, phrase_freqs)
 
     def positions(self, term_id: int, key) -> Union[List[np.ndarray], np.ndarray]:
