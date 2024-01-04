@@ -98,10 +98,8 @@ class Terms:
         return len(self.postings)
 
     def __repr__(self):
-        if self.encoded:
-            rval = f"Terms({repr(self.postings)}, encoded=True)"
-        else:
-            rval = f"Terms({repr(self.postings)})"
+        posting_keys = set(self.postings.keys())
+        rval = f"Terms({posting_keys})"
         return rval
 
     def __str__(self):
