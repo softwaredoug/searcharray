@@ -154,7 +154,7 @@ class Terms:
         return hash(json.dumps(self.postings, sort_keys=True))
 
 
-class PostingsDtype(ExtensionDtype):
+class TermsDtype(ExtensionDtype):
 
     name = 'tokenized_text'
     type = Terms
@@ -178,7 +178,7 @@ class PostingsDtype(ExtensionDtype):
         return SearchArray
 
     def __repr__(self):
-        return 'PostingsDtype()'
+        return 'TermsDtype()'
 
     @property
     def na_value(self):
@@ -188,7 +188,7 @@ class PostingsDtype(ExtensionDtype):
         return isinstance(value, dict) or pd.isna(value) or isinstance(value, Terms)
 
 
-register_extension_dtype(PostingsDtype)
+register_extension_dtype(TermsDtype)
 
 
 def ws_tokenizer(string):
@@ -297,7 +297,7 @@ def _row_to_postings_row(doc_id, row, doc_len, term_dict, posns: PosnBitArray):
 class SearchArray(ExtensionArray):
     """An array of tokenized text (Termss)."""
 
-    dtype = PostingsDtype()
+    dtype = TermsDtype()
 
     def __init__(self, postings, tokenizer=ws_tokenizer, avoid_copies=True):
         # Check dtype, raise TypeError
@@ -339,9 +339,9 @@ class SearchArray(ExtensionArray):
     def _from_sequence(cls, scalars, dtype=None, copy=False):
         """Construct a new SearchArray from a sequence of scalars (PostingRow or convertible into)."""
         if dtype is not None:
-            if not isinstance(dtype, PostingsDtype):
+            if not isinstance(dtype, TermsDtype):
                 return scalars
-        if isinstance(scalars, np.ndarray) and scalars.dtype == PostingsDtype():
+        if isinstance(scalars, np.ndarray) and scalars.dtype == TermsDtype():
             return cls(scalars)
         # String types
         elif isinstance(scalars, np.ndarray) and scalars.dtype.kind in 'US':

@@ -2,13 +2,13 @@ from pandas.tests.extension import base
 import pandas as pd
 import pytest
 
-from searcharray.postings import PostingsDtype, Terms
-from searcharray import SearchArray
+
+from searcharray import SearchArray, Terms, TermsDtype
 
 
 @pytest.fixture
 def dtype():
-    return PostingsDtype()
+    return TermsDtype()
 
 
 @pytest.fixture
