@@ -3,7 +3,7 @@ import re
 import pandas as pd
 import numpy as np
 from typing import List, Optional, Dict, Tuple
-from searcharray.postings import PostingsArray
+from searcharray.postings import SearchArray
 from searcharray.similarity import Similarity, default_bm25
 
 
@@ -75,10 +75,10 @@ def parse_field_boosts(field_lists: List[str]) -> dict:
     return out
 
 
-def get_field(frame, field) -> PostingsArray:
+def get_field(frame, field) -> SearchArray:
     if field not in frame.columns:
         raise ValueError(f"Field {field} not in dataframe")
-    if not isinstance(frame[field].array, PostingsArray):
+    if not isinstance(frame[field].array, SearchArray):
         raise ValueError(f"Field {field} is not a searcharray field")
     return frame[field].array
 

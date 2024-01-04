@@ -1,14 +1,14 @@
 """Test postings array search functionality."""
 import pytest
 import numpy as np
-from searcharray.postings import PostingsArray
+from searcharray.postings import SearchArray
 from test_utils import w_scenarios
 
 
 @pytest.fixture
 def data():
     """Return a fixture of your data here that returns an instance of your ExtensionArray."""
-    return PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25)
+    return SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25)
 
 
 def test_match(data):
@@ -48,17 +48,17 @@ def test_default_score_matches_lucene(data):
 
 and_scenarios = {
     "base": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "keywords": ["foo", "bar"],
         "expected": [True, False, False, False] * 25,
     },
     "no_match": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "keywords": ["foo", "data2"],
         "expected": [False, False, False, False] * 25,
     },
     "and_with_phrase": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "keywords": [["foo", "bar"], "baz"],
         "expected": [True, False, False, False] * 25,
     }
@@ -74,37 +74,37 @@ def test_and_query(data, docs, keywords, expected):
 
 or_scenarios = {
     "base": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "keywords": ["foo", "bar"],
         "expected": [True, False, True, False] * 25,
         "min_should_match": 1,
     },
     "mm_2": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "keywords": ["foo", "bar"],
         "expected": [True, False, False, False] * 25,
         "min_should_match": 2,
     },
     "one_term_match": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "keywords": ["foo", "data2"],
         "expected": [True, True, False, False] * 25,
         "min_should_match": 1,
     },
     "one_term_match_mm2": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "keywords": ["foo", "data2"],
         "expected": [False, False, False, False] * 25,
         "min_should_match": 2,
     },
     "or_with_phrase": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "keywords": [["foo", "bar"], "baz"],
         "expected": [True, False, False, False] * 25,
         "min_should_match": 1,
     },
     "or_with_phrase_mm2": {
-        "docs": lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "keywords": [["foo", "bar"], ["bar", "baz"]],
         "expected": [True, False, False, False] * 25,
         "min_should_match": 2,

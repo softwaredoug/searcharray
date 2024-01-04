@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 
 from searcharray.solr import parse_min_should_match, edismax
-from searcharray.postings import PostingsArray
+from searcharray.postings import SearchArray
 
 
 def test_standard_percentage():
@@ -82,8 +82,8 @@ def just_lowercasing_tokenizer(text: str) -> List[str]:
 edismax_scenarios = {
     "base": {
         "frame": {
-            'title': lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
-            'body': lambda: PostingsArray.index(["buzz", "data2", "data3 bar", "bunny funny wunny"])
+            'title': lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
+            'body': lambda: SearchArray.index(["buzz", "data2", "data3 bar", "bunny funny wunny"])
         },
         "expected": [lambda frame: sum([frame['title'].array.score("foo")[0],
                                         frame['title'].array.score("bar")[0]]),
@@ -95,9 +95,9 @@ edismax_scenarios = {
     },
     "field_centric": {
         "frame": {
-            'title': lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
-            'body': lambda: PostingsArray.index(["foo bar", "data2", "data3 bar", "bunny funny wunny"],
-                                                tokenizer=just_lowercasing_tokenizer)
+            'title': lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
+            'body': lambda: SearchArray.index(["foo bar", "data2", "data3 bar", "bunny funny wunny"],
+                                              tokenizer=just_lowercasing_tokenizer)
         },
         "expected": [lambda frame: max(sum([frame['title'].array.score("foo")[0],
                                            frame['title'].array.score("bar")[0]]),
@@ -109,9 +109,9 @@ edismax_scenarios = {
     },
     "field_centric_mm": {
         "frame": {
-            'title': lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
-            'body': lambda: PostingsArray.index(["foo bar", "data2", "data3 bar", "bunny funny wunny"],
-                                                tokenizer=just_lowercasing_tokenizer)
+            'title': lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
+            'body': lambda: SearchArray.index(["foo bar", "data2", "data3 bar", "bunny funny wunny"],
+                                              tokenizer=just_lowercasing_tokenizer)
         },
         "expected": [lambda frame: max(sum([frame['title'].array.score("foo")[0],
                                            frame['title'].array.score("bar")[0]]),
@@ -123,9 +123,9 @@ edismax_scenarios = {
     },
     "field_centric_mm_opp": {
         "frame": {
-            'title': lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
-            'body': lambda: PostingsArray.index(["foo bar", "data2", "data3 bar", "bunny funny wunny"],
-                                                tokenizer=just_lowercasing_tokenizer)
+            'title': lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
+            'body': lambda: SearchArray.index(["foo bar", "data2", "data3 bar", "bunny funny wunny"],
+                                              tokenizer=just_lowercasing_tokenizer)
         },
         "expected": [lambda frame: max(sum([frame['title'].array.score("foo")[0],
                                            frame['title'].array.score("bar")[0]]),
@@ -137,8 +137,8 @@ edismax_scenarios = {
     },
     "boost_title": {
         "frame": {
-            'title': lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
-            'body': lambda: PostingsArray.index(["buzz", "data2", "data3 bar", "bunny funny wunny"])
+            'title': lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
+            'body': lambda: SearchArray.index(["buzz", "data2", "data3 bar", "bunny funny wunny"])
         },
         "expected": [lambda frame: sum([frame['title'].array.score("foo")[0] * 10,
                                         frame['title'].array.score("bar")[0] * 10]),
@@ -150,8 +150,8 @@ edismax_scenarios = {
     },
     "pf_title": {
         "frame": {
-            'title': lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
-            'body': lambda: PostingsArray.index(["buzz", "data2", "data3 bar", "bunny funny wunny"])
+            'title': lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
+            'body': lambda: SearchArray.index(["buzz", "data2", "data3 bar", "bunny funny wunny"])
         },
         "expected": [lambda frame: sum([frame['title'].array.score(["foo", "bar"])[0],
                                         frame['title'].array.score("foo")[0],
@@ -165,9 +165,9 @@ edismax_scenarios = {
     },
     "different_analyzers": {
         "frame": {
-            'title': lambda: PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
-            'body': lambda: PostingsArray.index(["buzz", "data2", "data3 bar", "bunny funny wunny"],
-                                                tokenizer=everythings_a_b_tokenizer)
+            'title': lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
+            'body': lambda: SearchArray.index(["buzz", "data2", "data3 bar", "bunny funny wunny"],
+                                              tokenizer=everythings_a_b_tokenizer)
         },
         "expected": [lambda frame: max(frame['title'].array.score("bar")[0],
                                        frame['body'].array.score("b")[0]),

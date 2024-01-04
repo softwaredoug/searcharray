@@ -7,8 +7,11 @@ SearchArray turns Pandas string columns into a term index. It alows efficient BM
 Think Lucene, but as a Pandas column.
 
 ```python
-In[3]:  df['title_indexed'] = PostingsArray.index(df['title'])
+In[2]:  from searcharray import SearchArray
+
+In[3]:  df['title_indexed'] = SearchArray.index(df['title'])
         np.sort(df['title_indexed'].array.score('Cat'))
+
 Out[3]: array([ 0.        ,  0.        ,  0.        , ..., 15.84568033,
                 15.84568033, 15.84568033])
 ```
@@ -50,7 +53,7 @@ Out[1]:
 Index the text:
 
 ```
-In[2]: df['title_indexed'] = PostingsArray.index(df['title'])
+In[2]: df['title_indexed'] = SearchArray.index(df['title'])
        df
 
 Out[2]:
@@ -141,7 +144,7 @@ And you can pass any tokenizer that matches this signature to index:
 def ws_lowercase_tokenizer(string):
     return string.lower().split()
 
-df['title_indexed'] = PostingsArray.index(df['title'], tokenizer=ws_lowercase_tokenizer)
+df['title_indexed'] = SearchArray.index(df['title'], tokenizer=ws_lowercase_tokenizer)
 ```
 
 Create your own using stemming libraries, or whatever Python functionality you want.

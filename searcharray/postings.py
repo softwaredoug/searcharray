@@ -108,9 +108,9 @@ class PostingsRow:
         return repr(self)
 
     def __eq__(self, other):
-        # Flip to the other implementation if we're comparing to a PostingsArray
+        # Flip to the other implementation if we're comparing to a SearchArray
         # to get a boolean array back
-        if isinstance(other, PostingsArray):
+        if isinstance(other, SearchArray):
             return other == self
         same_postings = isinstance(other, PostingsRow) and self.postings == other.postings
         if same_postings and self.doc_len == other.doc_len:
@@ -175,7 +175,7 @@ class PostingsDtype(ExtensionDtype):
 
     @classmethod
     def construct_array_type(cls):
-        return PostingsArray
+        return SearchArray
 
     def __repr__(self):
         return 'PostingsDtype()'
@@ -294,7 +294,7 @@ def _row_to_postings_row(doc_id, row, doc_len, term_dict, posns: PosnBitArray):
     return result
 
 
-class PostingsArray(ExtensionArray):
+class SearchArray(ExtensionArray):
     """An array of tokenized text (PostingsRows)."""
 
     dtype = PostingsDtype()
@@ -337,7 +337,7 @@ class PostingsArray(ExtensionArray):
 
     @classmethod
     def _from_sequence(cls, scalars, dtype=None, copy=False):
-        """Construct a new PostingsArray from a sequence of scalars (PostingRow or convertible into)."""
+        """Construct a new SearchArray from a sequence of scalars (PostingRow or convertible into)."""
         if dtype is not None:
             if not isinstance(dtype, PostingsDtype):
                 return scalars
@@ -377,7 +377,7 @@ class PostingsArray(ExtensionArray):
             # Construct a sliced view of this array
             sliced_tfs = self.term_mat.slice(key)
             sliced_posns = self.posns
-            arr = PostingsArray([], tokenizer=self.tokenizer)
+            arr = SearchArray([], tokenizer=self.tokenizer)
             arr.term_mat = sliced_tfs
             arr.doc_lens = self.doc_lens[key]
             arr.posns = sliced_posns
@@ -392,13 +392,13 @@ class PostingsArray(ExtensionArray):
             value = value.values
         if isinstance(value, pd.DataFrame):
             value = value.values.flatten()
-        if isinstance(value, PostingsArray):
+        if isinstance(value, SearchArray):
             value = value.to_numpy()
         if isinstance(value, list):
             value = np.asarray(value, dtype=object)
 
         if not isinstance(value, np.ndarray) and not self.dtype.valid_value(value):
-            raise ValueError(f"Cannot set non-object array to PostingsArray -- you passed type:{type(value)} -- {value}")
+            raise ValueError(f"Cannot set non-object array to SearchArray -- you passed type:{type(value)} -- {value}")
 
         # Cant set a single value to an array
         if isinstance(key, numbers.Integral) and isinstance(value, np.ndarray):
@@ -480,7 +480,7 @@ class PostingsArray(ExtensionArray):
             return NotImplemented
 
         # When other is an ExtensionArray
-        if isinstance(other, PostingsArray):
+        if isinstance(other, SearchArray):
             if len(self) != len(other):
                 return False
             elif len(other) == 0:
@@ -496,8 +496,8 @@ class PostingsArray(ExtensionArray):
 
         # When other is a scalar value
         elif isinstance(other, PostingsRow):
-            other = PostingsArray([other], tokenizer=self.tokenizer)
-            warnings.warn("Comparing a scalar value to a PostingsArray. This is slow.")
+            other = SearchArray([other], tokenizer=self.tokenizer)
+            warnings.warn("Comparing a scalar value to a SearchArray. This is slow.")
             return np.array(self[:]) == np.array(other[:])
 
         # When other is a sequence but not an ExtensionArray
@@ -508,7 +508,7 @@ class PostingsArray(ExtensionArray):
             elif len(other) == 0:
                 return np.array([], dtype=bool)
             # We actually don't know how it was tokenized
-            other = PostingsArray(other, tokenizer=self.tokenizer)
+            other = SearchArray(other, tokenizer=self.tokenizer)
             return np.array(self[:]) == np.array(other[:])
 
         # Return False where 'other' is neither the same length nor a scalar
@@ -535,7 +535,7 @@ class PostingsArray(ExtensionArray):
             # on the subsequent assignment lines
             # However, this case tends to be the exception for
             # most dataframe operations
-            taken = PostingsArray([fill_value] * len(result_indices))
+            taken = SearchArray([fill_value] * len(result_indices))
             taken[~to_fill_mask] = self[result_indices[~to_fill_mask]].copy()
 
             return taken
@@ -544,7 +544,7 @@ class PostingsArray(ExtensionArray):
             return taken
 
     def copy(self):
-        postings_arr = PostingsArray([], tokenizer=self.tokenizer)
+        postings_arr = SearchArray([], tokenizer=self.tokenizer)
         postings_arr.doc_lens = self.doc_lens.copy()
         postings_arr.term_mat = self.term_mat.copy()
         postings_arr.posns = self.posns
@@ -559,7 +559,7 @@ class PostingsArray(ExtensionArray):
     @classmethod
     def _concat_same_type(cls, to_concat):
         concatenated_data = np.concatenate([ea[:] for ea in to_concat])
-        return PostingsArray(concatenated_data, tokenizer=to_concat[0].tokenizer)
+        return SearchArray(concatenated_data, tokenizer=to_concat[0].tokenizer)
 
     @classmethod
     def _from_factorized(cls, values, original):

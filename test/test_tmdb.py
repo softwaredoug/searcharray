@@ -5,7 +5,7 @@ import json
 import pandas as pd
 import numpy as np
 import sys
-from searcharray.postings import PostingsArray
+from searcharray.postings import SearchArray
 from test_utils import Profiler, profile_enabled
 
 
@@ -38,10 +38,10 @@ def tmdb_data(tmdb_raw_data):
     assert len(ids) == len(titles) == len(overviews)
 
     df = pd.DataFrame({'title': titles, 'overview': overviews, 'doc_id': ids}, index=ids)
-    indexed = PostingsArray.index(df['title'])
+    indexed = SearchArray.index(df['title'])
     df['title_tokens'] = indexed
 
-    indexed = PostingsArray.index(df['overview'])
+    indexed = SearchArray.index(df['overview'])
     df['overview_tokens'] = indexed
     return df
 
@@ -67,7 +67,7 @@ def test_tokenize_tmdb(tmdb_raw_data):
     # Create tokenized versions of each
     start = perf_counter()
     print("Indexing title...")
-    indexed = PostingsArray.index(df['title'])
+    indexed = SearchArray.index(df['title'])
     stop = perf_counter()
     df['title_tokens'] = indexed
     print(f"Memory usage: {indexed.memory_usage()}")
@@ -75,7 +75,7 @@ def test_tokenize_tmdb(tmdb_raw_data):
 
     start = perf_counter()
     print("Indexing overview...")
-    indexed = PostingsArray.index(df['overview'])
+    indexed = SearchArray.index(df['overview'])
     stop = perf_counter()
     df['overview_tokens'] = indexed
     print(f"Memory usage: {indexed.memory_usage()}")
@@ -123,7 +123,7 @@ def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 def test_index_benchmark(benchmark, tmdb_data):
     prof = Profiler(benchmark)
-    results = prof.run(PostingsArray.index, tmdb_data['overview'])
+    results = prof.run(SearchArray.index, tmdb_data['overview'])
     assert len(results) == len(tmdb_data)
 
 
@@ -181,7 +181,7 @@ def test_gather_results(benchmark, tmdb_data):
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 def test_eq_benchmark(benchmark, tmdb_data):
     prof = Profiler(benchmark)
-    idx_again = PostingsArray.index(tmdb_data['overview'])
+    idx_again = SearchArray.index(tmdb_data['overview'])
     compare_amount = 10000
     results = prof.run(tmdb_data['overview_tokens'][:compare_amount].array.__eq__, idx_again[:compare_amount])
     assert np.sum(results) == compare_amount

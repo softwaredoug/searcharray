@@ -4,7 +4,7 @@ import pathlib
 import requests
 import string
 from time import perf_counter
-from searcharray.postings import PostingsArray
+from searcharray import SearchArray
 from test_utils import Profiler, profile_enabled
 
 
@@ -60,10 +60,10 @@ def msmarco100k():
                     for token in split]
 
         print("Indexing...")
-        msmarco["title_ws"] = PostingsArray.index(msmarco["title"])
+        msmarco["title_ws"] = SearchArray.index(msmarco["title"])
         print(f"Indexed in {perf_counter() - start:.4f}s")
         print("Indexing...")
-        msmarco["body_ws"] = PostingsArray.index(msmarco["body"])
+        msmarco["body_ws"] = SearchArray.index(msmarco["body"])
         print(f"Indexed in {perf_counter() - start:.4f}s")
 
         # Save as pickle
@@ -94,10 +94,10 @@ def msmarco():
                     for token in split]
 
         print("Indexing...")
-        msmarco["title_ws"] = PostingsArray.index(msmarco["title"])
+        msmarco["title_ws"] = SearchArray.index(msmarco["title"])
         print(f"Indexed title in {perf_counter() - start:.4f}s")
         print("Indexing...")
-        msmarco["body_ws"] = PostingsArray.index(msmarco["body"])
+        msmarco["body_ws"] = SearchArray.index(msmarco["body"])
         print(f"Indexed body in {perf_counter() - start:.4f}s")
         msmarco.to_pickle("data/msmarco.pkl")
         print(f"Saved in {perf_counter() - start:.4f}s")

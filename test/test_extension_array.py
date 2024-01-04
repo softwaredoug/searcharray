@@ -2,7 +2,8 @@ from pandas.tests.extension import base
 import pandas as pd
 import pytest
 
-from searcharray.postings import PostingsDtype, PostingsArray, PostingsRow
+from searcharray.postings import PostingsDtype, PostingsRow
+from searcharray import SearchArray
 
 
 @pytest.fixture
@@ -13,13 +14,13 @@ def dtype():
 @pytest.fixture
 def data():
     """Return a fixture of your data here that returns an instance of your ExtensionArray."""
-    return PostingsArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25)
+    return SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25)
 
 
 @pytest.fixture
 def data_missing():
     """Return a fixture of your data with missing values here."""
-    return PostingsArray.index(["", "foo bar baz"])
+    return SearchArray.index(["", "foo bar baz"])
 
 
 @pytest.fixture
@@ -69,13 +70,13 @@ def data_for_sorting():
     This should be three items [B, C, A] with
     A < B < C
     """
-    arr = PostingsArray.index(["abba mmma dabbb", "abba abba aska", "caa cata"])
+    arr = SearchArray.index(["abba mmma dabbb", "abba abba aska", "caa cata"])
     return arr
 
 
 @pytest.fixture
 def data_missing_for_sorting():
-    arr = PostingsArray.index(["abba mmma dabbb", "", "caa cata"])
+    arr = SearchArray.index(["abba mmma dabbb", "", "caa cata"])
     return arr
 
 
@@ -87,10 +88,10 @@ def data_for_grouping():
 
     Where A < B < C and NA is missing
     """
-    arr = PostingsArray.index(["abba mmma dabbb", "abba mmma dabbb",
-                               "", "",
-                               "caa cata", "caa cata",
-                               "abba mmma dabbb", "abba abba aska"])
+    arr = SearchArray.index(["abba mmma dabbb", "abba mmma dabbb",
+                             "", "",
+                             "caa cata", "caa cata",
+                             "abba mmma dabbb", "abba abba aska"])
     return arr
 
 
