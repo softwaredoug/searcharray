@@ -53,7 +53,7 @@ profile:
 	snakeviz ./.benchmarks/last.prof
 
 
-build: deps test
+build: deps test lint
 	@echo "Building..."
 	python3 -m build --sdist
 	python3 -m build --wheel
