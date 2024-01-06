@@ -16,6 +16,12 @@ Out[3]: array([ 0.        ,  0.        ,  0.        , ..., 15.84568033,
                 15.84568033, 15.84568033])
 ```
 
+## Docs | Guide
+
+SearchArray is documented in these notebooks:
+
+[SearchArray Guide](https://colab.research.google.com/drive/1gmgVz53fDPTJakUHb6Mttevqry7gKHLM) | [SearchArray Offline Experiment](https://colab.research.google.com/drive/1w_Ajn5rHzcISKhdCuPhhVFav3zrvKWn1)
+
 ## Installation
 
 ```
