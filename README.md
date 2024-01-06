@@ -182,4 +182,5 @@ We focus on the lexical, ie "BM25-ish" and adjacent problems. There are other gr
 * Always more efficient
 * Support tokenizers with overlapping positions (ie synonyms, etc)
 * Improve support for phrase slop
+* Helper functions (like [this start at edismax](https://github.com/softwaredoug/searcharray/blob/main/searcharray/solr.py) that help recreate Solr / Elasticsearch lexical queries)
 * Fuzzy search
