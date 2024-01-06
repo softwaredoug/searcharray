@@ -30,11 +30,11 @@ pip install searcharray
 
 ## Motivation
 
-Why do we treat Lucene-based, and other lexical search systems, like a special snowflake in the data stack? Many ML practitioners reach for a vector search solution, then realize they need to sprinkle in some degree of traditional lexical matching for the best solution. Indeed, in search, [hybrid search](https://www.pinecone.io/learn/hybrid-search-intro/) of vector+lexical solutions has shown to be most performant.
+To simplify lexical search in the Python data stack.
 
-Let's break down the esoteric mystique of these systems, and tame them, so they just behave like other parts of the data stack.
+Many ML / AI practitioners reach for a vector search solution, then realize they need to sprinkle in some degree of traditional lexical matching for the best solution. Let's break down the esoteric mystique of these systems, and tame them, so they just behave like other parts of the data stack.
 
-SearchArray creates a Pandas-centric way of creating and using a search index as just part of a Pandas array. In a sense, it builds a search engine in Pandas - to allow anyone to prototype ideas, without external systems. 
+SearchArray creates a Pandas-centric way of creating and using a search index as just part of a Pandas array. In a sense, it builds a search engine in Pandas - to allow anyone to prototype ideas and perform reranking, without external systems. 
 
 You can see a full end-to-end search relevance experiment in this [colab notebook](https://colab.research.google.com/drive/1w_Ajn5rHzcISKhdCuPhhVFav3zrvKWn1?usp=sharing)
 
@@ -118,7 +118,7 @@ The overall goals are to recreate a lot of the lexical features (term / phrase s
 
 We want the index to be as memory efficient and fast at searching as possible. We want using it to have a minimal overhead.
 
-We want you to be able to work with a reasonable dataset (1M-10M docs) relatively efficiently.
+We want you to be able to work with a reasonable dataset (100X-1M docs) relatively efficiently for offline evaluation. And 1000s for fast reranking in a service.
 
 ### Experimentation, reranking, functionality over scalability
 
@@ -126,15 +126,15 @@ Instead of building for 'big data' our goal is to build for for *small-data*. Th
 
 To this end, the applications of searcharray will tend to be focused on experimentation and top N candidate reranking. For experimentation, we want any ideas expressed in Pandas to have a somewhat clear path / "contract" in how they'd be implemented in a classical lexical search engine. For reranking, we want to load some top N results from a base system and be able to modify them.
 
-### Make lexical search not a special snowflake in the ML stack
+### Make lexical search compatible with the data stack
 
-We know in search systems [hybrid search](https://www.pinecone.io/learn/hybrid-search-intro/) techniques dominate. Yet often its cast in terms of a giant, weird, big data lexical search engine that looks odd to most data scientists being joined with a vector database. We want lexical search to be more approachable to data scientists and ML engineers building these systems.
+We know in search, RAG, and other retrieval problems,s [hybrid search](https://www.pinecone.io/learn/hybrid-search-intro/) techniques dominate. Yet often its cast in terms of a giant, weird, big data lexical search engine that looks odd to most data scientists being joined with a vector database. We want lexical search to be more approachable to data scientists and ML engineers building these systems.
 
 ## Non-goals
 
 ### You need to bring your own tokenization
 
-Currently tokenization (ie text analysis) is out of scope. There's enough Python libraries [that do this really well](https://github.com/snowballstem). Even exceeding what Lucene can do.
+Python libraries [already do tokenization really well](https://github.com/snowballstem). Even exceeding what Lucene can do... giving you the ability to simulate and/or exceed the abilities of Lucene's tokenization.
 
 In SearchArray, a tokenizer is a function takes a string and emits a series of tokens. IE dumb, default whitespace tokenization:
 
@@ -144,7 +144,6 @@ def ws_tokenizer(string):
 ```
 
 And you can pass any tokenizer that matches this signature to index:
-
 
 ```python
 def ws_lowercase_tokenizer(string):
@@ -172,10 +171,13 @@ Then multiply by BM25 if you want:
 df['score'] = df['title_indexed'].score('Cat') * df['hrs_into_past']
 ```
 
+### Vector search
+
+We focus on the lexical, ie "BM25-ish" and adjacent problems. There are other great tools for vector search out there.
+
 ## TODOs / Future Work / Known issues
 
 * Always more efficient
 * Support tokenizers with overlapping positions (ie synonyms, etc)
-* Add support for loading global term stats (ie doc freq) from external sources for more accurate representation
-* Add minimum should match to each function
-* Dumb vector search? Guessing other tools do this at small scale well enough.
+* Improve support for phrase slop
+* Fuzzy search
