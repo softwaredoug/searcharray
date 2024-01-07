@@ -129,10 +129,14 @@ def trim_phrase_search(encoded_posns: List[np.ndarray],
     shortest_keys = None
     shortest_idx = None
     min_len = 1e100
+    max_len = 0
     for idx, enc_posn in enumerate(encoded_posns):
         if len(enc_posn) < min_len:
             shortest_keys = encoder.keys(enc_posn)
             shortest_idx = idx
+            min_len = len(enc_posn)
+        if len(enc_posn) > max_len:
+            max_len = len(enc_posn)
 
     if shortest_keys is None:
         return encoded_posns
@@ -140,8 +144,9 @@ def trim_phrase_search(encoded_posns: List[np.ndarray],
     for enc_posn_idx in range(len(encoded_posns)):
         if enc_posn_idx == shortest_idx:
             continue
-        encoded_posns[enc_posn_idx] = encoder.slice(encoded_posns[enc_posn_idx],
-                                                    shortest_keys)
+        if len(encoded_posns[enc_posn_idx]) > (10 * min_len):
+            encoded_posns[enc_posn_idx] = encoder.slice(encoded_posns[enc_posn_idx],
+                                                        shortest_keys)
 
     return encoded_posns
 
@@ -150,6 +155,10 @@ def compute_phrase_freqs(encoded_posns: List[np.ndarray],
                          phrase_freqs: np.ndarray) -> np.ndarray:
     if len(encoded_posns) < 2:
         raise ValueError("phrase must have at least two terms")
+
+    # Trim long phrases by searching the rarest terms first
+    if len(encoded_posns) > 3:
+        encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
 
     mask = np.ones(len(phrase_freqs), dtype=bool)
     lhs = encoded_posns[0]
