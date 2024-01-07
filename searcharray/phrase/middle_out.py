@@ -359,8 +359,7 @@ class PosnBitArray:
 
     def docfreq(self, term_id: int) -> np.uint32:
         encoded = self.encoded_term_posns[term_id]
-        doc_ids = encoder.keys(encoded)
-        return np.unique(doc_ids).size
+        return np.uint32(encoder.keys_unique(encoded).size)
 
     def insert(self, key, term_ids_to_posns, is_encoded=False):
         new_posns = PosnBitArrayBuilder()
