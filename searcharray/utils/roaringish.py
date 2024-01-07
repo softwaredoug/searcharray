@@ -40,6 +40,10 @@ def n_msb_mask(n: np.uint64) -> np.uint64:
     return np.uint64(~(np.uint64(_1 << (_64 - n))) + _1)
 
 
+def sorted_unique(arr: np.ndarray) -> np.ndarray:
+    return snp.intersect(arr, arr, duplicates=snp.DROP)
+
+
 class RoaringishEncoder:
     """An encoder for key->integer sets as a numpy array.
 
@@ -131,6 +135,12 @@ class RoaringishEncoder:
     def keys(self, encoded: np.ndarray) -> np.ndarray:
         """Return keys from encoded."""
         return (encoded & self.key_mask) >> (_64 - self.key_bits)
+
+    def keys_unique(self, encoded: np.ndarray) -> np.ndarray:
+        """Return keys from encoded."""
+        keys = self.keys(encoded)
+        intersected = sorted_unique(keys)
+        return intersected
 
     def payload_msb(self, encoded: np.ndarray) -> np.ndarray:
         """Return payload MSBs from encoded."""
