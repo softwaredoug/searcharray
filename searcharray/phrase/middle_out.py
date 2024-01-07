@@ -121,11 +121,36 @@ def bigram_freqs(lhs: np.ndarray, rhs: np.ndarray, phrase_freqs: np.ndarray) -> 
     return phrase_freqs, rhs_next
 
 
-def compute_phrase_freqs(encoded_posns: List[np.ndarray], phrase_freqs: np.ndarray) -> np.ndarray:
-    """Count phrase matches of all encoded posns."""
+def trim_phrase_search(encoded_posns: List[np.ndarray],
+                       phrase_freqs: np.ndarray) -> List[np.ndarray]:
+    """Trim long phrases by searching the rarest terms first."""
+
+    # Start with rarest term
+    shortest_keys = None
+    shortest_idx = None
+    min_len = 1e100
+    for idx, enc_posn in enumerate(encoded_posns):
+        if len(enc_posn) < min_len:
+            shortest_keys = encoder.keys(enc_posn)
+            shortest_idx = idx
+
+    if shortest_keys is None:
+        return encoded_posns
+
+    for enc_posn_idx in range(len(encoded_posns)):
+        if enc_posn_idx == shortest_idx:
+            continue
+        encoded_posns[enc_posn_idx] = encoder.slice(encoded_posns[enc_posn_idx],
+                                                    shortest_keys)
+
+    return encoded_posns
+
+
+def compute_phrase_freqs(encoded_posns: List[np.ndarray],
+                         phrase_freqs: np.ndarray) -> np.ndarray:
     if len(encoded_posns) < 2:
         raise ValueError("phrase must have at least two terms")
-    # Iterate bigrams
+
     mask = np.ones(len(phrase_freqs), dtype=bool)
     lhs = encoded_posns[0]
     for rhs in encoded_posns[1:]:
@@ -331,6 +356,11 @@ class PosnBitArray:
 
         term_freqs = np.add.reduceat(bit_counts, change_indices)
         return doc_ids, term_freqs
+
+    def docfreq(self, term_id: int) -> np.uint32:
+        encoded = self.encoded_term_posns[term_id]
+        doc_ids = encoder.keys(encoded)
+        return np.unique(doc_ids).size
 
     def insert(self, key, term_ids_to_posns, is_encoded=False):
         new_posns = PosnBitArrayBuilder()

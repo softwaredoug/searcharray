@@ -151,6 +151,12 @@ scenarios = {
         "phrase": ["foo", "bar"],
         "expected": [1, 0, 0, 0, 2] * 25
     },
+    "long_phrase": {
+        "docs": lambda: SearchArray.index(["foo la ma bar bar baz", "data2 ma ta", "data3 bar ma", "bunny funny wunny",
+                                           "la ma ta wa ga ao a b c d e f g a be ae i la ma ta wa ga ao a foo bar foo bar"] * 25),
+        "phrase": ["la", "ma", "ta", "wa", "ga", "ao", "a"],
+        "expected": [0, 0, 0, 0, 2] * 25
+    },
     "many_phrases": {
         "docs": lambda: SearchArray.index(["foo bar bar baz "
                                            + " ".join([" dummy foo bar baz"] * 100),
@@ -170,7 +176,7 @@ scenarios = {
 def test_phrase_api(docs, phrase, expected):
     docs = docs()
     docs_before = docs.copy()
-    term_freqs = docs.term_freq(phrase)
+    term_freqs = docs.termfreqs(phrase)
     expected_matches = np.array(expected) > 0
     matches = docs.match(phrase)
     assert (term_freqs == expected).all()

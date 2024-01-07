@@ -100,7 +100,7 @@ tmdb_term_matches = [
 @pytest.mark.parametrize("term,expected_matches", tmdb_term_matches)
 def test_term_freqs(tmdb_data, term, expected_matches):
     sliced = tmdb_data[tmdb_data['doc_id'].isin(expected_matches)]
-    term_freqs = sliced['title_tokens'].array.term_freq(term)
+    term_freqs = sliced['title_tokens'].array.termfreqs(term)
     assert np.all(term_freqs == 1)
 
 
@@ -153,7 +153,7 @@ def test_repr_html_benchmark(benchmark, tmdb_data):
 @pytest.mark.parametrize("term", ['the', 'cat', 'star', 'skywalker'])
 def test_term_freq(benchmark, tmdb_data, term):
     prof = Profiler(benchmark)
-    results = prof.run(tmdb_data['overview_tokens'].array.term_freq, term)
+    results = prof.run(tmdb_data['overview_tokens'].array.termfreqs, term)
     assert len(results) > 0
 
 

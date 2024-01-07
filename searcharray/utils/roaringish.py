@@ -32,6 +32,9 @@ _0 = np.uint64(0)
 _neg1 = np.int64(-1)
 
 
+_algorithm = snp.GALLOPING_SEARCH
+
+
 def n_msb_mask(n: np.uint64) -> np.uint64:
     """Return the n most significant bits of num."""
     return np.uint64(~(np.uint64(_1 << (_64 - n))) + _1)
@@ -156,7 +159,8 @@ class RoaringishEncoder:
         # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
         _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits,
                                               rhs_shifted,
-                                              indices=True)
+                                              indices=True,
+                                              algorithm=_algorithm)
         return lhs[lhs_idx], rhs_int[rhs_idx]
 
     def intersect(self, lhs: np.ndarray, rhs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -170,7 +174,8 @@ class RoaringishEncoder:
         # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
         _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits,
                                               rhs >> self.payload_lsb_bits,
-                                              indices=True)
+                                              indices=True,
+                                              algorithm=_algorithm)
         return lhs[lhs_idx], rhs[rhs_idx]
 
     def slice(self, encoded: np.ndarray, keys: np.ndarray) -> np.ndarray:
@@ -179,7 +184,8 @@ class RoaringishEncoder:
         assert len(encoded.shape) == 1
         encoded_keys = encoded.view(np.uint64) >> (_64 - self.key_bits)
         _, (idx_docs, idx_enc) = snp.intersect(keys, encoded_keys, indices=True,
-                                               duplicates=snp.KEEP_MAX_N)
+                                               duplicates=snp.KEEP_MAX_N,
+                                               algorithm=_algorithm)
 
         return encoded[idx_enc]
 

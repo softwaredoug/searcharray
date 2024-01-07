@@ -22,19 +22,19 @@ def test_match_missing_term(data):
 
 
 def test_term_freqs(data):
-    matches = data.term_freq("bar")
+    matches = data.termfreqs("bar")
     assert (matches == [2, 0, 1, 0] * 25).all()
 
 
 def test_doc_freq(data):
-    doc_freq = data.doc_freq("bar")
+    doc_freq = data.docfreq("bar")
     assert doc_freq == (2 * 25)
-    doc_freq = data.doc_freq("foo")
+    doc_freq = data.docfreq("foo")
     assert doc_freq == 25
 
 
 def test_doc_lengths(data):
-    doc_lengths = data.doc_lengths()
+    doc_lengths = data.doclengths()
     assert doc_lengths.shape == (100,)
     assert (doc_lengths == [4, 1, 2, 3] * 25).all()
     assert data.avg_doc_length == 2.5

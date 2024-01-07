@@ -581,7 +581,7 @@ class SearchArray(ExtensionArray):
     # ***********************************************************
     # Search functionality
     # ***********************************************************
-    def term_freq(self, token: Union[List[str], str]) -> np.ndarray:
+    def termfreqs(self, token: Union[List[str], str]) -> np.ndarray:
         token = self._check_token_arg(token)
         if isinstance(token, list):
             return self.phrase_freq(token)
@@ -597,15 +597,16 @@ class SearchArray(ExtensionArray):
         except TermMissingError:
             return np.zeros(len(self), dtype=int)
 
-    def doc_freq(self, token: str) -> int:
+    def docfreq(self, token: str) -> int:
         if not isinstance(token, str):
             raise TypeError("Expected a string")
         # Count number of rows where the term appears
-        term_freq = self.term_freq(token)
-        gt_0 = term_freq > 0
-        return np.sum(gt_0).astype(int)
+        try:
+            return self.posns.docfreq(self.term_dict.get_term_id(token))
+        except TermMissingError:
+            return 0
 
-    def doc_lengths(self) -> np.ndarray:
+    def doclengths(self) -> np.ndarray:
         return self.doc_lens
 
     def match(self, token: Union[List[str], str], slop: int = 1) -> np.ndarray:
@@ -614,7 +615,7 @@ class SearchArray(ExtensionArray):
         if isinstance(token, list):
             term_freq = self.phrase_freq(token)
         else:
-            term_freq = self.term_freq(token)
+            term_freq = self.termfreqs(token)
         return term_freq > 0
 
     def score(self, token: Union[str, List[str]], similarity: Similarity = default_bm25) -> np.ndarray:
@@ -628,11 +629,11 @@ class SearchArray(ExtensionArray):
         # Get term freqs per token
         token = self._check_token_arg(token)
 
-        tfs = self.term_freq(token)
+        tfs = self.termfreqs(token)
         token = self._check_token_arg(token)
         tokens_l = [token] if isinstance(token, str) else token
-        all_dfs = np.asarray([self.doc_freq(token) for token in tokens_l])
-        doc_lens = self.doc_lengths()
+        all_dfs = np.asarray([self.docfreq(token) for token in tokens_l])
+        doc_lens = self.doclengths()
         scores = similarity(term_freqs=tfs, doc_freqs=all_dfs,
                             doc_lens=doc_lens, avg_doc_lens=self.avg_doc_length,
                             num_docs=len(self))
