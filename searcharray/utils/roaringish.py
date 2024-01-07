@@ -74,9 +74,10 @@ class RoaringishEncoder:
             assert self.key_mask == DEFAULT_KEY_MASK
             assert self.payload_msb_mask == DEFAULT_PAYLOAD_MSB_MASK
             assert self.payload_lsb_mask == DEFAULT_PAYLOAD_LSB_MASK
+        self.max_posn = np.uint64(2**self.payload_lsb_bits - 1)
 
     def _validate_payload(self, payload: np.ndarray):
-        if not np.all(payload < 2**self.payload_lsb_bits):
+        if np.any(payload > self.max_posn):
             raise ValueError(f"Positions must be less than {2**self.payload_lsb_bits}")
 
     def encode(self, payload: np.ndarray, keys: Optional[np.ndarray] = None) -> np.ndarray:
@@ -99,7 +100,8 @@ class RoaringishEncoder:
         values = payload % self.payload_lsb_bits   # Value to encode
 
         change_indices = np.nonzero(np.diff(cols))[0] + 1
-        change_indices = np.insert(change_indices, 0, 0)
+        # change_indices = np.insert(change_indices, 0, 0)
+        change_indices = np.concatenate([[0], change_indices])
 
         # 0 as a position, goes in bit 1,
         # 1 as a position, goes in bit 2, etc

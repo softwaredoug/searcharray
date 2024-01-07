@@ -205,10 +205,6 @@ def _build_index_from_dict(postings):
     doc_lens = []
     avg_doc_length = 0
     num_postings = 0
-    add_term_time = 0
-    set_time = 0
-    get_posns_time = 0
-    set_posns_time = 0
     posns = PosnBitArrayBuilder()
     posns_enc = PosnBitArrayAlreadyEncBuilder()
 
@@ -235,34 +231,14 @@ def _build_index_from_dict(postings):
         avg_doc_length += doc_lens[-1]
         terms = []
         for token, term_freq in tokenized.terms():
-            add_term_start = perf_counter()
             term_id = term_dict.add_term(token)
-            add_term_time += perf_counter() - add_term_start
-
-            set_time_start = perf_counter()
             terms.append(term_id)
-            set_time += perf_counter() - set_time_start
-
-            get_posns_start = perf_counter()
             positions = tokenized.positions(token)
-            get_posns_time += perf_counter() - get_posns_start
-
-            set_posns_start = perf_counter()
             if positions is not None:
                 posns.add_posns(doc_id, term_id, positions)
 
-            set_posns_time += perf_counter() - set_posns_start
-
-        set_time_start = perf_counter()
         term_doc.append(terms)
-        set_time += perf_counter() - set_time_start
 
-        if doc_id % 1000 == 0:
-            logger.debug(f"Indexed {doc_id} documents in {perf_counter() - start} seconds")
-            logger.debug(f"   add time: {add_term_time}")
-            logger.debug(f"   set time: {set_time}")
-            logger.debug(f"   get posns time: {get_posns_time}")
-            logger.debug(f"   set posns time: {set_posns_time}")
         posns.ensure_capacity(doc_id)
         num_postings += 1
 
