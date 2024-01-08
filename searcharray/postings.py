@@ -299,12 +299,13 @@ class SearchArray(ExtensionArray):
                     yield Terms({})
                 else:
                     token_stream = tokenizer(doc)
+                    token_stream_len = len(token_stream)
                     term_freqs = Counter(token_stream)
                     positions = defaultdict(list)
-                    for posn in range(len(token_stream)):
+                    for posn in range(token_stream_len):
                         positions[token_stream[posn]].append(posn)
                     yield Terms(term_freqs,
-                                doc_len=len(token_stream),
+                                doc_len=token_stream_len,
                                 posns=positions)
 
         return cls(tokenized_docs(array), tokenizer)
