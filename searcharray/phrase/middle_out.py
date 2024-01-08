@@ -12,6 +12,7 @@ from typing import List, Tuple, Dict, Union, cast, Optional
 from searcharray.utils.roaringish import RoaringishEncoder, convert_keys
 import numbers
 import logging
+from collections import defaultdict
 
 from searcharray.utils.bitcount import bit_count64
 
@@ -174,20 +175,14 @@ def compute_phrase_freqs(encoded_posns: List[np.ndarray],
 class PosnBitArrayBuilder:
 
     def __init__(self):
-        self.term_posns = {}
-        self.term_posn_doc_ids = {}
+        self.term_posns = defaultdict(list)
+        self.term_posn_doc_ids = defaultdict(list)
         self.max_doc_id = 0
 
-    def add_posns(self, doc_id: int, term_id: int, posns):
-        if len(posns.shape) != 1:
-            raise ValueError("posns must be a 1D array")
-        if term_id not in self.term_posns:
-            self.term_posns[term_id] = []
-            self.term_posn_doc_ids[term_id] = []
-        doc_ids = [doc_id] * len(posns)
-        self.term_posns[term_id].extend(posns.tolist())
+    def add_posns(self, doc_id: int, term_id: int, posns: np.ndarray):
+        doc_ids = [doc_id] * posns.shape[0]
+        self.term_posns[term_id].append(posns)
         self.term_posn_doc_ids[term_id].extend(doc_ids)
-        self.max_doc_id = max(self.max_doc_id, doc_id)
 
     def ensure_capacity(self, doc_id):
         self.max_doc_id = max(self.max_doc_id, doc_id)
@@ -198,7 +193,7 @@ class PosnBitArrayBuilder:
             if len(posns) == 0:
                 posns = np.asarray([], dtype=np.uint32).flatten()
             elif isinstance(posns, list):
-                posns_arr = np.asarray(posns, dtype=np.uint32)
+                posns_arr = np.concatenate(posns).astype(np.uint32)
                 assert len(posns_arr.shape) == 1
                 posns = posns_arr
             doc_ids = self.term_posn_doc_ids[term_id]
