@@ -622,7 +622,7 @@ class SearchArray(ExtensionArray):
         posns = self.posns.positions(term_id, key=key)
         return posns
 
-    def and_query(self, tokens: List[str] | List[List[str]]) -> np.ndarray:
+    def and_query(self, tokens: Union[List[str], List[List[str]]]) -> np.ndarray:
         """Return a mask on the postings array indicating which elements contain all terms."""
         masks = [self.match(term) for term in tokens]
         mask = np.ones(len(self), dtype=bool)
@@ -630,7 +630,7 @@ class SearchArray(ExtensionArray):
             mask = mask & curr_mask
         return mask
 
-    def or_query(self, tokens: List[str] | List[List[str]], min_should_match: int = 1) -> np.ndarray:
+    def or_query(self, tokens: Union[List[str], List[List[str]]], min_should_match: int = 1) -> np.ndarray:
         """Return a mask on the postings array indicating which elements contain all terms."""
         masks = [self.match(term) for term in tokens]
         mask = np.sum(masks, axis=0) >= min_should_match
