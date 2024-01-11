@@ -75,7 +75,7 @@ class Terms:
         if term is None:
             posns = self.posns.items()
         else:
-            posns = np.array(self.posns[term])
+            posns = self.posns[term]
         return posns
 
     def raw_positions(self, term_dict, term=None):

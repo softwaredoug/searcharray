@@ -179,9 +179,9 @@ class PosnBitArrayBuilder:
         self.term_posn_doc_ids = defaultdict(list)
         self.max_doc_id = 0
 
-    def add_posns(self, doc_id: int, term_id: int, posns: np.ndarray):
-        doc_ids = [doc_id] * posns.shape[0]
-        self.term_posns[term_id].append(posns)
+    def add_posns(self, doc_id: int, term_id: int, posns: List[int]):
+        doc_ids = [doc_id] * len(posns)
+        self.term_posns[term_id].extend(posns)
         self.term_posn_doc_ids[term_id].extend(doc_ids)
 
     def ensure_capacity(self, doc_id):
@@ -193,8 +193,7 @@ class PosnBitArrayBuilder:
             if len(posns) == 0:
                 posns = np.asarray([], dtype=np.uint32).flatten()
             elif isinstance(posns, list):
-                posns_arr = np.concatenate(posns).astype(np.uint32)
-                assert len(posns_arr.shape) == 1
+                posns_arr = np.asarray(posns, dtype=np.uint32).flatten()
                 posns = posns_arr
             doc_ids = self.term_posn_doc_ids[term_id]
             if isinstance(doc_ids, list):
