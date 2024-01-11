@@ -17,7 +17,7 @@ from searcharray.utils.row_viewable_matrix import RowViewableMatrix
 from searcharray.term_dict import TermDict, TermMissingError
 from searcharray.phrase.scan_merge import scan_merge_ins
 from searcharray.phrase.posn_diffs import compute_phrase_freqs
-from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder, PosnBitArray
+from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder, PosnBitArray, MAX_POSN
 from searcharray.utils.mat_set import SparseMatSetBuilder
 from searcharray.similarity import Similarity, default_bm25
 
@@ -300,6 +300,8 @@ class SearchArray(ExtensionArray):
                 else:
                     token_stream = tokenizer(doc)
                     token_stream_len = len(token_stream)
+                    if token_stream_len > MAX_POSN:
+                        raise ValueError(f"Document {doc_id} has too many tokens ({token_stream_len} > {MAX_POSN})")
                     term_freqs = Counter(token_stream)
                     positions = defaultdict(list)
                     for posn in range(token_stream_len):

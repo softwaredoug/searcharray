@@ -76,7 +76,8 @@ class RoaringishEncoder:
             assert self.payload_lsb_mask == DEFAULT_PAYLOAD_LSB_MASK
         self.max_payload = np.uint64(2**self.payload_lsb_bits - 1)
 
-    def _validate_payload(self, payload: np.ndarray):
+    def validate_payload(self, payload: np.ndarray):
+        """Optional validation of payload."""
         if np.any(payload > self.max_payload):
             raise ValueError(f"Positions must be less than {2**self.payload_lsb_bits}")
 
@@ -92,7 +93,6 @@ class RoaringishEncoder:
         positions
 
         """
-        self._validate_payload(payload)
         cols = np.floor_divide(payload, self.payload_lsb_bits, dtype=np.uint64)    # Header of bit to use
         cols = cols << self.payload_msb_bits
         if keys is not None:

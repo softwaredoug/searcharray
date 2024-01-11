@@ -38,6 +38,8 @@ _1 = np.uint64(1)
 _0 = np.uint64(0)
 _neg1 = np.int64(-1)
 
+MAX_POSN = encoder.max_payload
+
 
 def inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
                        phrase_freqs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
