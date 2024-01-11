@@ -45,18 +45,10 @@ class Terms:
         self.posns = None
         self.encoded = encoded
         self.doc_len = doc_len
-
-        if posns is not None:
-            for term, term_posns in posns.items():
-                if not isinstance(term_posns, np.ndarray):
-                    posns[term] = np.array(term_posns)
-                    if len(posns[term].shape) != 1:
-                        raise ValueError("Positions must be a 1D array.")
         self.posns = posns
-        self._validate_posns()
 
     def _validate_posns(self):
-        # Confirm every term in positions also in postings
+        # (For testing/assertions) - Confirm every term in positions also in postings
         if self.posns is None:
             return
         for term in self.posns:
