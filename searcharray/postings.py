@@ -189,7 +189,47 @@ def ws_tokenizer(string):
     return string.split()
 
 
-def _build_index_from_dict(postings):
+def _build_index_from_tokenizer(array, tokenizer):
+    """Build index directly from tokenizing docs."""
+    term_dict = TermDict()
+    term_doc = SparseMatSetBuilder()
+    doc_lens = []
+    avg_doc_length = 0
+    num_postings = 0
+    posns = PosnBitArrayBuilder()
+
+    posns_uninverted_posns = defaultdict(list)
+    posns_uninverted_docs = defaultdict(list)
+    for doc_id, doc in enumerate(array):
+        tokens = tokenizer(doc)
+        if len(tokens) > MAX_POSN:
+            raise ValueError(f"Document {doc_id} has too many tokens ({len(tokens)})")
+        terms = set()
+        for posn, token in enumerate(tokens):
+            term_id = term_dict.add_term(token)
+            terms.add(term_id)
+
+            posns_uninverted_posns[term_id].append(posn)
+            posns_uninverted_docs[term_id].append(doc_id)
+
+        num_postings += 1
+        doc_len = len(tokens)
+        doc_lens.append(doc_len)
+        avg_doc_length += doc_len
+
+        posns.ensure_capacity(doc_id)
+        term_doc.append(terms)
+
+    posns.term_posns = posns_uninverted_posns
+    posns.term_posn_doc_ids = posns_uninverted_docs
+    bit_posns = posns.build()
+
+    avg_doc_length /= num_postings
+
+    return RowViewableMatrix(term_doc.build()), bit_posns, term_dict, avg_doc_length, np.array(doc_lens)
+
+
+def _build_index_from_postings_list(postings):
     """Bulid an index from postings that are already tokenized and point at their term frequencies."""
     start = perf_counter()
     term_dict = TermDict()
@@ -274,10 +314,10 @@ class SearchArray(ExtensionArray):
         self.tokenizer = tokenizer
         self.term_mat, self.posns, \
             self.term_dict, self.avg_doc_length, \
-            self.doc_lens = _build_index_from_dict(postings)
+            self.doc_lens = _build_index_from_postings_list(postings)
 
     @classmethod
-    def index(cls, array, tokenizer=ws_tokenizer):
+    def index(cls, array, tokenizer=ws_tokenizer) -> 'SearchArray':
         """Index an array of strings using tokenizer."""
         # Convert strings to expected scalars (dict -> term freqs)
         if not is_list_like(array):
@@ -285,24 +325,16 @@ class SearchArray(ExtensionArray):
         if not all(isinstance(x, str) or pd.isna(x) for x in array):
             raise TypeError("Expected a list of strings to tokenize")
 
-        def tokenized_docs(docs):
-            for doc_id, doc in enumerate(docs):
-                if pd.isna(doc):
-                    yield Terms({})
-                else:
-                    token_stream = tokenizer(doc)
-                    token_stream_len = len(token_stream)
-                    if token_stream_len > MAX_POSN:
-                        raise ValueError(f"Document {doc_id} has too many tokens ({token_stream_len} > {MAX_POSN})")
-                    term_freqs = Counter(token_stream)
-                    positions = defaultdict(list)
-                    for posn in range(token_stream_len):
-                        positions[token_stream[posn]].append(posn)
-                    yield Terms(term_freqs,
-                                doc_len=token_stream_len,
-                                posns=positions)
+        term_mat, posns, term_dict, avg_doc_length, doc_lens =\
+            _build_index_from_tokenizer(array, tokenizer)
 
-        return cls(tokenized_docs(array), tokenizer)
+        postings = cls([], tokenizer=tokenizer)
+        postings.term_mat = term_mat
+        postings.posns = posns
+        postings.term_dict = term_dict
+        postings.avg_doc_length = avg_doc_length
+        postings.doc_lens = doc_lens
+        return postings
 
     @classmethod
     def _from_sequence(cls, scalars, dtype=None, copy=False):
