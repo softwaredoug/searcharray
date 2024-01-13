@@ -128,6 +128,14 @@ def test_index_benchmark(benchmark, tmdb_data):
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_index_benchmark_1k_random(benchmark, tmdb_data):
+    prof = Profiler(benchmark)
+    thousand_random = np.random.choice(tmdb_data['overview'], size=1000)
+    results = prof.run(SearchArray.index, thousand_random)
+    assert len(results) == 1000
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 def test_copy_benchmark(benchmark, tmdb_data):
     prof = Profiler(benchmark)
     results = prof.run(tmdb_data['overview_tokens'].array.copy)
