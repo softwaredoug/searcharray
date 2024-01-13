@@ -20,7 +20,7 @@ def tmdb_raw_data():
 
 
 @pytest.fixture(scope="session")
-def tmdb_data(tmdb_raw_data):
+def tmdb_pd_data(tmdb_raw_data):
     ids = tmdb_raw_data.keys()
     titles = []
     overviews = []
@@ -36,8 +36,13 @@ def tmdb_data(tmdb_raw_data):
             overviews.append('')
 
     assert len(ids) == len(titles) == len(overviews)
-
     df = pd.DataFrame({'title': titles, 'overview': overviews, 'doc_id': ids}, index=ids)
+    return df
+
+
+@pytest.fixture(scope="session")
+def tmdb_data(tmdb_pd_data):
+    df = tmdb_pd_data
     indexed = SearchArray.index(df['title'])
     df['title_tokens'] = indexed
 
@@ -121,16 +126,16 @@ def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-def test_index_benchmark(benchmark, tmdb_data):
+def test_index_benchmark(benchmark, tmdb_pd_data):
     prof = Profiler(benchmark)
-    results = prof.run(SearchArray.index, tmdb_data['overview'])
-    assert len(results) == len(tmdb_data)
+    results = prof.run(SearchArray.index, tmdb_pd_data['overview'])
+    assert len(results) == len(tmdb_pd_data)
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-def test_index_benchmark_1k_random(benchmark, tmdb_data):
+def test_index_benchmark_1k_random(benchmark, tmdb_pd_data):
     prof = Profiler(benchmark)
-    thousand_random = np.random.choice(tmdb_data['overview'], size=1000)
+    thousand_random = np.random.choice(tmdb_pd_data['overview'], size=1000)
     results = prof.run(SearchArray.index, thousand_random)
     assert len(results) == 1000
 

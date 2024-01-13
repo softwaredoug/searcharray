@@ -199,8 +199,8 @@ def _build_index_from_tokenizer(array, tokenizer):
     all_terms_w_posns = []
 
     for doc_id, doc in enumerate(array):
-        terms = np.fromiter((term_dict.add_term(token)
-                             for token in tokenizer(doc)), dtype=np.uint32)
+        terms = np.asarray([term_dict.add_term(token)
+                            for token in tokenizer(doc)], dtype=np.uint32)
         doc_len = len(terms)
         doc_ids = np.full(doc_len, doc_id, dtype=np.uint32)
         terms_w_posns = np.asarray([terms,
