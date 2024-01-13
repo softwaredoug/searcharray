@@ -190,19 +190,18 @@ class PosnBitArrayFromFlatBuilder:
 
     def build(self):
         """Slice the flat array into a 2d array of doc ids and posns."""
-        term_boundaries = np.argwhere(np.diff(self.flat_array[1]) > 0).flatten() + 1
+        term_boundaries = np.argwhere(np.diff(self.flat_array[0]) > 0).flatten() + 1
         term_boundaries = np.concatenate([[0], term_boundaries, [len(self.flat_array[1])]])
 
         encoded_term_posns = {}
         for beg_idx, end_idx in zip(term_boundaries[:-1], term_boundaries[1:]):
-            doc_ids = self.flat_array[1][beg_idx:end_idx].view(np.uint64)
-            term_id = self.flat_array[0][beg_idx].view(np.uint64)
-            posns = self.flat_array[2][beg_idx:end_idx].view(np.uint64)
+            sliced = self.flat_array[:, beg_idx:end_idx].view(np.uint64)
+            term_ids = sliced[0]
 
-            encoded = encoder.encode(keys=doc_ids, payload=posns)
-            encoded_term_posns[term_id] = encoded
+            encoded = encoder.encode(keys=sliced[1], payload=sliced[2])
+            encoded_term_posns[term_ids[0]] = encoded
 
-        return PosnBitArray(encoded_term_posns, range(0, np.max(self.flat_array[0]) + 1))
+        return PosnBitArray(encoded_term_posns, range(0, np.max(self.flat_array[1]) + 1))
 
 
 class PosnBitArrayBuilder:
