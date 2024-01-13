@@ -1,11 +1,11 @@
 """Tokenized, searchable text as a pandas dtype."""
 import pandas as pd
 import numbers
-from collections import Counter, defaultdict
 from pandas.api.extensions import ExtensionDtype, ExtensionArray, register_extension_dtype
 from pandas.api.types import is_list_like
 from pandas.api.extensions import take
 import json
+from collections import Counter
 import warnings
 import logging
 from time import perf_counter
@@ -219,6 +219,9 @@ def _build_index_from_tokenizer(array, tokenizer):
     bit_posns = posns.build()
 
     avg_doc_length = np.mean(doc_lens)
+
+    if np.any(doc_lens > MAX_POSN):
+        raise ValueError(f"Document length exceeds maximum of {MAX_POSN}")
 
     return RowViewableMatrix(term_doc.build()), bit_posns, term_dict, avg_doc_length, np.array(doc_lens)
 
