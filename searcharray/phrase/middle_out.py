@@ -193,13 +193,15 @@ class PosnBitArrayFromFlatBuilder:
         term_boundaries = np.argwhere(np.diff(self.flat_array[0]) > 0).flatten() + 1
         term_boundaries = np.concatenate([[0], term_boundaries, [len(self.flat_array[1])]])
 
-        encoded_term_posns = {}
-        for beg_idx, end_idx in zip(term_boundaries[:-1], term_boundaries[1:]):
-            sliced = self.flat_array[:, beg_idx:end_idx].view(np.uint64)
-            term_ids = sliced[0]
+        encoded, enc_term_boundaries = encoder.encode(keys=self.flat_array[1].view(np.uint64),
+                                                      boundaries=term_boundaries[:-1],
+                                                      payload=self.flat_array[2].view(np.uint64))
+        term_ids = self.flat_array[0][term_boundaries[:-1]]
 
-            encoded = encoder.encode(keys=sliced[1], payload=sliced[2])
-            encoded_term_posns[term_ids[0]] = encoded
+        encoded_term_posns = {}
+        for into_terms, (beg_idx, end_idx) in enumerate(zip(enc_term_boundaries[:-1], enc_term_boundaries[1:])):
+            sliced = encoded[beg_idx:end_idx]
+            encoded_term_posns[term_ids[into_terms]] = sliced
 
         return PosnBitArray(encoded_term_posns, range(0, np.max(self.flat_array[1]) + 1))
 

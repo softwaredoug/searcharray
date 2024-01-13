@@ -81,16 +81,20 @@ class RoaringishEncoder:
         if np.any(payload > self.max_payload):
             raise ValueError(f"Positions must be less than {2**self.payload_lsb_bits}")
 
-    def encode(self, payload: np.ndarray, keys: Optional[np.ndarray] = None) -> np.ndarray:
+    def encode(self, payload: np.ndarray,
+               keys: Optional[np.ndarray] = None,
+               boundaries: Optional[np.ndarray] = None) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         """Pack a sorted array of integers into compact bit numpy array.
 
-        each returned array represents a single term, with doc_id as MSBS, ie:
+        each returned array represents a single term, with key as MSBS, ie:
 
         | 32 MSBs | 16 LSBs | 16 LSBs |
           key     | bits msbs| payload
 
         for later easy intersection of 32+16 msbs, then checking for adjacent
         positions
+
+        If boundaries are provided, then we consider multiple distinct payloads
 
         """
         cols = np.floor_divide(payload, self.payload_lsb_bits, dtype=np.uint64)    # Header of bit to use
@@ -99,15 +103,24 @@ class RoaringishEncoder:
             cols |= keys.astype(np.uint64) << (_64 - self.key_bits)
         values = payload % self.payload_lsb_bits   # Value to encode
 
-        change_indices = np.nonzero(np.diff(cols))[0] + 1
-        change_indices = np.concatenate([[0], change_indices])
+        change_indices_one_doc = np.nonzero(np.diff(cols))[0] + 1
+        change_indices_one_doc = np.concatenate([[0], change_indices_one_doc])
+        if boundaries is not None:
+            change_indices = snp.merge(change_indices_one_doc, boundaries,
+                                       duplicates=snp.DROP)
+            new_boundaries = snp.intersect(boundaries, change_indices, indices=True)[1][1]
+            new_boundaries = np.concatenate([new_boundaries, [len(change_indices)]])
+        else:
+            change_indices = change_indices_one_doc
+            new_boundaries = None
 
         # 0 as a position, goes in bit 1,
         # 1 as a position, goes in bit 2, etc
         encoded = cols | (1 << values)
         if len(encoded) == 0:
-            return encoded
-        return np.bitwise_or.reduceat(encoded, change_indices)
+            return encoded, new_boundaries
+        reduced = np.bitwise_or.reduceat(encoded, change_indices)
+        return reduced, new_boundaries
 
     def decode(self, encoded: np.ndarray, get_keys: bool = True) -> Union[List[Tuple[np.uint64, np.ndarray]], List[np.ndarray]]:
         """Decode an encoded bit array into keys / payloads."""
