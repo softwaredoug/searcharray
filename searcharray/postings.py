@@ -17,7 +17,7 @@ from searcharray.utils.row_viewable_matrix import RowViewableMatrix
 from searcharray.term_dict import TermDict, TermMissingError
 from searcharray.phrase.scan_merge import scan_merge_ins
 from searcharray.phrase.posn_diffs import compute_phrase_freqs
-from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder, PosnBitArray, MAX_POSN
+from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder, PosnBitArray, MAX_POSN, PosnBitArrayFromFlatBuilder
 from searcharray.utils.mat_set import SparseMatSetBuilder
 from searcharray.similarity import Similarity, default_bm25
 
@@ -195,36 +195,30 @@ def _build_index_from_tokenizer(array, tokenizer):
     term_doc = SparseMatSetBuilder()
     doc_lens = []
     avg_doc_length = 0
-    num_postings = 0
-    posns = PosnBitArrayBuilder()
 
-    posns_uninverted_posns = defaultdict(list)
-    posns_uninverted_docs = defaultdict(list)
+    all_terms_w_posns = []
+
     for doc_id, doc in enumerate(array):
-        tokens = tokenizer(doc)
-        if len(tokens) > MAX_POSN:
-            raise ValueError(f"Document {doc_id} has too many tokens ({len(tokens)})")
-        terms = set()
-        for posn, token in enumerate(tokens):
-            term_id = term_dict.add_term(token)
-            terms.add(term_id)
-
-            posns_uninverted_posns[term_id].append(posn)
-            posns_uninverted_docs[term_id].append(doc_id)
-
-        num_postings += 1
-        doc_len = len(tokens)
+        terms = np.fromiter((term_dict.add_term(token)
+                             for token in tokenizer(doc)), dtype=np.uint32)
+        doc_len = len(terms)
+        doc_ids = np.full(doc_len, doc_id, dtype=np.uint32)
+        terms_w_posns = np.asarray([terms,
+                                    doc_ids,
+                                    range(doc_len)])
+        all_terms_w_posns.append(terms_w_posns)
+        term_doc.append(np.unique(terms))
         doc_lens.append(doc_len)
-        avg_doc_length += doc_len
 
-        posns.ensure_capacity(doc_id)
-        term_doc.append(terms)
+    # Concat
+    terms_w_posns = np.concatenate(all_terms_w_posns, axis=1)
+    # Sort on terms, then doc_id, then posn with lexsort
+    terms_w_posns = terms_w_posns[:, np.lexsort(terms_w_posns[::-1, :])]
 
-    posns.term_posns = posns_uninverted_posns
-    posns.term_posn_doc_ids = posns_uninverted_docs
+    posns = PosnBitArrayFromFlatBuilder(terms_w_posns)
     bit_posns = posns.build()
 
-    avg_doc_length /= num_postings
+    avg_doc_length = np.mean(doc_lens)
 
     return RowViewableMatrix(term_doc.build()), bit_posns, term_dict, avg_doc_length, np.array(doc_lens)
 

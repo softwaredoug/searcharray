@@ -174,6 +174,37 @@ def compute_phrase_freqs(encoded_posns: List[np.ndarray],
     return phrase_freqs
 
 
+class PosnBitArrayFromFlatBuilder:
+    """ Build from sorted array shape num terms x 3.
+
+        0th is term id
+        1st is doc id
+        2nd is posn
+
+        Sorted by term id then posns
+
+    """
+
+    def __init__(self, flat_array: np.ndarray):
+        self.flat_array = flat_array
+
+    def build(self):
+        """Slice the flat array into a 2d array of doc ids and posns."""
+        term_boundaries = np.argwhere(np.diff(self.flat_array[1]) > 0).flatten() + 1
+        term_boundaries = np.concatenate([[0], term_boundaries, [len(self.flat_array[1])]])
+
+        encoded_term_posns = {}
+        for beg_idx, end_idx in zip(term_boundaries[:-1], term_boundaries[1:]):
+            doc_ids = self.flat_array[1][beg_idx:end_idx].view(np.uint64)
+            term_id = self.flat_array[0][beg_idx].view(np.uint64)
+            posns = self.flat_array[2][beg_idx:end_idx].view(np.uint64)
+
+            encoded = encoder.encode(keys=doc_ids, payload=posns)
+            encoded_term_posns[term_id] = encoded
+
+        return PosnBitArray(encoded_term_posns, range(0, np.max(self.flat_array[0]) + 1))
+
+
 class PosnBitArrayBuilder:
 
     def __init__(self):
