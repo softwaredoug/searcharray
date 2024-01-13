@@ -2,6 +2,7 @@ from searcharray.postings import SearchArray
 from test_utils import w_scenarios
 from time import perf_counter
 import pytest
+from searcharray.phrase.middle_out import MAX_POSN
 import numpy as np
 
 
@@ -232,6 +233,12 @@ def test_phrase_scattered_posns3(posn_offset):
     expected = [2, 0]
     phrase_matches = docs.phrase_freq(phrase)
     assert (expected == phrase_matches).all()
+
+
+def test_phrase_too_many_posns():
+    big_str = "foo bar baz " + " ".join(["dummy"] * MAX_POSN) + " foo bar baz"
+    with pytest.raises(ValueError):
+        SearchArray.index([big_str, "not match"])
 
 
 perf_scenarios = {
