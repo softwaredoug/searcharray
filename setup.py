@@ -8,6 +8,8 @@ https://github.com/pypa/sampleproject
 # Always prefer setuptools over distutils
 from setuptools import setup, find_packages
 import pathlib
+from Cython.Build import cythonize
+
 
 here = pathlib.Path(__file__).parent.resolve()
 
@@ -127,6 +129,8 @@ setup(
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/discussions/install-requires-vs-requirements/
     install_requires=["pandas>=2.0.0", "sortednp"],  # Optional
+    ext_modules=cythonize(["searcharray/*.pyx", "searcharray/phrase/*.pyx", "searcharray/utils/*.pyx"]),
+
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"
     # syntax, for example:

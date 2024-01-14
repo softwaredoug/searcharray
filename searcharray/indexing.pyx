@@ -3,6 +3,7 @@ from searcharray.phrase.middle_out import MAX_POSN, PosnBitArrayFromFlatBuilder,
 from searcharray.term_dict import TermDict
 from searcharray.utils.mat_set import SparseMatSetBuilder
 from searcharray.utils.row_viewable_matrix import RowViewableMatrix
+from searcharray.tokenize import tokenize
 
 
 def _compute_doc_lens(posns: np.ndarray, doc_ids: np.ndarray, num_docs: int) -> np.ndarray:
@@ -43,9 +44,21 @@ def _gather_tokens(array, tokenizer):
     return terms_w_posns, term_dict, term_doc
 
 
+def _idxs_sorted(terms_w_posns):
+    rows_to_sort_by = terms_w_posns[::-1, :]
+    idxs_sorted = np.lexsort(rows_to_sort_by)
+    return idxs_sorted
+
+
+def _sort_posns(terms_w_posns):
+    """Sort posns by term, then doc_id, then posn."""
+    # Perf opportunity: if this could be done with np.sort, inplace
+    return terms_w_posns[:, _idxs_sorted(terms_w_posns)]
+
+
 def build_index_from_tokenizer(array, tokenizer):
     """Build index directly from tokenizing docs (array of string)."""
-    terms_w_posns, term_dict, term_doc = _gather_tokens(array, tokenizer)
+    terms_w_posns, term_dict, term_doc = tokenize(array, tokenizer)
 
     # Use posns to compute doc lens
     doc_lens = _compute_doc_lens(posns=terms_w_posns[2, :],
@@ -54,7 +67,7 @@ def build_index_from_tokenizer(array, tokenizer):
     avg_doc_length = np.mean(doc_lens)
 
     # Sort on terms, then doc_id, then posn with lexsort
-    terms_w_posns = terms_w_posns[:, np.lexsort(terms_w_posns[::-1, :])]
+    terms_w_posns = _sort_posns(terms_w_posns)
 
     # Encode posns to bit array
     posns = PosnBitArrayFromFlatBuilder(terms_w_posns)
