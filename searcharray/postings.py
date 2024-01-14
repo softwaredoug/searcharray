@@ -223,7 +223,9 @@ def gather_tokens(array, tokenizer):
         all_posns.extend(np.arange(len(terms)))
 
         term_doc.append(np.unique(terms))
-    return np.vstack([all_terms, all_docs, all_posns]), term_dict, term_doc
+
+    terms_w_posns = np.vstack([all_terms, all_docs, all_posns])
+    return terms_w_posns, term_dict, term_doc
 
 
 def _build_index_from_tokenizer(array, tokenizer):
