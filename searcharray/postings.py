@@ -32,7 +32,7 @@ logger.setLevel(logging.ERROR)
 
 
 class Terms:
-    """An indexed search doc - a row of postings, with bag of tokenized words and positions."""
+    """An indexed search doc - a single bag of tokenized words and positions."""
 
     def __init__(self,
                  postings,
@@ -199,7 +199,6 @@ def _row_to_postings_row(doc_id, row, doc_len, term_dict, posns: PosnBitArray):
 
     result = Terms(tfs, posns=labeled_posns,
                    doc_len=doc_len, encoded=True)
-    # TODO add positions
     return result
 
 
@@ -222,7 +221,6 @@ class SearchArray(ExtensionArray):
     @classmethod
     def index(cls, array, tokenizer=ws_tokenizer) -> 'SearchArray':
         """Index an array of strings using tokenizer."""
-        # Convert strings to expected scalars (dict -> term freqs)
         if not is_list_like(array):
             raise TypeError("Expected list-like object, got {}".format(type(array)))
         if not all(isinstance(x, str) or pd.isna(x) for x in array):

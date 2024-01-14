@@ -3,7 +3,6 @@ import pandas as pd
 import pathlib
 import requests
 import string
-from time import perf_counter
 from searcharray import SearchArray
 from test_utils import Profiler, profile_enabled
 
@@ -21,8 +20,12 @@ def download_file(url):
     return local_filename
 
 
+def msmarco_path():
+    return "data/msmarco-docs.tsv.gz"
+
+
 def msmarco_exists():
-    path = pathlib.Path("data/msmarco-docs.tsv.gz")
+    path = pathlib.Path(msmarco_path())
     return path.exists()
 
 
@@ -39,71 +42,87 @@ def download_msmarco():
     pathlib.Path(path).rename(f"data/{path}")
 
 
-@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
-def msmarco100k():
-    msmarco100k_path = pathlib.Path("data/msmarco100k.pkl")
+def msmarco_download():
+    if not msmarco_exists():
+        download_msmarco()
+    return msmarco_path()
 
-    if not msmarco100k_path.exists():
-        start = perf_counter()
-        if not msmarco_exists():
-            download_msmarco()
+
+@pytest.fixture(scope="session")
+def msmarco_raw(msmarco_download):
+    msmarco_raw_path = 'data/msmarco_raw.pkl'
+    msmarco100k_raw_path = pathlib.Path(msmarco_raw_path)
+
+    if not msmarco100k_raw_path.exists():
         print("Loading docs...")
-        msmarco = pd.read_csv("data/msmarco-docs.tsv.gz", sep="\t",
+        msmarco = pd.read_csv(msmarco_download, sep="\t",
+                              header=None, names=["id", "url", "title", "body"])
+
+        msmarco.to_pickle(msmarco_raw_path)
+        return msmarco
+    else:
+        return pd.read_pickle(msmarco_raw_path)
+
+
+@pytest.fixture(scope="session")
+def msmarco100k_raw(msmarco_download):
+    msmarco_raw_path = 'data/msmarco100k_raw.pkl'
+    msmarco100k_raw_path = pathlib.Path(msmarco_raw_path)
+
+    if not msmarco100k_raw_path.exists():
+        print("Loading docs...")
+        msmarco = pd.read_csv(msmarco_download, sep="\t",
                               nrows=100000,
                               header=None, names=["id", "url", "title", "body"])
-        print(f"Loaded {len(msmarco)} docs in {perf_counter() - start:.4f}s")
 
-        def ws_punc_tokenizer(text):
-            split = text.lower().split()
-            return [token.translate(str.maketrans('', '', string.punctuation))
-                    for token in split]
-
-        print("Indexing...")
-        msmarco["title_ws"] = SearchArray.index(msmarco["title"])
-        print(f"Indexed in {perf_counter() - start:.4f}s")
-        print("Indexing...")
-        msmarco["body_ws"] = SearchArray.index(msmarco["body"])
-        print(f"Indexed in {perf_counter() - start:.4f}s")
-
-        # Save as pickle
-        print("Saving...")
-        msmarco.to_pickle("data/msmarco100k.pkl")
-        print(f"Saved in {perf_counter() - start:.4f}s")
+        msmarco.to_pickle(msmarco_raw_path)
         return msmarco
     else:
-        return pd.read_pickle("data/msmarco100k.pkl")
+        return pd.read_pickle(msmarco_raw_path)
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
-def msmarco():
-    msmarco_path = pathlib.Path("data/msmarco.pkl")
+def msmarco100k(msmarco100k_raw):
+    msmarco_path = 'data/msmarco100k.pkl'
+    msmarco100k_path = pathlib.Path(msmarco_path)
 
-    if not msmarco_path.exists():
-        start = perf_counter()
-        if not msmarco_exists():
-            download_msmarco()
-        print("Loading docs...")
-        msmarco = pd.read_csv("data/msmarco-docs.tsv.gz", sep="\t", header=None, names=["id", "url", "title", "body"])
-        print(f"Loaded {len(msmarco)} docs in {perf_counter() - start:.4f}s")
-
+    if not msmarco100k_path.exists():
         def ws_punc_tokenizer(text):
             split = text.lower().split()
             return [token.translate(str.maketrans('', '', string.punctuation))
                     for token in split]
 
-        print("Indexing...")
+        msmarco = msmarco100k_raw
         msmarco["title_ws"] = SearchArray.index(msmarco["title"])
-        print(f"Indexed title in {perf_counter() - start:.4f}s")
-        print("Indexing...")
         msmarco["body_ws"] = SearchArray.index(msmarco["body"])
-        print(f"Indexed body in {perf_counter() - start:.4f}s")
-        msmarco.to_pickle("data/msmarco.pkl")
-        print(f"Saved in {perf_counter() - start:.4f}s")
+
+        msmarco.to_pickle(msmarco_path)
         return msmarco
     else:
-        return pd.read_pickle("data/msmarco.pkl")
+        return pd.read_pickle(msmarco_path)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.fixture(scope="session")
+def msmarco(msmarco_raw):
+    msmarco_path_str = 'data/msmarco100k.pkl'
+    msmarco_path = pathlib.Path(msmarco_path_str)
+
+    if not msmarco_path.exists():
+        def ws_punc_tokenizer(text):
+            split = text.lower().split()
+            return [token.translate(str.maketrans('', '', string.punctuation))
+                    for token in split]
+
+        msmarco = msmarco_raw
+        msmarco["title_ws"] = SearchArray.index(msmarco["title"])
+        msmarco["body_ws"] = SearchArray.index(msmarco["body"])
+        msmarco.to_pickle(msmarco_path_str)
+        return msmarco
+    else:
+        return pd.read_pickle(msmarco_path_str)
 
 
 # Memory usage
@@ -171,8 +190,13 @@ def test_msmarco(phrase_search, msmarco100k, benchmark):
     phrase_search = phrase_search.split()
     print(f"STARTING {phrase_search}")
     print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
-    # print(f"Memory Usage (TITLE): {msmarco100k['title_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
-    start = perf_counter()
-    results = profiler.run(msmarco100k['body_ws'].array.score, phrase_search)
-    num_results = results[results > 0].shape[0]
-    print(f"msmarco phrase search {phrase_search}. Found {num_results}. {perf_counter() - start:.4f}s")
+    profiler.run(msmarco100k['body_ws'].array.score, phrase_search)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_msmarco10k_indexing(msmarco100k_raw, benchmark):
+    profiler = Profiler(benchmark)
+    # Random 10k
+    tenk = msmarco100k_raw['body'].sample(10000)
+    results = profiler.run(SearchArray.index, tenk)
+    assert len(results) == 10000
