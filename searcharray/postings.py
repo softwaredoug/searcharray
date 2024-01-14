@@ -194,7 +194,7 @@ def _row_to_postings_row(doc_id, row, doc_len, term_dict, posns: PosnBitArray):
     for term_idx in row.cols:
         term = term_dict.get_term(term_idx)
         tfs[term] = 1
-        enc_term_posns = posns.doc_encoded_posns(term_idx, doc_id=doc_id)
+        enc_term_posns = posns.doc_encoded_posns(int(term_idx), doc_id=doc_id)
         labeled_posns[term] = enc_term_posns
 
     result = Terms(tfs, posns=labeled_posns,
