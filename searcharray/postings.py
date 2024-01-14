@@ -17,9 +17,10 @@ from searcharray.utils.row_viewable_matrix import RowViewableMatrix
 from searcharray.term_dict import TermDict, TermMissingError
 from searcharray.phrase.scan_merge import scan_merge_ins
 from searcharray.phrase.posn_diffs import compute_phrase_freqs
-from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder, PosnBitArray, MAX_POSN, PosnBitArrayFromFlatBuilder
+from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder, PosnBitArray
 from searcharray.utils.mat_set import SparseMatSetBuilder
 from searcharray.similarity import Similarity, default_bm25
+from searcharray.indexing import build_index_from_tokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -190,67 +191,6 @@ def ws_tokenizer(string):
     return string.split()
 
 
-def _compute_doc_lens(posns: np.ndarray, doc_ids: np.ndarray, num_docs: int) -> np.ndarray:
-    """Given an array of positions, compute the length of each document."""
-    doc_lens = np.zeros(num_docs, dtype=np.uint32)
-
-    # Find were we ave posns for each doc
-    non_empty_doc_lens = -np.diff(posns) + 1
-
-    non_empty_idxs = np.argwhere(non_empty_doc_lens > 0).flatten()
-    non_empty_doc_ids = doc_ids[non_empty_idxs]
-    non_empty_doc_lens = non_empty_doc_lens[non_empty_idxs]
-    doc_lens[non_empty_doc_ids] = non_empty_doc_lens
-    if doc_ids[-1] not in non_empty_doc_ids:
-        doc_lens[doc_ids[-1]] = posns[-1] + 1
-    return doc_lens
-
-
-def gather_tokens(array, tokenizer):
-    term_dict = TermDict()
-    term_doc = SparseMatSetBuilder()
-
-    all_terms = []
-    all_docs = []
-    all_posns = []
-
-    for doc_id, doc in enumerate(array):
-        terms = np.asarray([term_dict.add_term(token)
-                            for token in tokenizer(doc)], dtype=np.uint32)
-        doc_ids = np.full(len(terms), doc_id, dtype=np.uint32)
-        all_terms.extend(terms)
-        all_docs.extend(doc_ids)
-        all_posns.extend(np.arange(len(terms)))
-
-        term_doc.append(np.unique(terms))
-
-    terms_w_posns = np.vstack([all_terms, all_docs, all_posns])
-    return terms_w_posns, term_dict, term_doc
-
-
-def _build_index_from_tokenizer(array, tokenizer):
-    """Build index directly from tokenizing docs."""
-    terms_w_posns, term_dict, term_doc = gather_tokens(array, tokenizer)
-
-    # Use posns to compute doc lens
-    doc_lens = _compute_doc_lens(posns=terms_w_posns[2, :],
-                                 doc_ids=terms_w_posns[1, :],
-                                 num_docs=len(array))
-    avg_doc_length = np.mean(doc_lens)
-
-    # Sort on terms, then doc_id, then posn with lexsort
-    terms_w_posns = terms_w_posns[:, np.lexsort(terms_w_posns[::-1, :])]
-
-    # Encode posns to bit array
-    posns = PosnBitArrayFromFlatBuilder(terms_w_posns)
-    bit_posns = posns.build()
-
-    if np.any(doc_lens > MAX_POSN):
-        raise ValueError(f"Document length exceeds maximum of {MAX_POSN}")
-
-    return RowViewableMatrix(term_doc.build()), bit_posns, term_dict, avg_doc_length, np.array(doc_lens)
-
-
 def _build_index_from_postings_list(postings):
     """Bulid an index from postings that are already tokenized and point at their term frequencies."""
     start = perf_counter()
@@ -348,7 +288,7 @@ class SearchArray(ExtensionArray):
             raise TypeError("Expected a list of strings to tokenize")
 
         term_mat, posns, term_dict, avg_doc_length, doc_lens =\
-            _build_index_from_tokenizer(array, tokenizer)
+            build_index_from_tokenizer(array, tokenizer)
 
         postings = cls([], tokenizer=tokenizer)
         postings.term_mat = term_mat
