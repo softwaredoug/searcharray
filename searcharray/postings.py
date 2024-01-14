@@ -8,19 +8,16 @@ import json
 from collections import Counter
 import warnings
 import logging
-from time import perf_counter
 from typing import List, Union, Optional
 
 
 import numpy as np
-from searcharray.utils.row_viewable_matrix import RowViewableMatrix
-from searcharray.term_dict import TermDict, TermMissingError
 from searcharray.phrase.scan_merge import scan_merge_ins
 from searcharray.phrase.posn_diffs import compute_phrase_freqs
-from searcharray.phrase.middle_out import PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder, PosnBitArray
-from searcharray.utils.mat_set import SparseMatSetBuilder
+from searcharray.phrase.middle_out import PosnBitArray
 from searcharray.similarity import Similarity, default_bm25
-from searcharray.indexing import build_index_from_tokenizer
+from searcharray.indexing import build_index_from_tokenizer, build_index_from_terms_list
+from searcharray.term_dict import TermMissingError
 
 logger = logging.getLogger(__name__)
 
@@ -191,62 +188,6 @@ def ws_tokenizer(string):
     return string.split()
 
 
-def _build_index_from_postings_list(postings):
-    """Bulid an index from postings that are already tokenized and point at their term frequencies."""
-    start = perf_counter()
-    term_dict = TermDict()
-    term_doc = SparseMatSetBuilder()
-    doc_lens = []
-    avg_doc_length = 0
-    num_postings = 0
-    posns = PosnBitArrayBuilder()
-    posns_enc = PosnBitArrayAlreadyEncBuilder()
-
-    # COPY 1
-    # Consume generator (tokenized postings) into list
-    # its faster this way?
-    postings = list(postings)
-    logger.debug(f"Tokenized {len(postings)} documents in {perf_counter() - start} seconds")
-
-    # COPY 2
-    # Build dict for sparse matrix
-    # this is faster that directly using the matrix
-    # https://www.austintripp.ca/blog/2018/09/12/sparse-matrices-tips1
-    for doc_id, tokenized in enumerate(postings):
-        if isinstance(tokenized, dict):
-            tokenized = Terms(tokenized, doc_len=len(tokenized))
-        elif not isinstance(tokenized, Terms):
-            raise TypeError("Expected a Terms or a dict")
-
-        if tokenized.encoded:
-            posns = posns_enc
-
-        doc_lens.append(tokenized.doc_len)
-        avg_doc_length += doc_lens[-1]
-        terms = []
-        for token, term_freq in tokenized.terms():
-            term_id = term_dict.add_term(token)
-            terms.append(term_id)
-            positions = tokenized.positions(token)
-            if positions is not None:
-                posns.add_posns(doc_id, term_id, positions)
-
-        term_doc.append(terms)
-
-        posns.ensure_capacity(doc_id)
-        num_postings += 1
-
-    if num_postings > 0:
-        avg_doc_length /= num_postings
-
-    logger.debug(f"Indexed {num_postings} documents in {perf_counter() - start} seconds")
-
-    bit_posns = posns.build()
-    logger.info(f"Bitwis Posn memory usage: {bit_posns.nbytes / 1024 / 1024} MB")
-
-    return RowViewableMatrix(term_doc.build()), bit_posns, term_dict, avg_doc_length, np.array(doc_lens)
-
-
 def _row_to_postings_row(doc_id, row, doc_len, term_dict, posns: PosnBitArray):
     tfs = {}
     labeled_posns = {}
@@ -276,7 +217,7 @@ class SearchArray(ExtensionArray):
         self.tokenizer = tokenizer
         self.term_mat, self.posns, \
             self.term_dict, self.avg_doc_length, \
-            self.doc_lens = _build_index_from_postings_list(postings)
+            self.doc_lens = build_index_from_terms_list(postings, Terms)
 
     @classmethod
     def index(cls, array, tokenizer=ws_tokenizer) -> 'SearchArray':

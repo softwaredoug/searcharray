@@ -66,13 +66,8 @@ def build_index_from_tokenizer(array, tokenizer):
     return RowViewableMatrix(term_doc.build()), bit_posns, term_dict, avg_doc_length, np.array(doc_lens)
 
 
-# Fwd decl
-class Terms:
-    pass
-
-
-def build_index_from_terms_list(postings):
-    """Bulid an index from postings that are already tokenized and point at their term frequencies."""
+def build_index_from_terms_list(postings, Terms):
+    """Bulid an index from postings that are already tokenized and point at their term frequencies/posns."""
     term_dict = TermDict()
     term_doc = SparseMatSetBuilder()
     doc_lens = []
