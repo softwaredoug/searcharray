@@ -210,20 +210,14 @@ def gather_tokens(array, tokenizer):
     term_dict = TermDict()
     term_doc = SparseMatSetBuilder()
 
-    all_terms = []
-    all_docs = []
-    all_posns = []
+    terms_w_posns2 = np.fromiter((
+        [term_dict.add_term(token), doc_id, posn]
+        for doc_id, doc in enumerate(array)
+        for posn, token in enumerate(tokenizer(doc))),
+        dtype=np.uint32
+    ).T
 
-    for doc_id, doc in enumerate(array):
-        terms = np.asarray([term_dict.add_term(token)
-                            for token in tokenizer(doc)], dtype=np.uint32)
-        doc_ids = np.full(len(terms), doc_id, dtype=np.uint32)
-        all_terms.extend(terms)
-        all_docs.extend(doc_ids)
-        all_posns.extend(np.arange(len(terms)))
-
-        term_doc.append(np.unique(terms))
-    return np.vstack([all_terms, all_docs, all_posns]), term_dict, term_doc
+    return terms_w_posns2, term_dict, term_doc
 
 
 def _build_index_from_tokenizer(array, tokenizer):
