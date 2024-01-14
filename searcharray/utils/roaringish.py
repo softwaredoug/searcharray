@@ -95,6 +95,7 @@ class RoaringishEncoder:
         positions
 
         If boundaries are provided, then we consider multiple distinct payloads
+        being encoded simultaneously, and we return the boundaries of each
 
         """
         cols = np.floor_divide(payload, self.payload_lsb_bits, dtype=np.uint64)    # Header of bit to use
