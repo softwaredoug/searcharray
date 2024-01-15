@@ -8,6 +8,7 @@ __pycache__/
 
 # Benchmarks
 .benchmarks
+.benchmarks*
 
 # Distribution / packaging
 .Python
