@@ -18,9 +18,15 @@ deps: venv
 	fi
 
 
-clean:
+clean: deps
 	@echo "Cleaning..."
-	rm -rf dist
+	rm -rf build dist
+	@echo "Clean any .so files..."
+	find . -name "searcharray/*.so" -type f -delete
+
+
+
+destroy: clean
 	@echo "Clean deps..."
 	deactivate
 	rm -rf venv
@@ -77,6 +83,7 @@ help:
 	@echo "  test            Run tests"
 	@echo "  build           Build package"
 	@echo "  clean           Clean build files"
+	@echo "  destroy         Completely destroy the dev env"
 	@echo "  help            Show this help message"
 	@echo "  publish         Publish package to PyPI"
 
