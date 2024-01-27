@@ -53,6 +53,9 @@ class TermDict:
     def __repr__(self):
         return repr(self.term_to_ids)
 
+    def __eq__(self, other):
+        return self.term_to_ids == other.term_to_ids and self.id_to_terms == other.id_to_terms
+
     @property
     def nbytes(self):
         bytes_used = sys.getsizeof(self.term_to_ids) + sys.getsizeof(self.id_to_terms)

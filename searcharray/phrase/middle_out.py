@@ -203,7 +203,8 @@ class PosnBitArrayFromFlatBuilder:
             sliced = encoded[beg_idx:end_idx]
             encoded_term_posns[term_ids[into_terms]] = sliced
 
-        return PosnBitArray(encoded_term_posns, range(0, np.max(self.flat_array[1]) + 1))
+        rng = range(0, np.max(self.flat_array[1]) + np.uint64(1))
+        return PosnBitArray(encoded_term_posns, rng)
 
 
 class PosnBitArrayBuilder:

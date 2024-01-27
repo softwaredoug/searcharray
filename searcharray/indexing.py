@@ -59,6 +59,13 @@ def _sort_posns(terms_w_posns):
 def build_index_from_tokenizer(array, tokenizer):
     """Build index directly from tokenizing docs (array of string)."""
     terms_w_posns, term_dict, term_doc = tokenize(array, tokenizer)
+    print("Tokenization complete")
+
+    # terms_w_posns2, term_dict2, term_doc2 = _gather_tokens(array, tokenizer)
+    # assert terms_w_posns.shape == terms_w_posns2.shape
+    # assert np.all(terms_w_posns == terms_w_posns2)
+    # assert term_dict == term_dict2
+    # assert term_doc == term_doc2
 
     # Use posns to compute doc lens
     doc_lens = _compute_doc_lens(posns=terms_w_posns[2, :],

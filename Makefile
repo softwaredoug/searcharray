@@ -19,6 +19,14 @@ deps: venv
 
 
 clean:
+	@echo "Cleaning extensions..."
+	rm -rf searcharray/*.so
+	rm -rf searcharray/*.c
+	rm -rf searcharray/phrase/*.so
+	rm -rf searcharray/phrase/*.c
+	rm -rf searcharray/utils/*.so
+	rm -rf searcharray/utils/*.c
+	rm -rf build
 	@echo "Cleaning..."
 	rm -rf dist
 	@echo "Clean deps..."
@@ -26,7 +34,12 @@ clean:
 	rm -rf venv
 
 
-test: deps
+extensions:
+	@echo "Building extensions..."
+	python setup.py build_ext --inplace
+
+
+test: deps extensions
 	@echo "Running tests..."
 	python -m pytest --benchmark-skip test
 
@@ -48,8 +61,8 @@ benchmark: deps
 benchmark_graph: deps
 	python scripts/graph_benchmarks.py "$(TEST)"
 
-profile:
-	python -m pytest -x --benchmark-disable "$(TEST)"
+profile: deps extensions
+	python -m pytest -s -x --benchmark-disable "$(TEST)"
 	snakeviz ./.benchmarks/last.prof
 
 

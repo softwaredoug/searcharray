@@ -18,6 +18,9 @@ class SparseMatSetBuilder:
         return SparseMatSet(cols=np.asarray(self.cols, dtype=np.uint32),
                             rows=np.asarray(self.rows, dtype=np.uint32))
 
+    def __eq__(self, other):
+        return self.cols == other.cols and self.rows == other.rows
+
 
 class SparseMatSet:
     """Sparse matrix that only stores the set of row/col indices that are set to 1."""
