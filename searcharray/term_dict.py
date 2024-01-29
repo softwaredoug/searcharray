@@ -14,12 +14,14 @@ class TermDict:
         self.id_to_terms = {}
 
     def add_term(self, term):
-        if term in self.term_to_ids:
+        # Why is this faster than setdefault?
+        try:
             return self.term_to_ids[term]
-        term_id = len(self.term_to_ids)
-        self.term_to_ids[term] = term_id
-        self.id_to_terms[term_id] = term
-        return term_id
+        except KeyError:
+            term_id = len(self.term_to_ids)
+            self.term_to_ids[term] = term_id
+            self.id_to_terms[term_id] = term
+            return term_id
 
     def copy(self):
         new_dict = TermDict()

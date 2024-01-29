@@ -58,8 +58,7 @@ def _sort_posns(terms_w_posns):
 
 def build_index_from_tokenizer(array, tokenizer):
     """Build index directly from tokenizing docs (array of string)."""
-    terms_w_posns, term_dict, term_doc = tokenize(array, tokenizer)
-    print("Tokenization complete")
+    terms_w_posns, term_dict, term_doc, doc_lens = tokenize(array, tokenizer)
 
     # terms_w_posns2, term_dict2, term_doc2 = _gather_tokens(array, tokenizer)
     # assert terms_w_posns.shape == terms_w_posns2.shape
@@ -68,13 +67,10 @@ def build_index_from_tokenizer(array, tokenizer):
     # assert term_doc == term_doc2
 
     # Use posns to compute doc lens
-    doc_lens = _compute_doc_lens(posns=terms_w_posns[2, :],
-                                 doc_ids=terms_w_posns[1, :],
-                                 num_docs=len(array))
     avg_doc_length = np.mean(doc_lens)
 
     # Sort on terms, then doc_id, then posn with lexsort
-    terms_w_posns = _sort_posns(terms_w_posns)
+    # terms_w_posns = _sort_posns(terms_w_posns)
 
     # Encode posns to bit array
     posns = PosnBitArrayFromFlatBuilder(terms_w_posns)

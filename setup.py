@@ -132,6 +132,7 @@ setup(
     install_requires=["pandas>=2.0.0", "sortednp"],  # Optional
     include_dirs=[np.get_include()],
     ext_modules=cythonize(["searcharray/*.pyx"],
+                          annotate=True,
                           compiler_directives={'language_level': "3"}),
 
     # List additional groups of dependencies here (e.g. development
