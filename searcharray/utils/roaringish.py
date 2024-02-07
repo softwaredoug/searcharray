@@ -1,4 +1,7 @@
-"""Roaring-ish bit array for storing sorted integers in numpy array."""
+"""Roaring-ish bit array for storing sorted integers in numpy array.
+
+See - https://softwaredoug.com/blog/2024/01/21/search-array-phrase-algorithm
+"""
 import numpy as np
 import sortednp as snp
 import logging
