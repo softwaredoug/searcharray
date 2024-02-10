@@ -58,6 +58,13 @@ profile:
 	python -m pytest -x --benchmark-disable "$(TEST)"
 	snakeviz ./.benchmarks/last.prof
 
+memory_profile:
+	rm .benchmarks/memray.bin
+	python -m memray run -o .benchmarks/memray.bin test/memray.py
+	rm .benchmarks/memray-flamegraph-memray.html
+	python -m memray flamegraph .benchmarks/memray.bin
+	open .benchmarks/memray-flamegraph-memray.html
+
 
 build: deps test lint
 	@echo "Building..."

@@ -299,6 +299,22 @@ class PosnBitArray:
                            self.doc_ids)
         return new
 
+    def concat(self, other):
+        """Merge other into self.
+
+        Assumes other's doc ids are not overlapping with self's doc ids.
+        """
+        # Shared terms
+        shared_terms = set(self.encoded_term_posns.keys()).intersection(set(other.encoded_term_posns.keys()))
+        for term_id in shared_terms:
+            # Append then sort
+            self.encoded_term_posns[term_id] = np.concatenate([self.encoded_term_posns[term_id], other.encoded_term_posns[term_id]])
+            self.encoded_term_posns[term_id].sort()
+
+        only_other_terms = set(other.encoded_term_posns.keys()).difference(set(self.encoded_term_posns.keys()))
+        for term_id in only_other_terms:
+            self.encoded_term_posns[term_id] = other.encoded_term_posns[term_id]
+
     def slice(self, key):
         sliced_term_posns = {}
         doc_ids = index_range(self.doc_ids, key)

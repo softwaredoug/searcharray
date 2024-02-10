@@ -1,8 +1,10 @@
 import pytest
+import numpy as np
 import pandas as pd
 import pathlib
 import requests
 import string
+import logging
 from searcharray import SearchArray
 from test_utils import Profiler, profile_enabled
 
@@ -50,11 +52,12 @@ def msmarco_download():
 
 
 @pytest.fixture(scope="session")
-def msmarco_raw(msmarco_download):
-    msmarco_raw_path = 'data/msmarco_raw.pkl'
-    msmarco100k_raw_path = pathlib.Path(msmarco_raw_path)
+def msmarco_all_raw(msmarco_download):
+    print("Loading docs...")
+    msmarco_raw_path = 'data/msmarco_all_raw.pkl'
+    msmarco_all_raw_path = pathlib.Path(msmarco_raw_path)
 
-    if not msmarco100k_raw_path.exists():
+    if not msmarco_all_raw_path.exists():
         print("Loading docs...")
         msmarco = pd.read_csv(msmarco_download, sep="\t",
                               header=None, names=["id", "url", "title", "body"])
@@ -74,6 +77,23 @@ def msmarco100k_raw(msmarco_download):
         print("Loading docs...")
         msmarco = pd.read_csv(msmarco_download, sep="\t",
                               nrows=100000,
+                              header=None, names=["id", "url", "title", "body"])
+
+        msmarco.to_pickle(msmarco_raw_path)
+        return msmarco
+    else:
+        return pd.read_pickle(msmarco_raw_path)
+
+
+@pytest.fixture(scope="session")
+def msmarco1m_raw(msmarco_download):
+    msmarco_raw_path = 'data/msmarco1m_raw.pkl'
+    msmarco1m_raw_path = pathlib.Path(msmarco_raw_path)
+
+    if not msmarco1m_raw_path.exists():
+        print("Loading docs...")
+        msmarco = pd.read_csv(msmarco_download, sep="\t",
+                              nrows=1000000,
                               header=None, names=["id", "url", "title", "body"])
 
         msmarco.to_pickle(msmarco_raw_path)
@@ -106,8 +126,30 @@ def msmarco100k(msmarco100k_raw):
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
-def msmarco(msmarco_raw):
-    msmarco_path_str = 'data/msmarco100k.pkl'
+def msmarco1m(msmarco1m_raw):
+    msmarco_path = 'data/msmarco1m.pkl'
+    msmarco1m_path = pathlib.Path(msmarco_path)
+
+    if not msmarco1m_path.exists():
+        def ws_punc_tokenizer(text):
+            split = text.lower().split()
+            return [token.translate(str.maketrans('', '', string.punctuation))
+                    for token in split]
+
+        msmarco = msmarco100k_raw
+        msmarco["title_ws"] = SearchArray.index(msmarco["title"])
+        msmarco["body_ws"] = SearchArray.index(msmarco["body"])
+
+        msmarco.to_pickle(msmarco_path)
+        return msmarco
+    else:
+        return pd.read_pickle(msmarco_path)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.fixture(scope="session")
+def msmarco_all(msmarco_all_raw):
+    msmarco_path_str = 'data/msmarco_all.pkl'
     msmarco_path = pathlib.Path(msmarco_path_str)
 
     if not msmarco_path.exists():
@@ -116,7 +158,7 @@ def msmarco(msmarco_raw):
             return [token.translate(str.maketrans('', '', string.punctuation))
                     for token in split]
 
-        msmarco = msmarco_raw
+        msmarco = msmarco_all_raw
         msmarco["title_ws"] = SearchArray.index(msmarco["title"])
         msmarco["body_ws"] = SearchArray.index(msmarco["body"])
         msmarco.to_pickle(msmarco_path_str)
@@ -185,7 +227,17 @@ def msmarco(msmarco_raw):
 #
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
-def test_msmarco(phrase_search, msmarco100k, benchmark):
+def test_msmarco100k(phrase_search, msmarco100k, benchmark):
+    profiler = Profiler(benchmark)
+    phrase_search = phrase_search.split()
+    print(f"STARTING {phrase_search}")
+    print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+    profiler.run(msmarco100k['body_ws'].array.score, phrase_search)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
+def test_msmarco_all(phrase_search, msmarco_all, benchmark):
     profiler = Profiler(benchmark)
     phrase_search = phrase_search.split()
     print(f"STARTING {phrase_search}")
@@ -200,3 +252,26 @@ def test_msmarco10k_indexing(msmarco100k_raw, benchmark):
     tenk = msmarco100k_raw['body'].sample(10000)
     results = profiler.run(SearchArray.index, tenk)
     assert len(results) == 10000
+
+
+def test_msmarco_batch_sizes_give_same(msmarco100k_raw):
+    with_batch_10k = SearchArray.index(msmarco100k_raw['body'], batch_size=10000)
+    with_batch_5k = SearchArray.index(msmarco100k_raw['body'], batch_size=5000)
+    assert np.all(with_batch_10k == with_batch_5k)
+
+
+@pytest.mark.skip(reason="Not used on every run")
+def test_msmarco1m_indexall(msmarco1m_raw, benchmark, caplog):
+    caplog.set_level(logging.DEBUG)
+
+    body = msmarco1m_raw['body']
+    idxed = SearchArray.index(body)
+    assert len(idxed) == len(body)
+
+
+@pytest.mark.skip(reason="Not used on every run")
+def test_msmarco_indexall(msmarco_all_raw, benchmark, caplog):
+    caplog.set_level(logging.DEBUG)
+    body = msmarco_all_raw['body']
+    idxed = SearchArray.index(body)
+    assert len(idxed) == len(body)
