@@ -102,7 +102,7 @@ class RoaringishEncoder:
 
         """
         cols = np.floor_divide(payload, self.payload_lsb_bits, dtype=np.uint64)    # Header of bit to use
-        cols = cols << self.payload_msb_bits
+        cols <<= self.payload_msb_bits
         if keys is not None:
             cols |= keys.astype(np.uint64) << (_64 - self.key_bits)
         values = payload % self.payload_lsb_bits   # Value to encode
@@ -120,7 +120,9 @@ class RoaringishEncoder:
 
         # 0 as a position, goes in bit 1,
         # 1 as a position, goes in bit 2, etc
-        encoded = cols | (1 << values)
+        values = _1 << values
+        cols |= values
+        encoded = cols
         if len(encoded) == 0:
             return encoded, new_boundaries
         reduced = np.bitwise_or.reduceat(encoded, change_indices)
