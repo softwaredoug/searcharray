@@ -241,6 +241,15 @@ def test_phrase_too_many_posns():
         SearchArray.index([big_str, "not match"])
 
 
+def test_phrase_too_many_posns_with_truncate():
+    big_str = "foo bar baz " + " ".join(["dummy"] * MAX_POSN) + " blah blah blah"
+    arr = SearchArray.index([big_str, "not match"], truncate=True)
+    assert len(arr) == 2
+    phrase_matches = arr.phrase_freq(["foo", "bar", "baz"])
+    expected = [1, 0]
+    assert (expected == phrase_matches).all()
+
+
 perf_scenarios = {
     "4m_docs": {
         "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 1000000),

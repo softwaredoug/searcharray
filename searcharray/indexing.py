@@ -36,7 +36,7 @@ def convert_size(size_bytes):
     return "%s %s" % (s, size_name[i])
 
 
-def _gather_tokens(array, tokenizer, term_dict, term_doc, start_doc_id=0):
+def _gather_tokens(array, tokenizer, term_dict, term_doc, start_doc_id=0, trunc_posn=None):
     all_terms = []
     all_docs = []
     all_posns = []
@@ -47,10 +47,11 @@ def _gather_tokens(array, tokenizer, term_dict, term_doc, start_doc_id=0):
         doc_id = start_doc_id + idx
 
         terms = np.asarray([term_dict.add_term(token)
-                            for token in tokenizer(doc)], dtype=np.uint32)
-        doc_ids = np.full(len(terms), doc_id, dtype=np.uint32)
+                            for token in tokenizer(doc)], dtype=np.uint32)[:trunc_posn]
+        doc_ids = np.full(len(terms), doc_id, dtype=np.uint32)[:trunc_posn]
         all_terms.append(terms)
         all_docs.append(doc_ids)
+
         all_posns.append(np.arange(len(terms)))
 
         term_doc.append(np.unique(terms))
@@ -71,9 +72,14 @@ def _gather_tokens(array, tokenizer, term_dict, term_doc, start_doc_id=0):
     return terms_w_posns, term_dict, term_doc
 
 
-def _tokenize_batch(array, tokenizer, term_dict, term_doc, batch_size, batch_beg):
+def _tokenize_batch(array, tokenizer, term_dict, term_doc, batch_size, batch_beg, truncate=False):
+    trunc_posn = None
+    if truncate:
+        trunc_posn = MAX_POSN
+
     terms_w_posns, term_dict, term_doc = _gather_tokens(array, tokenizer,
-                                                        term_dict, term_doc, start_doc_id=batch_beg)
+                                                        term_dict, term_doc, start_doc_id=batch_beg,
+                                                        trunc_posn=trunc_posn)
 
     # Use posns to compute doc lens
     doc_lens = _compute_doc_lens(posns=terms_w_posns[2, :],
@@ -94,19 +100,27 @@ def _tokenize_batch(array, tokenizer, term_dict, term_doc, batch_size, batch_beg
     return term_doc, bit_posns, term_dict, doc_lens
 
 
-def build_index_from_tokenizer(array, tokenizer, batch_size=10000):
+def build_index_from_tokenizer(array, tokenizer, batch_size=10000, truncate=False):
     """Build index directly from tokenizing docs (array of string)."""
     term_dict = TermDict()
     term_doc = SparseMatSetBuilder()
     doc_lens = []
     bit_posns = None
+    batch_bit_posns = None
 
     for batch_beg in range(0, len(array), batch_size):
         batch_end = (batch_beg + batch_size) if (batch_beg + batch_size) < len(array) else len(array)
         batch = array[batch_beg:batch_end]
-        term_doc, batch_bit_posns, term_dict, batch_doc_lens = _tokenize_batch(batch, tokenizer,
-                                                                               term_dict, term_doc,
-                                                                               batch_size, batch_beg)
+        try:
+            term_doc, batch_bit_posns, term_dict, batch_doc_lens = _tokenize_batch(batch, tokenizer,
+                                                                                   term_dict, term_doc,
+                                                                                   batch_size, batch_beg,
+                                                                                   truncate=truncate)
+        except ValueError as e:
+            logger.error(e)
+            logger.error(f"Batch {batch_beg} - {batch_end} failed to tokenize")
+            raise e
+
         if bit_posns is None:
             bit_posns = batch_bit_posns
         else:

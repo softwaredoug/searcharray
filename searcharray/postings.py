@@ -219,7 +219,8 @@ class SearchArray(ExtensionArray):
             self.doc_lens = build_index_from_terms_list(postings, Terms)
 
     @classmethod
-    def index(cls, array, tokenizer=ws_tokenizer, batch_size=100000) -> 'SearchArray':
+    def index(cls, array, tokenizer=ws_tokenizer,
+              truncate=False, batch_size=100000) -> 'SearchArray':
         """Index an array of strings using tokenizer."""
         if not is_list_like(array):
             raise TypeError("Expected list-like object, got {}".format(type(array)))
@@ -227,7 +228,8 @@ class SearchArray(ExtensionArray):
             raise TypeError("Expected a list of strings to tokenize")
 
         term_mat, posns, term_dict, avg_doc_length, doc_lens =\
-            build_index_from_tokenizer(array, tokenizer, batch_size=batch_size)
+            build_index_from_tokenizer(array, tokenizer, batch_size=batch_size,
+                                       truncate=truncate)
 
         postings = cls([], tokenizer=tokenizer)
         postings.term_mat = term_mat

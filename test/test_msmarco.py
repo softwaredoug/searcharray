@@ -269,7 +269,7 @@ def test_msmarco1m_indexall(msmarco1m_raw, benchmark, caplog):
     assert len(idxed) == len(body)
 
 
-@pytest.mark.skip(reason="Not used on every run")
+# @pytest.mark.skip(reason="Not used on every run")
 def test_msmarco_indexall(msmarco_all_raw, benchmark, caplog):
     caplog.set_level(logging.DEBUG)
     body = msmarco_all_raw['body']
