@@ -127,8 +127,12 @@ def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000, tru
     bit_posns = None
     batch_bit_posns = None
 
+    print(f"Indexing begins")
+    logger.info("Indexing begins")
+
     for batch_beg, batch in batch_iterator(array, batch_size):
         try:
+            logger.info(f"{batch_beg} Batch Start")
             term_doc, batch_bit_posns, term_dict, batch_doc_lens = _tokenize_batch(batch, tokenizer,
                                                                                    term_dict, term_doc,
                                                                                    batch_size, batch_beg,

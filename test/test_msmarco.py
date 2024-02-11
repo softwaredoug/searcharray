@@ -1,10 +1,12 @@
 import pytest
-import numpy as np
 import pandas as pd
+import csv
+import gzip
 import pathlib
 import requests
 import string
 import logging
+import sys
 from searcharray import SearchArray
 from test_utils import Profiler, profile_enabled
 
@@ -49,6 +51,19 @@ def msmarco_download():
     if not msmarco_exists():
         download_msmarco()
     return msmarco_path()
+
+
+@pytest.fixture(scope="session")
+def msmarco_unzipped(msmarco_download):
+    print("Unzipping...")
+    msmarco_unzipped_path = 'data/msmarco-docs.tsv'
+    msmarco_unzipped_path = pathlib.Path(msmarco_unzipped_path)
+
+    if not msmarco_unzipped_path.exists():
+        with gzip.open(msmarco_download, 'rb') as f_in:
+            with open(msmarco_unzipped_path, 'wb') as f_out:
+                f_out.write(f_in.read())
+    return msmarco_unzipped_path
 
 
 @pytest.fixture(scope="session")
@@ -263,9 +278,29 @@ def test_msmarco1m_indexall(msmarco1m_raw, benchmark, caplog):
     assert len(idxed) == len(body)
 
 
-# @pytest.mark.skip(reason="Not used on every run")
-def test_msmarco_indexall(msmarco_all_raw, benchmark, caplog):
+@pytest.mark.skip(reason="Not used on every run")
+def test_msmarco_indexall(msmarco_unzipped, benchmark, caplog):
     caplog.set_level(logging.DEBUG)
-    body = msmarco_all_raw['body']
-    idxed = SearchArray.index(body)
-    assert len(idxed) == len(body)
+    # Get an iterator through the msmarco dataset
+
+    csv.field_size_limit(sys.maxsize)
+
+    # Use csv iterator for memory efficiency
+    def csv_col_iter(msmarco_unzipped_path, col_no):
+        with open(msmarco_unzipped_path, "rt") as f:
+            csv_reader = csv.reader(f, delimiter="\t")
+            for row in csv_reader:
+                col = row[col_no]
+                yield col
+
+    body_iter = csv_col_iter(msmarco_unzipped, 3)
+    title_iter = csv_col_iter(msmarco_unzipped, 2)
+    df = pd.DataFrame()
+    print("Indexing body")
+    df['body_tokens'] = SearchArray.index(body_iter, truncate=True)
+    print("Indexing title")
+    df['title_tokens'] = SearchArray.index(title_iter, truncate=True)
+    print("Saving ids")
+    df['msmarco_id'] = pd.read_csv(msmarco_unzipped, delimiter="\t", usecols=[0], header=None)
+    print("Getting URL")
+    df['msmarco_id'] = pd.read_csv(msmarco_unzipped, delimiter="\t", usecols=[1], header=None)
