@@ -8,7 +8,7 @@ import json
 from collections import Counter
 import warnings
 import logging
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Iterable
 
 
 import numpy as np
@@ -219,13 +219,11 @@ class SearchArray(ExtensionArray):
             self.doc_lens = build_index_from_terms_list(postings, Terms)
 
     @classmethod
-    def index(cls, array, tokenizer=ws_tokenizer,
+    def index(cls, array: Iterable, tokenizer=ws_tokenizer,
               truncate=False, batch_size=100000) -> 'SearchArray':
         """Index an array of strings using tokenizer."""
         if not is_list_like(array):
             raise TypeError("Expected list-like object, got {}".format(type(array)))
-        if not all(isinstance(x, str) or pd.isna(x) for x in array):
-            raise TypeError("Expected a list of strings to tokenize")
 
         term_mat, posns, term_dict, avg_doc_length, doc_lens =\
             build_index_from_tokenizer(array, tokenizer, batch_size=batch_size,
