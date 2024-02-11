@@ -304,3 +304,5 @@ def test_msmarco_indexall(msmarco_unzipped, benchmark, caplog):
     df['msmarco_id'] = pd.read_csv(msmarco_unzipped, delimiter="\t", usecols=[0], header=None)
     print("Getting URL")
     df['msmarco_id'] = pd.read_csv(msmarco_unzipped, delimiter="\t", usecols=[1], header=None)
+    # Save to pickle
+    df.to_pickle("data/msmarco_indexed.pkl")
