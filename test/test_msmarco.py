@@ -254,12 +254,6 @@ def test_msmarco10k_indexing(msmarco100k_raw, benchmark):
     assert len(results) == 10000
 
 
-def test_msmarco_batch_sizes_give_same(msmarco100k_raw):
-    with_batch_10k = SearchArray.index(msmarco100k_raw['body'], batch_size=10000)
-    with_batch_5k = SearchArray.index(msmarco100k_raw['body'], batch_size=5000)
-    assert np.all(with_batch_10k == with_batch_5k)
-
-
 @pytest.mark.skip(reason="Not used on every run")
 def test_msmarco1m_indexall(msmarco1m_raw, benchmark, caplog):
     caplog.set_level(logging.DEBUG)

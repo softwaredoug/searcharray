@@ -96,6 +96,12 @@ def test_slice_then_search(tmdb_data):
     assert skywalker_bm25.shape[0] == 3
 
 
+def test_batch_sizes_give_same(tmdb_data):
+    with_batch_10k = SearchArray.index(tmdb_data['overview'], batch_size=10000)
+    with_batch_5k = SearchArray.index(tmdb_data['overview'], batch_size=5000)
+    assert np.all(with_batch_10k == with_batch_5k)
+
+
 tmdb_term_matches = [
     ("Star", ['11', '330459', '76180']),
     ("Black", ['374430']),

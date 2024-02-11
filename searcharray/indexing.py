@@ -1,6 +1,8 @@
 import numpy as np
 import math
 import gc
+from typing import Iterable
+from itertools import islice
 from searcharray.phrase.middle_out import MAX_POSN, PosnBitArrayFromFlatBuilder, PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder
 from searcharray.term_dict import TermDict
 from searcharray.utils.mat_set import SparseMatSetBuilder
@@ -100,7 +102,24 @@ def _tokenize_batch(array, tokenizer, term_dict, term_doc, batch_size, batch_beg
     return term_doc, bit_posns, term_dict, doc_lens
 
 
-def build_index_from_tokenizer(array, tokenizer, batch_size=10000, truncate=False):
+def batch_iterator(iterator, batch_size):
+    """
+    Slices an iterator into batches of specified size and yields each batch until the iterator is exhausted.
+
+    :param iterator: The iterator to slice into batches.
+    :param batch_size: The size of each batch.
+    """
+    batch_beg = 0
+    it = iter(iterator)
+    while True:
+        batch = list(islice(it, batch_size))
+        if not batch:
+            break
+        yield batch_beg, batch
+        batch_beg += batch_size
+
+
+def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000, truncate=False):
     """Build index directly from tokenizing docs (array of string)."""
     term_dict = TermDict()
     term_doc = SparseMatSetBuilder()
@@ -108,9 +127,7 @@ def build_index_from_tokenizer(array, tokenizer, batch_size=10000, truncate=Fals
     bit_posns = None
     batch_bit_posns = None
 
-    for batch_beg in range(0, len(array), batch_size):
-        batch_end = (batch_beg + batch_size) if (batch_beg + batch_size) < len(array) else len(array)
-        batch = array[batch_beg:batch_end]
+    for batch_beg, batch in batch_iterator(array, batch_size):
         try:
             term_doc, batch_bit_posns, term_dict, batch_doc_lens = _tokenize_batch(batch, tokenizer,
                                                                                    term_dict, term_doc,
@@ -118,7 +135,7 @@ def build_index_from_tokenizer(array, tokenizer, batch_size=10000, truncate=Fals
                                                                                    truncate=truncate)
         except ValueError as e:
             logger.error(e)
-            logger.error(f"Batch {batch_beg} - {batch_end} failed to tokenize")
+            logger.error(f"Batch {batch_beg} failed to tokenize")
             raise e
 
         if bit_posns is None:
@@ -128,9 +145,9 @@ def build_index_from_tokenizer(array, tokenizer, batch_size=10000, truncate=Fals
 
         doc_lens.append(batch_doc_lens)
 
-        logger.info(f"{batch_end // batch_size} - Complete, remaining batches: {len(array) / batch_size}")
-        logger.info(f"{batch_end // batch_size} - Roaringish NBytes -- {convert_size(bit_posns.nbytes)}")
-        logger.info(f"{batch_end // batch_size} - Term Dict Size -- {len(term_dict)}")
+        logger.info(f"{batch_beg} Batch Complete")
+        logger.info(f"Roaringish NBytes -- {convert_size(bit_posns.nbytes)}")
+        logger.info(f"Term Dict Size -- {len(term_dict)}")
 
     doc_lens = np.concatenate(doc_lens)
 
