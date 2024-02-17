@@ -74,6 +74,19 @@ def _gather_tokens(array, tokenizer, term_dict, term_doc, start_doc_id=0, trunc_
     return terms_w_posns, term_dict, term_doc
 
 
+def _lex_sort(terms_w_posns):
+    """Sort terms, then doc_id, then posn."""
+    # Because docs / posns already sorted, we can just sort on terms
+    # Equivelant to np.lexsort(terms_w_posns[[::-1], :])
+    return np.argsort(terms_w_posns[0, :], kind='stable')
+
+
+def _invert_docs_terms(terms_w_posns):
+    # Sort on terms, then doc_id, then posn with lexsort
+    lexsort = _lex_sort(terms_w_posns)
+    return terms_w_posns[:, lexsort]
+
+
 def _tokenize_batch(array, tokenizer, term_dict, term_doc, batch_size, batch_beg, truncate=False):
     trunc_posn = None
     if truncate:
@@ -88,8 +101,7 @@ def _tokenize_batch(array, tokenizer, term_dict, term_doc, batch_size, batch_beg
                                  doc_ids=(terms_w_posns[1, :] - batch_beg),
                                  num_docs=len(array))
     logger.info("Inverting docs->terms")
-    # Sort on terms, then doc_id, then posn with lexsort
-    terms_w_posns = terms_w_posns[:, np.lexsort(terms_w_posns[::-1, :])]
+    terms_w_posns = _invert_docs_terms(terms_w_posns)
 
     # Encode posns to bit array
     logger.info("Encoding positions to bit array")
@@ -127,7 +139,6 @@ def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000, tru
     bit_posns = None
     batch_bit_posns = None
 
-    print(f"Indexing begins")
     logger.info("Indexing begins")
 
     for batch_beg, batch in batch_iterator(array, batch_size):
