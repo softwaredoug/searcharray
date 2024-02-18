@@ -11,6 +11,7 @@ decorator==5.1.1
 docutils==0.20.1
 executing==2.0.1
 flake8==6.1.0
+flake8-print==5.0.0
 fonttools==4.46.0
 idna==3.4
 importlib-metadata==6.8.0
