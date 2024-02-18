@@ -82,7 +82,10 @@ def _lex_sort(terms_w_posns):
 
 
 def _invert_docs_terms(terms_w_posns):
-    # Sort on terms, then doc_id, then posn with lexsort
+    """Sort terms, then doc_id, then posn."""
+    # An in place sort could be faster if we could figure this out,
+    # an np.sort(arr) is about 1/3 the time of np.argsort(arr)
+    # possibly more with just arr.sort()
     lexsort = _lex_sort(terms_w_posns)
     return terms_w_posns[:, lexsort]
 

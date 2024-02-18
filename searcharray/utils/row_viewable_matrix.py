@@ -18,7 +18,7 @@ def rowwise_eq(mat: SparseMatSet, other: SparseMatSet) -> Union[bool, np.ndarray
 class RowViewableMatrix:
     """A slicable matrix that can return views without copying."""
 
-    def __init__(self, mat: SparseMatSet, rows: Optional[np.ndarray] = None):
+    def __init__(self, mat: SparseMatSet, rows: Optional[np.ndarray] = None, subset=False):
         self.mat = mat
         self.col_cache: Dict[int, np.ndarray] = {}
         self.cols_cached: List[int] = []
@@ -28,9 +28,10 @@ class RowViewableMatrix:
             self.rows = np.array([rows])
         else:
             self.rows = rows
+        self.subset = subset
 
     def slice(self, keys):
-        return RowViewableMatrix(self.mat, self.rows[keys])
+        return RowViewableMatrix(self.mat, self.rows[keys], subset=True)
 
     def __setitem__(self, keys, values):
         # Replace nan with 0
@@ -46,7 +47,7 @@ class RowViewableMatrix:
         return self.mat[self.rows[row]]
 
     def copy(self):
-        return RowViewableMatrix(self.mat.copy(), self.rows.copy())
+        return RowViewableMatrix(self.mat.copy(), self.rows.copy(), subset=self.subset)
 
     def cols_per_row(self):
         return self.mat[self.rows].num_cols_per_row()

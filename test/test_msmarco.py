@@ -1,5 +1,6 @@
 import pytest
 import pandas as pd
+import numpy as np
 import csv
 import gzip
 import pathlib
@@ -9,6 +10,20 @@ import logging
 import sys
 from searcharray import SearchArray
 from test_utils import Profiler, profile_enabled
+
+
+csv.field_size_limit(sys.maxsize)
+
+
+# Use csv iterator for memory efficiency
+def csv_col_iter(msmarco_unzipped_path, col_no, num_docs=None):
+    with open(msmarco_unzipped_path, "rt") as f:
+        csv_reader = csv.reader(f, delimiter="\t")
+        for idx, row in enumerate(csv_reader):
+            col = row[col_no]
+            yield col
+            if num_docs is not None and idx >= num_docs:
+                break
 
 
 def download_file(url):
@@ -114,6 +129,7 @@ def msmarco1m_raw(msmarco_download):
         msmarco.to_pickle(msmarco_raw_path)
         return msmarco
     else:
+        print("Loading pkl docs...")
         return pd.read_pickle(msmarco_raw_path)
 
 
@@ -151,7 +167,7 @@ def msmarco1m(msmarco1m_raw):
             return [token.translate(str.maketrans('', '', string.punctuation))
                     for token in split]
 
-        msmarco = msmarco100k_raw
+        msmarco = msmarco1m_raw
         msmarco["title_ws"] = SearchArray.index(msmarco["title"])
         msmarco["body_ws"] = SearchArray.index(msmarco["body"])
 
@@ -251,16 +267,6 @@ def test_msmarco100k(phrase_search, msmarco100k, benchmark):
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-@pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
-def test_msmarco_all(phrase_search, msmarco_all, benchmark):
-    profiler = Profiler(benchmark)
-    phrase_search = phrase_search.split()
-    print(f"STARTING {phrase_search}")
-    print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
-    profiler.run(msmarco100k['body_ws'].array.score, phrase_search)
-
-
-@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 def test_msmarco10k_indexing(msmarco100k_raw, benchmark):
     profiler = Profiler(benchmark)
     # Random 10k
@@ -283,16 +289,6 @@ def test_msmarco_indexall(msmarco_unzipped, benchmark, caplog):
     caplog.set_level(logging.DEBUG)
     # Get an iterator through the msmarco dataset
 
-    csv.field_size_limit(sys.maxsize)
-
-    # Use csv iterator for memory efficiency
-    def csv_col_iter(msmarco_unzipped_path, col_no):
-        with open(msmarco_unzipped_path, "rt") as f:
-            csv_reader = csv.reader(f, delimiter="\t")
-            for row in csv_reader:
-                col = row[col_no]
-                yield col
-
     body_iter = csv_col_iter(msmarco_unzipped, 3)
     title_iter = csv_col_iter(msmarco_unzipped, 2)
     df = pd.DataFrame()
@@ -306,3 +302,31 @@ def test_msmarco_indexall(msmarco_unzipped, benchmark, caplog):
     df['msmarco_id'] = pd.read_csv(msmarco_unzipped, delimiter="\t", usecols=[1], header=None)
     # Save to pickle
     df.to_pickle("data/msmarco_indexed.pkl")
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("query", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
+def test_msmarco1m_or_search(query, msmarco1m, benchmark, caplog):
+    profiler = Profiler(benchmark)
+
+    caplog.set_level(logging.DEBUG)
+
+    def sum_scores(query):
+        return np.sum([msmarco1m['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
+    scores = profiler.run(sum_scores, query)
+    assert len(scores) == len(msmarco1m['body_ws'].array)
+    assert np.any(scores > 0)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("query", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
+def test_msmarco100k_or_search(query, msmarco100k, benchmark, caplog):
+    profiler = Profiler(benchmark)
+
+    caplog.set_level(logging.DEBUG)
+
+    def sum_scores(query):
+        return np.sum([msmarco100k['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
+    scores = profiler.run(sum_scores, query)
+    assert len(scores) == len(msmarco100k['body_ws'].array)
+    assert np.any(scores > 0)

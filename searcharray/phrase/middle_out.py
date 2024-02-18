@@ -8,7 +8,7 @@ https://colab.research.google.com/drive/10tIEkdlCE_1J_CcgEcV0jkLfBc-0H4am?authus
 import numpy as np
 import sortednp as snp
 from copy import deepcopy
-from typing import List, Tuple, Dict, Union, cast
+from typing import List, Tuple, Dict, Union, cast, Optional
 from searcharray.utils.roaringish import RoaringishEncoder, convert_keys
 import numbers
 import logging
@@ -396,11 +396,13 @@ class PosnBitArray:
                 return decs[0]
             return decs
 
-    def termfreqs(self, term_id: int, doc_ids: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def termfreqs(self, term_id: int, doc_ids: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
         """Count term freqs using unique positions."""
         encoded = self.encoded_term_posns[term_id]
-        term_posns = encoder.slice(encoded,
-                                   keys=doc_ids.astype(np.uint64))
+        term_posns = encoded
+        if doc_ids is not None:
+            term_posns = encoder.slice(encoded,
+                                       keys=doc_ids.astype(np.uint64))
         doc_ids = encoder.keys(term_posns)
         change_indices = np.nonzero(np.diff(doc_ids))[0]
         change_indices = np.concatenate((np.asarray([0]), change_indices + 1))
