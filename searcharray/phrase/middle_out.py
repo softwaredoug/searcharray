@@ -315,6 +315,9 @@ class PosnBitArray:
         only_other_terms = set(other.encoded_term_posns.keys()).difference(set(self.encoded_term_posns.keys()))
         for term_id in only_other_terms:
             self.encoded_term_posns[term_id] = other.encoded_term_posns[term_id]
+        # Empty caches
+        self.termfreq_cache = {}
+        self.docfreq_cache = {}
 
     def slice(self, key):
         sliced_term_posns = {}
@@ -343,6 +346,9 @@ class PosnBitArray:
                 posns_self = self.encoded_term_posns[term_id]
                 posns_other = other.encoded_term_posns[term_id]
                 self.encoded_term_posns[term_id] = snp.merge(posns_self, posns_other)
+        # Empty caches
+        self.termfreq_cache = {}
+        self.docfreq_cache = {}
 
     def doc_encoded_posns(self, term_id: int, doc_id: int) -> np.ndarray:
         term_posns = encoder.slice(self.encoded_term_posns[term_id],
