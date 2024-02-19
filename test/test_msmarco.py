@@ -306,13 +306,28 @@ def test_msmarco_indexall(msmarco_unzipped, benchmark, caplog):
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.mark.parametrize("query", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
-def test_msmarco1m_or_search(query, msmarco1m, benchmark, caplog):
+def test_msmarco1m_or_search_unwarmed(query, msmarco1m, benchmark, caplog):
     profiler = Profiler(benchmark)
 
     caplog.set_level(logging.DEBUG)
 
     def sum_scores(query):
         return np.sum([msmarco1m['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
+    scores = profiler.run(sum_scores, query)
+    assert len(scores) == len(msmarco1m['body_ws'].array)
+    assert np.any(scores > 0)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("query", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
+def test_msmarco1m_or_search_warmed(query, msmarco1m, benchmark, caplog):
+    profiler = Profiler(benchmark)
+
+    caplog.set_level(logging.DEBUG)
+
+    def sum_scores(query):
+        return np.sum([msmarco1m['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
+    sum_scores(query)  # Warmup
     scores = profiler.run(sum_scores, query)
     assert len(scores) == len(msmarco1m['body_ws'].array)
     assert np.any(scores > 0)

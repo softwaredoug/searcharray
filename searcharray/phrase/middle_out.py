@@ -315,6 +315,7 @@ class PosnBitArray:
         only_other_terms = set(other.encoded_term_posns.keys()).difference(set(self.encoded_term_posns.keys()))
         for term_id in only_other_terms:
             self.encoded_term_posns[term_id] = other.encoded_term_posns[term_id]
+        self.max_doc_id = max(self.max_doc_id, other.max_doc_id)
         # Empty caches
         self.termfreq_cache = {}
         self.docfreq_cache = {}
@@ -346,6 +347,7 @@ class PosnBitArray:
                 posns_self = self.encoded_term_posns[term_id]
                 posns_other = other.encoded_term_posns[term_id]
                 self.encoded_term_posns[term_id] = snp.merge(posns_self, posns_other)
+        self.max_doc_id = self.max_doc_id + other.max_doc_id
         # Empty caches
         self.termfreq_cache = {}
         self.docfreq_cache = {}
@@ -437,7 +439,7 @@ class PosnBitArray:
         return self.docfreq_cache[term_id]
 
     def _maybe_cache_docfreq(self, term_id: int, docfreq: np.uint64):
-        if docfreq > self.max_doc_id // 10:
+        if self.max_doc_id >= 100000 and docfreq > (self.max_doc_id // 100):
             self.docfreq_cache[term_id] = docfreq
 
     def docfreq(self, term_id: int) -> np.uint64:
