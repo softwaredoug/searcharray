@@ -541,10 +541,13 @@ class SearchArray(ExtensionArray):
         # Get term freqs per token
         token = self._check_token_arg(token)
 
-        tfs = self.termfreqs(token)
-        token = self._check_token_arg(token)
+        # For expensive toknes, we compute doc freq first, so we
+        # cache them in the DF cache, to let TF cache know it should be cached
         tokens_l = [token] if isinstance(token, str) else token
         all_dfs = np.asarray([self.docfreq(token) for token in tokens_l])
+
+        tfs = self.termfreqs(token)
+        token = self._check_token_arg(token)
         doc_lens = self.doclengths()
         scores = similarity(term_freqs=tfs, doc_freqs=all_dfs,
                             doc_lens=doc_lens, avg_doc_lens=self.avg_doc_length,

@@ -294,6 +294,7 @@ class PosnBitArray:
         self.encoded_term_posns = encoded_term_posns
         self.max_doc_id = max_doc_id
         self.docfreq_cache : Dict[int, np.uint64] = {}
+        self.termfreq_cache : Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
 
     def copy(self):
         new = PosnBitArray(deepcopy(self.encoded_term_posns), self.max_doc_id)
@@ -394,11 +395,16 @@ class PosnBitArray:
 
     def termfreqs(self, term_id: int, doc_ids: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
         """Count term freqs using unique positions."""
+        if doc_ids is None:
+            return self._termfreqs_with_cache(term_id)
+
         encoded = self.encoded_term_posns[term_id]
         term_posns = encoded
-        if doc_ids is not None:
-            term_posns = encoder.slice(encoded,
-                                       keys=doc_ids.astype(np.uint64))
+        term_posns = encoder.slice(encoded,
+                                   keys=doc_ids.astype(np.uint64))
+        return self._computed_term_freqs(term_posns)
+
+    def _computed_term_freqs(self, term_posns) -> Tuple[np.ndarray, np.ndarray]:
         doc_ids = encoder.keys(term_posns)
         change_indices = np.nonzero(np.diff(doc_ids))[0]
         change_indices = np.concatenate((np.asarray([0]), change_indices + 1))
@@ -408,13 +414,34 @@ class PosnBitArray:
         term_freqs = np.add.reduceat(bit_counts, change_indices)
         return sorted_unique(doc_ids), term_freqs
 
+    def _termfreqs_with_cache(self, term_id: int) -> Tuple[np.ndarray, np.ndarray]:
+        try:
+            return self.termfreq_cache[term_id]
+        except KeyError:
+            term_posns = self.encoded_term_posns[term_id]
+            doc_ids, term_freqs = self._computed_term_freqs(term_posns)
+            if self._is_cached(term_id):
+                self.termfreq_cache[term_id] = (doc_ids, term_freqs)
+            return doc_ids, term_freqs
+
+    def _is_cached(self, term_id: int) -> bool:
+        return term_id in self.docfreq_cache
+
+    def _docfreq_from_cache(self, term_id: int) -> np.uint64:
+        return self.docfreq_cache[term_id]
+
+    def _maybe_cache_docfreq(self, term_id: int, docfreq: np.uint64):
+        if docfreq > self.max_doc_id // 10:
+            self.docfreq_cache[term_id] = docfreq
+
     def docfreq(self, term_id: int) -> np.uint64:
         try:
             return self.docfreq_cache[term_id]
         except KeyError:
             encoded = self.encoded_term_posns[term_id]
-            self.docfreq_cache[term_id] = np.uint64(encoder.keys_unique(encoded).size)
-            return self.docfreq_cache[term_id]
+            docfreq = np.uint64(encoder.keys_unique(encoded).size)
+            self._maybe_cache_docfreq(term_id, docfreq)
+            return docfreq
 
     def insert(self, key, term_ids_to_posns, is_encoded=False):
         new_posns = PosnBitArrayBuilder()
