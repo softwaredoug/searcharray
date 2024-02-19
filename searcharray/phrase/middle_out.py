@@ -9,7 +9,7 @@ import numpy as np
 import sortednp as snp
 from copy import deepcopy
 from typing import List, Tuple, Dict, Union, cast, Optional
-from searcharray.utils.roaringish import RoaringishEncoder, convert_keys
+from searcharray.utils.roaringish import RoaringishEncoder, convert_keys, sorted_unique
 import numbers
 import logging
 from collections import defaultdict
@@ -293,6 +293,8 @@ class PosnBitArray:
     def __init__(self, encoded_term_posns, doc_ids):
         self.encoded_term_posns = encoded_term_posns
         self.doc_ids = doc_ids
+        self.termfreq_cache = {}
+        self.docfreq_cache = {}
 
     def copy(self):
         new = PosnBitArray(deepcopy(self.encoded_term_posns),
@@ -410,11 +412,15 @@ class PosnBitArray:
         bit_counts = bit_count64(posns)
 
         term_freqs = np.add.reduceat(bit_counts, change_indices)
-        return doc_ids, term_freqs
+        return sorted_unique(doc_ids), term_freqs
 
     def docfreq(self, term_id: int) -> np.uint32:
-        encoded = self.encoded_term_posns[term_id]
-        return np.uint32(encoder.keys_unique(encoded).size)
+        try:
+            return self.docfreq_cache[term_id]
+        except KeyError:
+            encoded = self.encoded_term_posns[term_id]
+            self.docfreq_cache[term_id] = np.uint32(encoder.keys_unique(encoded).size)
+            return self.docfreq_cache[term_id]
 
     def insert(self, key, term_ids_to_posns, is_encoded=False):
         new_posns = PosnBitArrayBuilder()

@@ -496,11 +496,16 @@ class SearchArray(ExtensionArray):
             slice_of_rows = None
             if self.term_mat.subset:
                 slice_of_rows = self.term_mat.rows
-            doc_ids, termfreqs = self.posns.termfreqs(term_id,
-                                                      doc_ids=slice_of_rows)
-            mask = np.isin(self.term_mat.rows, doc_ids)
-            matches[mask] = termfreqs
-            return matches
+                doc_ids, termfreqs = self.posns.termfreqs(term_id,
+                                                          doc_ids=slice_of_rows)
+                mask = np.isin(self.term_mat.rows, doc_ids)
+                matches[mask] = termfreqs
+                return matches
+            else:
+                doc_ids, termfreqs = self.posns.termfreqs(term_id,
+                                                          doc_ids=slice_of_rows)
+                matches[doc_ids] = termfreqs
+                return matches
         except TermMissingError:
             return np.zeros(len(self), dtype=int)
 
