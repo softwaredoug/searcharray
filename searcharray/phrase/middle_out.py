@@ -461,4 +461,9 @@ class PosnBitArray:
         arr_bytes = 0
         for doc_id, posn in self.encoded_term_posns.items():
             arr_bytes += posn.nbytes
+        for term_id, (doc_ids, term_freqs) in self.termfreq_cache.items():
+            arr_bytes += doc_ids.nbytes
+            arr_bytes += term_freqs.nbytes
+        for term_id, docfreq in self.docfreq_cache.items():
+            arr_bytes += docfreq.nbytes
         return arr_bytes
