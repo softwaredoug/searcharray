@@ -1,6 +1,6 @@
 """Test postings array search functionality."""
-import pytest
 import numpy as np
+import pytest
 from searcharray.postings import SearchArray
 from test_utils import w_scenarios
 
@@ -103,6 +103,12 @@ or_scenarios = {
         "expected": [True, False, False, False] * 25,
         "min_should_match": 1,
     },
+    "or_with_phrase_on_copy": {
+        "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25, avoid_copies=False),
+        "keywords": [["foo", "bar"], "baz"],
+        "expected": [True, False, False, False] * 25,
+        "min_should_match": 1,
+    },
     "or_with_phrase_mm2": {
         "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "keywords": [["foo", "bar"], ["bar", "baz"]],
@@ -113,17 +119,27 @@ or_scenarios = {
 
 
 @w_scenarios(or_scenarios)
-def test_or_query(data, docs, keywords, expected, min_should_match):
+def test_or_query(docs, keywords, expected, min_should_match):
     docs = docs()
-    matches = data.or_query(keywords, min_should_match=min_should_match)
+    matches = docs.or_query(keywords, min_should_match=min_should_match)
     assert (expected == matches).all()
 
 
 @w_scenarios(or_scenarios)
-def test_or_query_sliced(data, docs, keywords, expected, min_should_match):
+def test_or_query_sliced(docs, keywords, expected, min_should_match):
     docs = docs()
     num_docs = len(docs)
-    sliced = data[:num_docs // 2]
+    sliced = docs[:num_docs // 2]
+    expected_sliced = expected[:num_docs // 2]
+    matches = sliced.or_query(keywords, min_should_match=min_should_match)
+    assert (expected_sliced == matches).all()
+
+
+@w_scenarios(or_scenarios)
+def test_or_query_copy(docs, keywords, expected, min_should_match):
+    docs = docs()
+    num_docs = len(docs)
+    sliced = docs[:num_docs // 2].copy()
     expected_sliced = expected[:num_docs // 2]
     matches = sliced.or_query(keywords, min_should_match=min_should_match)
     assert (expected_sliced == matches).all()

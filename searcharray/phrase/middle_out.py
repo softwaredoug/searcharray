@@ -203,7 +203,7 @@ class PosnBitArrayFromFlatBuilder:
             sliced = encoded[beg_idx:end_idx]
             encoded_term_posns[term_ids[into_terms]] = sliced
 
-        return PosnBitArray(encoded_term_posns, range(0, np.max(self.flat_array[1]) + 1))
+        return PosnBitArray(encoded_term_posns, self.flat_array[1].max())
 
 
 class PosnBitArrayBuilder:
@@ -246,7 +246,7 @@ class PosnBitArrayBuilder:
                 assert np.array_equal(posns, posns_again)
             encoded_term_posns[term_id] = encoded
 
-        return PosnBitArray(encoded_term_posns, range(0, self.max_doc_id + 1))
+        return PosnBitArray(encoded_term_posns, self.max_doc_id)
 
 
 class PosnBitArrayAlreadyEncBuilder:
@@ -262,7 +262,7 @@ class PosnBitArrayAlreadyEncBuilder:
         self.max_doc_id = max(self.max_doc_id, doc_id)
 
     def build(self, check=False):
-        return PosnBitArray(self.encoded_term_posns, range(0, self.max_doc_id + 1))
+        return PosnBitArray(self.encoded_term_posns, self.max_doc_id)
 
 
 def index_range(rng, key):
@@ -290,15 +290,13 @@ def index_range(rng, key):
 
 class PosnBitArray:
 
-    def __init__(self, encoded_term_posns, doc_ids):
+    def __init__(self, encoded_term_posns, max_doc_id: int):
         self.encoded_term_posns = encoded_term_posns
-        self.doc_ids = doc_ids
-        self.termfreq_cache = {}
-        self.docfreq_cache = {}
+        self.max_doc_id = max_doc_id
+        self.docfreq_cache : Dict[int, np.uint64] = {}
 
     def copy(self):
-        new = PosnBitArray(deepcopy(self.encoded_term_posns),
-                           self.doc_ids)
+        new = PosnBitArray(deepcopy(self.encoded_term_posns), self.max_doc_id)
         return new
 
     def concat(self, other):
@@ -319,14 +317,14 @@ class PosnBitArray:
 
     def slice(self, key):
         sliced_term_posns = {}
-        doc_ids = index_range(self.doc_ids, key)
-        np_doc_ids = convert_keys(doc_ids)
+        doc_ids = convert_keys(key)
+        max_doc_id = np.max(doc_ids)
         for term_id, posns in self.encoded_term_posns.items():
             encoded = self.encoded_term_posns[term_id]
             assert len(encoded.shape) == 1
-            sliced_term_posns[term_id] = encoder.slice(encoded, keys=np_doc_ids)
+            sliced_term_posns[term_id] = encoder.slice(encoded, keys=doc_ids)
 
-        return PosnBitArray(sliced_term_posns, doc_ids=doc_ids)
+        return PosnBitArray(sliced_term_posns, max_doc_id)
 
     def __getitem__(self, key):
         return self.slice(key)
@@ -354,16 +352,14 @@ class PosnBitArray:
                      doc_ids: np.ndarray) -> np.ndarray:
         if len(term_ids) < 2:
             raise ValueError("Must have at least two terms")
-        if phrase_freqs.shape[0] == len(self.doc_ids):
+        if phrase_freqs.shape[0] == self.max_doc_id + 1:
             enc_term_posns = [self.encoded_term_posns[term_id] for term_id in term_ids]
         else:
             enc_term_posns = [encoder.slice(self.encoded_term_posns[term_id],
                                             keys=doc_ids.view(np.uint64)) for term_id in term_ids]
         return compute_phrase_freqs(enc_term_posns, phrase_freqs)
 
-    def positions(self, term_id: int, key) -> Union[List[np.ndarray], np.ndarray]:
-        # Check if key is in doc ids?
-        doc_ids = index_range(self.doc_ids, key)
+    def positions(self, term_id: int, doc_ids) -> Union[List[np.ndarray], np.ndarray]:
         if isinstance(doc_ids, numbers.Number):
             doc_ids = np.asarray([doc_ids])
 
@@ -373,7 +369,7 @@ class PosnBitArray:
                                        keys=np_doc_ids)
         except KeyError:
             r_val = [np.array([], dtype=np.uint32) for doc_id in doc_ids]
-            if len(r_val) == 1 and isinstance(key, numbers.Number):
+            if len(r_val) == 1 and len(doc_ids) == 1 and isinstance(doc_ids[0], numbers.Number):
                 return [r_val[0]]
             return r_val
 
@@ -394,8 +390,6 @@ class PosnBitArray:
             return decs
         else:
             decs = [dec[1] for dec in decoded]
-            if len(decs) == 1 and isinstance(key, numbers.Number):
-                return decs[0]
             return decs
 
     def termfreqs(self, term_id: int, doc_ids: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
@@ -414,12 +408,12 @@ class PosnBitArray:
         term_freqs = np.add.reduceat(bit_counts, change_indices)
         return sorted_unique(doc_ids), term_freqs
 
-    def docfreq(self, term_id: int) -> np.uint32:
+    def docfreq(self, term_id: int) -> np.uint64:
         try:
             return self.docfreq_cache[term_id]
         except KeyError:
             encoded = self.encoded_term_posns[term_id]
-            self.docfreq_cache[term_id] = np.uint32(encoder.keys_unique(encoded).size)
+            self.docfreq_cache[term_id] = np.uint64(encoder.keys_unique(encoded).size)
             return self.docfreq_cache[term_id]
 
     def insert(self, key, term_ids_to_posns, is_encoded=False):

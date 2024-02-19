@@ -220,7 +220,7 @@ class SearchArray(ExtensionArray):
 
     @classmethod
     def index(cls, array: Iterable, tokenizer=ws_tokenizer,
-              truncate=False, batch_size=100000) -> 'SearchArray':
+              truncate=False, batch_size=100000, avoid_copies=True) -> 'SearchArray':
         """Index an array of strings using tokenizer."""
         if not is_list_like(array):
             raise TypeError("Expected list-like object, got {}".format(type(array)))
@@ -229,7 +229,7 @@ class SearchArray(ExtensionArray):
             build_index_from_tokenizer(array, tokenizer, batch_size=batch_size,
                                        truncate=truncate)
 
-        postings = cls([], tokenizer=tokenizer)
+        postings = cls([], tokenizer=tokenizer, avoid_copies=avoid_copies)
         postings.term_mat = term_mat
         postings.posns = posns
         postings.term_dict = term_dict
@@ -278,7 +278,7 @@ class SearchArray(ExtensionArray):
         else:
             # Construct a sliced view of this array
             sliced_tfs = self.term_mat.slice(key)
-            sliced_posns = self.posns
+            sliced_posns = self.posns.slice(sliced_tfs.rows) if not self.avoid_copies else self.posns
             arr = SearchArray([], tokenizer=self.tokenizer)
             arr.term_mat = sliced_tfs
             arr.doc_lens = self.doc_lens[key]
@@ -554,7 +554,8 @@ class SearchArray(ExtensionArray):
     def positions(self, token: str, key=None) -> List[np.ndarray]:
         """Return a list of lists of positions of the given term."""
         term_id = self.term_dict.get_term_id(token)
-        posns = self.posns.positions(term_id, key=key)
+        key = self.term_mat.rows[key] if key is not None else self.term_mat.rows
+        posns = self.posns.positions(term_id, doc_ids=key)
         return posns
 
     def and_query(self, tokens: Union[List[str], List[List[str]]]) -> np.ndarray:
