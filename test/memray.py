@@ -1,11 +1,15 @@
 """A function for memray profiling to access all CLI params"""
-import pandas as pd
-import pathlib
-import requests
+import pytest
+
+pytest.skip("Skip memray.py", allow_module_level=True)
+
+import pandas as pd  # noqa
+import pathlib # noqa
+import requests # noqa
 
 # Set python path to parent
-import sys
-import os
+import sys # noqa
+import os # noqa
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from searcharray import SearchArray  # noqa
