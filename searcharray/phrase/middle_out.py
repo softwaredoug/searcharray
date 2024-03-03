@@ -296,6 +296,17 @@ class PosnBitArray:
         self.docfreq_cache : Dict[int, np.uint64] = {}
         self.termfreq_cache : Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
 
+    def warm(self):
+        """Warm tf / df cache of most common terms."""
+        for term_id, encoded in self.encoded_term_posns.items():
+            if len(encoded) > 1000:
+                self.docfreq(term_id)
+                self.termfreqs(term_id)
+
+    def clear_cache(self):
+        self.docfreq_cache = {}
+        self.termfreq_cache = {}
+
     def copy(self):
         new = PosnBitArray(deepcopy(self.encoded_term_posns), self.max_doc_id)
         return new
@@ -316,9 +327,7 @@ class PosnBitArray:
         for term_id in only_other_terms:
             self.encoded_term_posns[term_id] = other.encoded_term_posns[term_id]
         self.max_doc_id = max(self.max_doc_id, other.max_doc_id)
-        # Empty caches
-        self.termfreq_cache = {}
-        self.docfreq_cache = {}
+        self.clear_cache()
 
     def slice(self, key):
         sliced_term_posns = {}
@@ -348,9 +357,7 @@ class PosnBitArray:
                 posns_other = other.encoded_term_posns[term_id]
                 self.encoded_term_posns[term_id] = snp.merge(posns_self, posns_other)
         self.max_doc_id = self.max_doc_id + other.max_doc_id
-        # Empty caches
-        self.termfreq_cache = {}
-        self.docfreq_cache = {}
+        self.clear_cache()
 
     def doc_encoded_posns(self, term_id: int, doc_id: int) -> np.ndarray:
         term_posns = encoder.slice(self.encoded_term_posns[term_id],

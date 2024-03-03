@@ -203,7 +203,11 @@ def _row_to_postings_row(doc_id, row, doc_len, term_dict, posns: PosnBitArray):
 
 
 class SearchArray(ExtensionArray):
-    """An array of tokenized text (Termss)."""
+    """An array of tokenized text (Terms).
+
+    Use the class method `index` to create a SearchArray from a list of strings and tokenizer
+
+    """
 
     dtype = TermsDtype()
 
@@ -219,15 +223,42 @@ class SearchArray(ExtensionArray):
             self.doc_lens = build_index_from_terms_list(postings, Terms)
 
     @classmethod
-    def index(cls, array: Iterable, tokenizer=ws_tokenizer,
-              truncate=False, batch_size=100000, avoid_copies=True) -> 'SearchArray':
-        """Index an array of strings using tokenizer."""
+    def index(cls, array: Iterable,
+              tokenizer=ws_tokenizer,
+              truncate=False,
+              batch_size=100000,
+              avoid_copies=True,
+              autowarm=True) -> 'SearchArray':
+        """Index an array of strings into SearchArray using tokenizer.
+
+        Parameters
+        ----------
+        array : Iterable
+            A list of strings to index
+        tokenizer : Callable
+            A function that takes a string and returns an iterable of tokens
+        truncate : bool
+            If true, truncate the tokenized strings to a maximum length (2^18-1)
+        batch_size : int
+            For tuning memory usage, the number of strings to encode at once.
+            (which will be merged into one index at the end). Higher the more memory
+            will be used.
+        avoid_copies : bool
+            If true, avoid copying the term dictionary and positions during normal
+            pandas copy operations
+        autowarm : bool
+            If true, precompute docfreq / term freqs for most common terms
+            after indexing
+        """
         if not is_list_like(array):
             raise TypeError("Expected list-like object, got {}".format(type(array)))
 
         term_mat, posns, term_dict, avg_doc_length, doc_lens =\
             build_index_from_tokenizer(array, tokenizer, batch_size=batch_size,
                                        truncate=truncate)
+
+        if autowarm:
+            posns.warm()
 
         postings = cls([], tokenizer=tokenizer, avoid_copies=avoid_copies)
         postings.term_mat = term_mat
@@ -236,6 +267,9 @@ class SearchArray(ExtensionArray):
         postings.avg_doc_length = avg_doc_length
         postings.doc_lens = doc_lens
         return postings
+
+    def warm(self):
+        self.posns.warm()
 
     @classmethod
     def _from_sequence(cls, scalars, dtype=None, copy=False):
