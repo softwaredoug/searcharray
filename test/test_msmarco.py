@@ -271,7 +271,16 @@ def test_msmarco10k_indexing(msmarco100k_raw, benchmark):
     profiler = Profiler(benchmark)
     # Random 10k
     tenk = msmarco100k_raw['body'].sample(10000)
-    results = profiler.run(SearchArray.index, tenk)
+    results = profiler.run(SearchArray.index, tenk, autowarm=False)
+    assert len(results) == 10000
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_msmarco10k_indexing_warm(msmarco100k_raw, benchmark):
+    profiler = Profiler(benchmark)
+    # Random 10k
+    tenk = msmarco100k_raw['body'].sample(10000)
+    results = profiler.run(SearchArray.index, tenk, autowarm=True)
     assert len(results) == 10000
 
 

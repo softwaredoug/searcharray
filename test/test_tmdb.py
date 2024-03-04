@@ -134,7 +134,14 @@ def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 def test_index_benchmark(benchmark, tmdb_pd_data):
     prof = Profiler(benchmark)
-    results = prof.run(SearchArray.index, tmdb_pd_data['overview'])
+    results = prof.run(SearchArray.index, tmdb_pd_data['overview'], autowarm=False)
+    assert len(results) == len(tmdb_pd_data)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_index_benchmark_warmed(benchmark, tmdb_pd_data):
+    prof = Profiler(benchmark)
+    results = prof.run(SearchArray.index, tmdb_pd_data['overview'], autowarm=True)
     assert len(results) == len(tmdb_pd_data)
 
 
@@ -142,7 +149,7 @@ def test_index_benchmark(benchmark, tmdb_pd_data):
 def test_index_benchmark_1k_random(benchmark, tmdb_pd_data):
     prof = Profiler(benchmark)
     thousand_random = np.random.choice(tmdb_pd_data['overview'], size=1000)
-    results = prof.run(SearchArray.index, thousand_random)
+    results = prof.run(SearchArray.index, thousand_random, autowarm=False)
     assert len(results) == 1000
 
 

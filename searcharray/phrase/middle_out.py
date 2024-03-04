@@ -299,7 +299,7 @@ class PosnBitArray:
     def warm(self):
         """Warm tf / df cache of most common terms."""
         for term_id, encoded in self.encoded_term_posns.items():
-            if len(encoded) > 1000:
+            if len(encoded) > 255:
                 self.docfreq(term_id)
                 self.termfreqs(term_id)
 
