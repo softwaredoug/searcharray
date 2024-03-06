@@ -426,7 +426,7 @@ class PosnBitArray:
         posns = term_posns & encoder.payload_lsb_mask
         bit_counts = bit_count64(posns)
 
-        term_freqs = np.add.reduceat(bit_counts, change_indices)
+        term_freqs = np.add.reduceat(bit_counts, change_indices, dtype=np.float32)
         return sorted_unique(doc_ids), term_freqs
 
     def _termfreqs_with_cache(self, term_id: int) -> Tuple[np.ndarray, np.ndarray]:

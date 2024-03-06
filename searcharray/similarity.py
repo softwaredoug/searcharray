@@ -12,6 +12,16 @@ class Similarity(Protocol):
         ...
 
 
+def compute_idf(num_docs, sum_dfs):
+    """Calculate idf."""
+    return np.log(1 + (num_docs - sum_dfs + 0.5) / (sum_dfs + 0.5))
+
+
+def compute_tfs(term_freqs: np.ndarray, doc_lens, avg_doc_lens, k1, b):
+    adj_doc_lens = k1 * (1 - b + b * doc_lens / avg_doc_lens)
+    return term_freqs / (term_freqs + adj_doc_lens)
+
+
 def bm25_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
     """BM25 similarity function, as in Lucene 9."""
     def bm25(term_freqs: np.ndarray, doc_freqs: np.ndarray,
@@ -21,9 +31,10 @@ def bm25_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
         # Sum doc freqs
         sum_dfs = np.sum(doc_freqs, axis=0)
         # Calculate idf
-        idf = np.log(1 + (num_docs - sum_dfs + 0.5) / (sum_dfs + 0.5))
+        idf = compute_idf(num_docs, sum_dfs)
         # Calculate tf
-        tf = term_freqs / (term_freqs + k1 * (1 - b + b * doc_lens / avg_doc_lens))
+        # tf = term_freqs / (term_freqs + k1 * (1 - b + b * doc_lens / avg_doc_lens))
+        tf = compute_tfs(term_freqs, doc_lens, avg_doc_lens, k1, b)
         return idf * tf
     return bm25
 
