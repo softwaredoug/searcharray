@@ -19,7 +19,10 @@ def compute_idf(num_docs, sum_dfs):
 
 def compute_tfs(term_freqs: np.ndarray, doc_lens, avg_doc_lens, k1, b):
     adj_doc_lens = k1 * (1 - b + b * doc_lens / avg_doc_lens)
-    return term_freqs / (term_freqs + adj_doc_lens)
+    # Divide tf in place for perf, but this means
+    # we can't use the same term_freqs for different k1, b
+    term_freqs /= (term_freqs + adj_doc_lens)
+    return term_freqs
 
 
 def bm25_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:

@@ -526,7 +526,7 @@ class SearchArray(ExtensionArray):
 
         try:
             term_id = self.term_dict.get_term_id(token)
-            matches = np.zeros(len(self), dtype=int)
+            matches = np.zeros(len(self), dtype=np.float32)
             slice_of_rows = None
             if self.term_mat.subset:
                 slice_of_rows = self.term_mat.rows
@@ -541,7 +541,7 @@ class SearchArray(ExtensionArray):
                 matches[doc_ids] = termfreqs
                 return matches
         except TermMissingError:
-            return np.zeros(len(self), dtype=int)
+            return np.zeros(len(self), dtype=np.float32)
 
     def docfreq(self, token: str) -> int:
         if not isinstance(token, str):
