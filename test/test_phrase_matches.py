@@ -202,11 +202,15 @@ def test_phrase(docs, phrase, expected, algorithm):
         assert (expected == phrase_matches2).all()
 
 
+@pytest.mark.parametrize("phrase", ["foo bar baz", "foo bar",
+                                    "foo foo foo", "foo foo bar",
+                                    "foo bar bar", "foo bar bar baz buz foo foo",
+                                    "foo foo", "foo foo bar", "foo bar bar"])
 @pytest.mark.parametrize("posn_offset", range(100))
-def test_phrase_different_posns(posn_offset):
-    docs = SearchArray.index([" ".join(["dummy"] * posn_offset) + " foo bar baz",
+def test_phrase_different_posns(posn_offset, phrase):
+    docs = SearchArray.index([" ".join(["dummy"] * posn_offset) + " " + phrase,
                              "not match"])
-    phrase = ["foo", "bar"]
+    phrase = phrase.split()
     expected = [1, 0]
     phrase_matches = docs.phrase_freq(phrase)
     assert (expected == phrase_matches).all()
