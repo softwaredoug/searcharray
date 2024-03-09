@@ -41,6 +41,46 @@ _neg1 = np.int64(-1)
 MAX_POSN = encoder.max_payload
 
 
+def adj_to_phrase_freq(adjacents: np.ndarray) -> np.ndarray:
+    """Adjust phrase freqs for adjacent matches."""
+    # ?? 1 1 1 0 1
+    # we need to treat the 2nd consecutive 1 as 'not a match'
+    # and also update 'term' to not include it
+    # Search for foo foo
+    # foo foo -> phrase freq 1
+    # foo foo foo -> 2 adjs, phrase freqs = 1
+    # foo foo foo foo -> 3 adjs, phrase freqs = 2
+    # [foo foo] [foo foo] foo -> 4 adjs, phrase freqs = 2
+    adjacents -= -np.floor_divide(adjacents - 1, -2)
+    return adjacents
+
+
+def inner_bigram_same_term(lhs_int: np.ndarray, rhs_int: np.ndarray,
+                           lhs_doc_ids: np.ndarray,
+                           phrase_freqs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Count bigram matches when lhs / rhs are same term.
+
+    Despite being the same term, its possible lhs_int != rhs_int due to lhs corresponding
+    to a past match of identical term."""
+    # Shift RHS to left by 1
+    # 3  2   1   0      3    2   1   0
+    # ?? foo foo foo -> foo foo foo ??
+    rhs_shift = rhs_int << _1
+    # Now we have unshifted and shifted to count adjacents:
+    # foo foo foo ?? & ?? foo foo foo
+    # ->  ?? foo foo ?? or two times term is adjacent
+    # Count these bits...
+    term_cont = lhs_int & rhs_shift
+    overlap = encoder.payload_lsb(term_cont)
+    adjacents = bit_count64(overlap).astype(np.int64)
+    phrase_freqs[lhs_doc_ids] += adj_to_phrase_freq(adjacents)
+    # Continue with ?? ?? foo foo
+    # term_int without lsbs
+    term_int_msbs = lhs_int & ~encoder.payload_lsb_mask
+    term_cont = term_int_msbs | encoder.payload_lsb(rhs_shift)
+    return phrase_freqs, term_cont
+
+
 def inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
                        phrase_freqs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Count bigram matches between two encoded arrays, within a 64 bit word with same MSBs.
@@ -57,16 +97,10 @@ def inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
         raise ValueError("Encoding error, MSBs apparently are duplicated among your encoded posn arrays.")
     if len(lhs_int) == 0:
         return phrase_freqs, rhs_int
+    # For perf we don't check all values, but if overlapping posns allowed in future, maybe we should
     same_term = (len(lhs_int) == len(rhs_int) and lhs_int[0] == rhs_int[0])
     if same_term:
-        # Find adjacent matches
-        rhs_shift = rhs_int << _1
-        overlap = lhs_int & rhs_shift
-        overlap = encoder.payload_lsb(overlap)
-        adjacents = bit_count64(overlap).astype(np.int64)
-        adjacents -= -np.floor_divide(adjacents, -2)  # ceiling divide
-        phrase_freqs[lhs_doc_ids] += adjacents
-        return phrase_freqs, rhs_int
+        return inner_bigram_same_term(lhs_int, rhs_int, lhs_doc_ids, phrase_freqs)
 
     overlap_bits = (lhs_int & encoder.payload_lsb_mask) & ((rhs_int & encoder.payload_lsb_mask) >> _1)
     rhs_next2 = (overlap_bits << _1) & encoder.payload_lsb_mask
@@ -120,7 +154,6 @@ def bigram_freqs(lhs: np.ndarray, rhs: np.ndarray, phrase_freqs: np.ndarray) -> 
     phrase_freqs, rhs_next_adj = adjacent_bigram_freqs(lhs, rhs, phrase_freqs)
     rhs_next = np.sort(np.concatenate([rhs_next_inner, rhs_next_adj]))
 
-    # Combine
     return phrase_freqs, rhs_next
 
 
@@ -375,8 +408,8 @@ class PosnBitArray:
         else:
             enc_term_posns = [encoder.slice(self.encoded_term_posns[term_id],
                                             keys=doc_ids.view(np.uint64),
-                                            min_posn=min_posn,
-                                            max_posn=max_posn) for term_id in term_ids]
+                                            min_payload=min_posn,
+                                            max_payload=max_posn) for term_id in term_ids]
         return compute_phrase_freqs(enc_term_posns, phrase_freqs)
 
     def positions(self, term_id: int, doc_ids) -> Union[List[np.ndarray], np.ndarray]:
@@ -426,8 +459,8 @@ class PosnBitArray:
         term_posns = encoded
         term_posns = encoder.slice(encoded,
                                    keys=doc_ids.astype(np.uint64),
-                                   min_posn=min_posn,
-                                   max_posn=max_posn)
+                                   min_payload=min_posn,
+                                   max_payload=max_posn)
 
         return self._computed_term_freqs(term_posns)
 

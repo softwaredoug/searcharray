@@ -615,7 +615,7 @@ class SearchArray(ExtensionArray):
                     slop=1,
                     min_posn: Optional[int] = None,
                     max_posn: Optional[int] = None) -> np.ndarray:
-        if slop == 1 and len(tokens) == len(set(tokens)):
+        if slop == 1:
             phrase_freqs = np.zeros(len(self))
             try:
                 doc_ids = self.term_mat.rows
