@@ -41,7 +41,7 @@ _neg1 = np.int64(-1)
 MAX_POSN = encoder.max_payload
 
 
-def adj_to_phrase_freq(adjacents: np.ndarray) -> np.ndarray:
+def adj_to_phrase_freq(overlap: np.ndarray, adjacents: np.ndarray) -> np.ndarray:
     """Adjust phrase freqs for adjacent matches."""
     # ?? 1 1 1 0 1
     # we need to treat the 2nd consecutive 1 as 'not a match'
@@ -51,7 +51,10 @@ def adj_to_phrase_freq(adjacents: np.ndarray) -> np.ndarray:
     # foo foo foo -> 2 adjs, phrase freqs = 1
     # foo foo foo foo -> 3 adjs, phrase freqs = 2
     # [foo foo] [foo foo] foo -> 4 adjs, phrase freqs = 2
-    adjacents -= -np.floor_divide(adjacents - 1, -2)
+    # [foo foo] [foo foo] mal [foo foo] -> 4 adjs, phrase freqs = 3
+    consecutive_ones = encoder.payload_lsb(overlap & (overlap << _1))
+    consecutive_ones = bit_count64(consecutive_ones)
+    adjacents -= -np.floor_divide(consecutive_ones, -2).astype(np.int64)
     return adjacents
 
 
@@ -70,10 +73,10 @@ def inner_bigram_same_term(lhs_int: np.ndarray, rhs_int: np.ndarray,
     # foo foo foo ?? & ?? foo foo foo
     # ->  ?? foo foo ?? or two times term is adjacent
     # Count these bits...
-    term_cont = lhs_int & rhs_shift
-    overlap = encoder.payload_lsb(term_cont)
-    adjacents = bit_count64(overlap).astype(np.int64)
-    phrase_freqs[lhs_doc_ids] += adj_to_phrase_freq(adjacents)
+    overlap = lhs_int & rhs_shift
+    adj_count = encoder.payload_lsb(overlap)
+    adjacents = bit_count64(adj_count).astype(np.int64)
+    phrase_freqs[lhs_doc_ids] += adj_to_phrase_freq(overlap, adjacents)
     # Continue with ?? ?? foo foo
     # term_int without lsbs
     term_int_msbs = lhs_int & ~encoder.payload_lsb_mask
