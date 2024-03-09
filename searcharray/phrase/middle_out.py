@@ -365,14 +365,18 @@ class PosnBitArray:
         return term_posns
 
     def phrase_freqs(self, term_ids: List[int], phrase_freqs: np.ndarray,
-                     doc_ids: np.ndarray) -> np.ndarray:
+                     doc_ids: np.ndarray,
+                     min_posn: Optional[int] = None,
+                     max_posn: Optional[int] = None) -> np.ndarray:
         if len(term_ids) < 2:
             raise ValueError("Must have at least two terms")
-        if phrase_freqs.shape[0] == self.max_doc_id + 1:
+        if phrase_freqs.shape[0] == self.max_doc_id + 1 and min_posn is None and max_posn is None:
             enc_term_posns = [self.encoded_term_posns[term_id] for term_id in term_ids]
         else:
             enc_term_posns = [encoder.slice(self.encoded_term_posns[term_id],
-                                            keys=doc_ids.view(np.uint64)) for term_id in term_ids]
+                                            keys=doc_ids.view(np.uint64),
+                                            min_posn=min_posn,
+                                            max_posn=max_posn) for term_id in term_ids]
         return compute_phrase_freqs(enc_term_posns, phrase_freqs)
 
     def positions(self, term_id: int, doc_ids) -> Union[List[np.ndarray], np.ndarray]:
@@ -408,15 +412,23 @@ class PosnBitArray:
             decs = [dec[1] for dec in decoded]
             return decs
 
-    def termfreqs(self, term_id: int, doc_ids: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
+    def termfreqs(self, term_id: int,
+                  doc_ids: Optional[np.ndarray] = None,
+                  min_posn: Optional[int] = None,
+                  max_posn: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray]:
         """Count term freqs using unique positions."""
-        if doc_ids is None:
+        if doc_ids is None and max_posn is None and min_posn is None:
             return self._termfreqs_with_cache(term_id)
+        if doc_ids is None:
+            doc_ids = sorted_unique(encoder.keys(self.encoded_term_posns[term_id]))
 
         encoded = self.encoded_term_posns[term_id]
         term_posns = encoded
         term_posns = encoder.slice(encoded,
-                                   keys=doc_ids.astype(np.uint64))
+                                   keys=doc_ids.astype(np.uint64),
+                                   min_posn=min_posn,
+                                   max_posn=max_posn)
+
         return self._computed_term_freqs(term_posns)
 
     def _computed_term_freqs(self, term_posns) -> Tuple[np.ndarray, np.ndarray]:
