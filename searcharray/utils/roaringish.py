@@ -227,11 +227,13 @@ class RoaringishEncoder:
             if min_posn is not None:
                 if min_posn % self.payload_lsb_bits != 0:
                     raise ValueError(f"min_posn must be a multiple of {self.payload_lsb_bits}")
-                gt_min_posn = self.payload_msb(encoded[idx_enc]) >= min_posn
+                min_posn_bit = min_posn // self.payload_lsb_bits
+                gt_min_posn = self.payload_msb(encoded[idx_enc]) >= min_posn_bit
             if max_posn is not None:
-                if max_posn % self.payload_lsb_bits != 0:
-                    raise ValueError(f"max_posn must be a multiple of {self.payload_lsb_bits}")
-                lt_max_posn = self.payload_msb(encoded[idx_enc]) < max_posn
+                if max_posn % self.payload_lsb_bits != self.payload_lsb_bits - 1:
+                    raise ValueError(f"max_posn must be a multiple of {self.payload_lsb_bits} - 1")
+                max_posn_bit = max_posn // self.payload_lsb_bits
+                lt_max_posn = self.payload_msb(encoded[idx_enc]) <= max_posn_bit
             return encoded[lt_max_posn & gt_min_posn]
 
 

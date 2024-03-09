@@ -519,10 +519,12 @@ class SearchArray(ExtensionArray):
     # ***********************************************************
     # Search functionality
     # ***********************************************************
-    def termfreqs(self, token: Union[List[str], str]) -> np.ndarray:
+    def termfreqs(self, token: Union[List[str], str],
+                  min_posn: Optional[int] = None,
+                  max_posn: Optional[int] = None) -> np.ndarray:
         token = self._check_token_arg(token)
         if isinstance(token, list):
-            return self.phrase_freq(token)
+            return self.phrase_freq(token, min_posn=min_posn, max_posn=max_posn)
 
         try:
             term_id = self.term_dict.get_term_id(token)
@@ -531,13 +533,13 @@ class SearchArray(ExtensionArray):
             if self.term_mat.subset:
                 slice_of_rows = self.term_mat.rows
                 doc_ids, termfreqs = self.posns.termfreqs(term_id,
-                                                          doc_ids=slice_of_rows)
+                                                          doc_ids=slice_of_rows, min_posn=min_posn, max_posn=max_posn)
                 mask = np.isin(self.term_mat.rows, doc_ids)
                 matches[mask] = termfreqs
                 return matches
             else:
                 doc_ids, termfreqs = self.posns.termfreqs(term_id,
-                                                          doc_ids=slice_of_rows)
+                                                          doc_ids=slice_of_rows, min_posn=min_posn, max_posn=max_posn)
                 matches[doc_ids] = termfreqs
                 return matches
         except TermMissingError:
@@ -609,14 +611,19 @@ class SearchArray(ExtensionArray):
         mask = np.sum(masks, axis=0) >= min_should_match
         return mask
 
-    def phrase_freq(self, tokens: List[str], slop=1) -> np.ndarray:
+    def phrase_freq(self, tokens: List[str],
+                    slop=1,
+                    min_posn: Optional[int] = None,
+                    max_posn: Optional[int] = None) -> np.ndarray:
         if slop == 1 and len(tokens) == len(set(tokens)):
             phrase_freqs = np.zeros(len(self))
             try:
                 doc_ids = self.term_mat.rows
                 term_ids = [self.term_dict.get_term_id(token) for token in tokens]
                 return self.posns.phrase_freqs(term_ids, doc_ids=doc_ids,
-                                               phrase_freqs=phrase_freqs)
+                                               phrase_freqs=phrase_freqs,
+                                               min_posn=min_posn,
+                                               max_posn=max_posn)
             except TermMissingError:
                 return phrase_freqs
         else:
