@@ -1,6 +1,5 @@
 from searcharray.postings import SearchArray
 from test_utils import w_scenarios
-from time import perf_counter
 import pytest
 from searcharray.phrase.middle_out import MAX_POSN
 import numpy as np
@@ -248,71 +247,6 @@ def test_phrase_too_many_posns_with_truncate():
     phrase_matches = arr.phrase_freq(["foo", "bar", "baz"])
     expected = [1, 0]
     assert (expected == phrase_matches).all()
-
-
-perf_scenarios = {
-    "4m_docs": {
-        "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 1000000),
-        "phrase": ["foo", "bar"],
-        "expected": [True, False, False, False] * 1000000,
-    },
-    "many_docs_long_doc": {
-        "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny",
-                                           "la ma ta wa ga ao a b c d e f g a be ae i foo bar foo bar"] * 100000),
-        "phrase": ["foo", "bar"],
-        "expected": [1, 0, 0, 0, 2] * 100000,
-    },
-    "many_docs_large_term_dict": {
-        "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny",
-                                           " ".join(random_strings(1000, 4, 10)),
-                                           "la ma ta wa ga ao a b c d e f g a be ae i foo bar foo bar"] * 100000),
-        "phrase": ["foo", "bar"],
-        "expected": [1, 0, 0, 0, 0, 2] * 100000,
-    },
-    "many_docs_and_positions": {
-        "docs": lambda: SearchArray.index(["foo bar",
-                                           " ".join(["foo bar bar baz foo foo bar foo"] * 100),
-                                           " ".join(["what is the foo bar doing in the bar foo?"] * 100)] * 100000),
-        "phrase": ["foo", "bar"],
-        "expected": [1, 200, 100] * 100000
-    }
-
-}
-
-
-# phrase_match_every_diff  took 17.07792454198352 seconds | 200000 docs
-# phrase_match_scan old    took 16.765271917014616 seconds | 200000 docs
-# phrase_match_scan        took 81.19630783301545 seconds | 200000 docs
-# phrase_match_scan        took 70.4959268750099 seconds | 200000 docs
-#
-# phrase_match_every_diff  took 2.214169082988519 seconds | 4000000 docs
-# phrase_match_scan old    took 69.71960766700795 seconds | 4000000 docs
-# phrase_match_scan        took 4.758700999984285 seconds | 4000000 docs
-# phrase_match_scan        took 4.029075291007757 seconds | 4000000 docs
-
-@pytest.mark.skip("perf")
-@w_scenarios(perf_scenarios)
-def test_phrase_performance(docs, phrase, expected):
-    start = perf_counter()
-    docs = docs()
-    print(f"Indexing took {perf_counter() - start} seconds | {len(docs)} docs")
-
-    print(f"Starting phrase: {phrase} -- expected: {expected[:10]}")
-
-    start = perf_counter()
-    matches = docs.phrase_freq(phrase)
-    print(f"phrase_freq API took {perf_counter() - start} seconds | {len(docs)} docs")
-    assert (matches == expected).all()
-
-    start = perf_counter()
-    matches_every_diff = docs.phrase_freq_every_diff(phrase)
-    print(f"phrase_match_every_diff  took {perf_counter() - start} seconds | {len(docs)} docs")
-    assert (matches_every_diff == expected).all()
-
-    start = perf_counter()
-    matches_scan = docs.phrase_freq_scan(phrase)
-    print(f"phrase_match_scan old    took {perf_counter() - start} seconds | {len(docs)} docs")
-    assert (matches_scan == expected).all()
 
 
 def test_positions():
