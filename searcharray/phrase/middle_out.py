@@ -10,6 +10,7 @@ import sortednp as snp
 from copy import deepcopy
 from typing import List, Tuple, Dict, Union, cast, Optional
 from searcharray.utils.roaringish import RoaringishEncoder, convert_keys, sorted_unique
+from searcharray.phrase.bigram_freqs import bigram_freqs
 import numbers
 import logging
 from collections import defaultdict
@@ -39,125 +40,6 @@ _0 = np.uint64(0)
 _neg1 = np.int64(-1)
 
 MAX_POSN = encoder.max_payload
-
-
-def adj_to_phrase_freq(overlap: np.ndarray, adjacents: np.ndarray) -> np.ndarray:
-    """Adjust phrase freqs for adjacent matches."""
-    # ?? 1 1 1 0 1
-    # we need to treat the 2nd consecutive 1 as 'not a match'
-    # and also update 'term' to not include it
-    # Search for foo foo
-    # foo foo -> phrase freq 1
-    # foo foo foo -> 2 adjs, phrase freqs = 1
-    # foo foo foo foo -> 3 adjs, phrase freqs = 2
-    # [foo foo] [foo foo] foo -> 4 adjs, phrase freqs = 2
-    # [foo foo] [foo foo] mal [foo foo] -> 4 adjs, phrase freqs = 3
-    consecutive_ones = encoder.payload_lsb(overlap & (overlap << _1))
-    consecutive_ones = bit_count64(consecutive_ones)
-    adjacents -= -np.floor_divide(consecutive_ones, -2).astype(np.int64)
-    return adjacents
-
-
-def inner_bigram_same_term(lhs_int: np.ndarray, rhs_int: np.ndarray,
-                           lhs_doc_ids: np.ndarray,
-                           phrase_freqs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Count bigram matches when lhs / rhs are same term.
-
-    Despite being the same term, its possible lhs_int != rhs_int due to lhs corresponding
-    to a past match of identical term."""
-    # Shift RHS to left by 1
-    # 3  2   1   0      3    2   1   0
-    # ?? foo foo foo -> foo foo foo ??
-    rhs_shift = rhs_int << _1
-    # Now we have unshifted and shifted to count adjacents:
-    # foo foo foo ?? & ?? foo foo foo
-    # ->  ?? foo foo ?? or two times term is adjacent
-    # Count these bits...
-    overlap = lhs_int & rhs_shift
-    adj_count = encoder.payload_lsb(overlap)
-    adjacents = bit_count64(adj_count).astype(np.int64)
-    phrase_freqs[lhs_doc_ids] += adj_to_phrase_freq(overlap, adjacents)
-    # Continue with ?? ?? foo foo
-    # term_int without lsbs
-    term_int_msbs = lhs_int & ~encoder.payload_lsb_mask
-    term_cont = term_int_msbs | encoder.payload_lsb(rhs_shift)
-    return phrase_freqs, term_cont
-
-
-def inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
-                       phrase_freqs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Count bigram matches between two encoded arrays, within a 64 bit word with same MSBs.
-
-    Returns:
-    --------
-    count: number of matches per doc
-    rhs_next: the next rhs array to continue matching
-
-    """
-    lhs_int, rhs_int = encoder.intersect(lhs, rhs)
-    lhs_doc_ids = encoder.keys(lhs_int)
-    if len(lhs_int) != len(rhs_int):
-        raise ValueError("Encoding error, MSBs apparently are duplicated among your encoded posn arrays.")
-    if len(lhs_int) == 0:
-        return phrase_freqs, rhs_int
-    # For perf we don't check all values, but if overlapping posns allowed in future, maybe we should
-    same_term = (len(lhs_int) == len(rhs_int) and lhs_int[0] == rhs_int[0])
-    if same_term:
-        return inner_bigram_same_term(lhs_int, rhs_int, lhs_doc_ids, phrase_freqs)
-
-    overlap_bits = (lhs_int & encoder.payload_lsb_mask) & ((rhs_int & encoder.payload_lsb_mask) >> _1)
-    rhs_next2 = (overlap_bits << _1) & encoder.payload_lsb_mask
-    rhs_next2 |= (rhs_int & (encoder.key_mask | encoder.payload_msb_mask))
-    phrase_freqs2 = phrase_freqs.copy()
-    matches2 = overlap_bits > 0
-    if np.any(matches2):
-        transitions = np.argwhere(np.diff(lhs_doc_ids[matches2]) != 0).flatten() + 1
-        transitions = np.insert(transitions, 0, 0)
-        counted_bits = bit_count64(overlap_bits[matches2])
-        reduced = np.add.reduceat(counted_bits,
-                                  transitions)
-        phrase_freqs2[np.unique(lhs_doc_ids[matches2])] += reduced
-    return phrase_freqs2, rhs_next2
-
-
-def adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
-                          phrase_freqs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Count bigram matches between two encoded arrays where they occur in adjacent 64 bit words.
-
-    Returns:
-    --------
-    count: number of matches per doc
-    rhs_next: the next rhs array to continue matching
-
-    """
-    lhs_int, rhs_int = encoder.intersect_rshift(lhs, rhs, rshift=_neg1)
-    lhs_doc_ids = encoder.keys(lhs_int)
-    # lhs lsb set and rhs lsb's most significant bit set
-    upper_bit = _1 << (encoder.payload_lsb_bits - _1)
-    matches = ((lhs_int & upper_bit) != 0) & ((rhs_int & _1) != 0)
-    unique, counts = np.unique(lhs_doc_ids[matches], return_counts=True)
-    phrase_freqs[unique] += counts
-    rhs_next = rhs_int
-    rhs_next[~matches] |= ~encoder.payload_lsb_mask
-    rhs_next[matches] |= (encoder.payload_lsb_mask & _1)
-    return phrase_freqs, rhs_next
-
-
-def bigram_freqs(lhs: np.ndarray, rhs: np.ndarray, phrase_freqs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Count bigram matches between two encoded arrays.
-
-    Returns:
-    --------
-    count: number of matches per doc
-    rhs_next: the next rhs array to continue matching
-
-    """
-    # Combine lhs and rhs matches from two strategies
-    phrase_freqs, rhs_next_inner = inner_bigram_freqs(lhs, rhs, phrase_freqs)
-    phrase_freqs, rhs_next_adj = adjacent_bigram_freqs(lhs, rhs, phrase_freqs)
-    rhs_next = np.sort(np.concatenate([rhs_next_inner, rhs_next_adj]))
-
-    return phrase_freqs, rhs_next
 
 
 def trim_phrase_search(encoded_posns: List[np.ndarray],
@@ -190,8 +72,9 @@ def trim_phrase_search(encoded_posns: List[np.ndarray],
     return encoded_posns
 
 
-def compute_phrase_freqs(encoded_posns: List[np.ndarray],
-                         phrase_freqs: np.ndarray) -> np.ndarray:
+def _compute_phrase_freqs(encoded_posns: List[np.ndarray],
+                          phrase_freqs: np.ndarray) -> np.ndarray:
+    """Compute phrase freqs from a set of encoded positions."""
     if len(encoded_posns) < 2:
         raise ValueError("phrase must have at least two terms")
 
@@ -206,6 +89,9 @@ def compute_phrase_freqs(encoded_posns: List[np.ndarray],
         phrase_freqs[mask] = 0
         phrase_freqs, lhs = bigram_freqs(lhs, rhs, phrase_freqs)
         mask &= (phrase_freqs > 0)
+        # print("-- pf", phrase_freqs)
+        # dec = encoder.decode(lhs)
+        # print("-- co", dec)
     phrase_freqs[~mask] = 0
     return phrase_freqs
 
@@ -413,7 +299,7 @@ class PosnBitArray:
                                             keys=doc_ids.view(np.uint64),
                                             min_payload=min_posn,
                                             max_payload=max_posn) for term_id in term_ids]
-        return compute_phrase_freqs(enc_term_posns, phrase_freqs)
+        return _compute_phrase_freqs(enc_term_posns, phrase_freqs)
 
     def positions(self, term_id: int, doc_ids) -> Union[List[np.ndarray], np.ndarray]:
         if isinstance(doc_ids, numbers.Number):

@@ -100,6 +100,11 @@ scenarios = {
         "phrase": ["foo", "foo"],
         "expected": [3, 0, 0, 0] * 25,
     },
+    "2x_same_term": {
+        "docs": lambda: SearchArray.index(["foo foo bar bar", "data2", "data3 bar", "bunny funny wunny"] * 25),
+        "phrase": ["foo", "foo", "bar", "bar"],
+        "expected": [1, 0, 0, 0] * 25,
+    },
     "duplicate_phrases": {
         "docs": lambda: SearchArray.index(["foo bar foo bar", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "bar"],
@@ -204,7 +209,9 @@ def test_phrase(docs, phrase, expected, algorithm):
 
 @pytest.mark.parametrize("phrase", ["foo bar baz", "foo bar",
                                     "foo foo foo", "foo foo bar",
-                                    "foo bar bar", "foo bar bar baz buz foo foo",
+                                    "foo bar bar",
+                                    "foo bar bar baz buz foo bar",
+                                    "foo bar bar baz buz foo foo",
                                     "foo foo", "foo foo bar", "foo bar bar"])
 @pytest.mark.parametrize("posn_offset", range(100))
 def test_phrase_different_posns(posn_offset, phrase):
