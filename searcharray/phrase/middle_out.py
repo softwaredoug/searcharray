@@ -81,15 +81,17 @@ def _compute_phrase_freqs(encoded_posns: List[np.ndarray],
         raise ValueError("phrase must have at least two terms")
 
     # Trim long phrases by searching the rarest terms first
-    if trim and len(encoded_posns) > 3:
-        encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
+    # if trim and len(encoded_posns) > 3:
+    #     encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
 
     mask = np.ones(len(phrase_freqs), dtype=bool)
     lhs = encoded_posns[begin]
     for rhs in encoded_posns[begin + 1:]:
         # Only count the count of the last bigram (ignoring the ones where priors did not match)
         phrase_freqs[mask] = 0
-        phrase_freqs, lhs = bigram_freqs(lhs, rhs, phrase_freqs)
+        phrase_freqs, conts = bigram_freqs(lhs, rhs, phrase_freqs)
+        assert conts[1] is not None
+        lhs = conts[1]
         mask &= (phrase_freqs > 0)
         # print("-- pf", phrase_freqs)
         # dec = encoder.decode(lhs)
