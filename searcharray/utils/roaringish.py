@@ -154,7 +154,7 @@ class RoaringishEncoder:
 
     def keys(self, encoded: np.ndarray) -> np.ndarray:
         """Return keys from encoded."""
-        return (encoded & self.key_mask) >> (_64 - self.key_bits)
+        return encoded >> (_64 - self.key_bits)
 
     def keys_unique(self, encoded: np.ndarray) -> np.ndarray:
         """Return keys from encoded."""
@@ -217,9 +217,8 @@ class RoaringishEncoder:
               max_payload: Optional[int] = None,
               min_payload: Optional[int] = None) -> np.ndarray:
         """Get list of encoded that have values in keys."""
-        assert len(keys.shape) == 1
-        assert len(encoded.shape) == 1
-        encoded_keys = encoded.view(np.uint64) >> (_64 - self.key_bits)
+        # encoded_keys = encoded.view(np.uint64) >> (_64 - self.key_bits)
+        encoded_keys = self.keys(encoded)
         _, (idx_docs, idx_enc) = snp.intersect(keys, encoded_keys, indices=True,
                                                duplicates=snp.KEEP_MAX_N,
                                                algorithm=_algorithm)

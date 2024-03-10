@@ -65,7 +65,7 @@ def trim_phrase_search(encoded_posns: List[np.ndarray],
     for enc_posn_idx in range(len(encoded_posns)):
         if enc_posn_idx == shortest_idx:
             continue
-        if len(encoded_posns[enc_posn_idx]) > (10 * min_len):
+        if len(encoded_posns[enc_posn_idx]) > (20 * min_len):
             encoded_posns[enc_posn_idx] = encoder.slice(encoded_posns[enc_posn_idx],
                                                         shortest_keys)
 
@@ -73,18 +73,20 @@ def trim_phrase_search(encoded_posns: List[np.ndarray],
 
 
 def _compute_phrase_freqs(encoded_posns: List[np.ndarray],
-                          phrase_freqs: np.ndarray) -> np.ndarray:
+                          phrase_freqs: np.ndarray,
+                          begin: int = 0,
+                          trim: bool = True) -> np.ndarray:
     """Compute phrase freqs from a set of encoded positions."""
     if len(encoded_posns) < 2:
         raise ValueError("phrase must have at least two terms")
 
     # Trim long phrases by searching the rarest terms first
-    if len(encoded_posns) > 3:
+    if trim and len(encoded_posns) > 3:
         encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
 
     mask = np.ones(len(phrase_freqs), dtype=bool)
-    lhs = encoded_posns[0]
-    for rhs in encoded_posns[1:]:
+    lhs = encoded_posns[begin]
+    for rhs in encoded_posns[begin + 1:]:
         # Only count the count of the last bigram (ignoring the ones where priors did not match)
         phrase_freqs[mask] = 0
         phrase_freqs, lhs = bigram_freqs(lhs, rhs, phrase_freqs)
@@ -94,6 +96,17 @@ def _compute_phrase_freqs(encoded_posns: List[np.ndarray],
         # print("-- co", dec)
     phrase_freqs[~mask] = 0
     return phrase_freqs
+
+
+# def _compute_phrase_freqs_long(encoded_posns: List[np.ndarray],
+#                                phrase_freqs: np.ndarray) -> np.ndarray:
+#   """Compute phrase freqs from a set of encoded positions."""
+#   one_before_shortest = np.argsort(encoded_posns, key=lambda x: len(x))[0] - 1
+#   if one_before_shortest == 0:
+#       return _compute_phrase_freqs(encoded_posns, phrase_freqs, begin=0)
+#
+#   phrase_freqs = _compute_phrase_freqs(encoded_posns, phrase_freqs,
+#                                         begin=one_before_shortest)
 
 
 class PosnBitArrayFromFlatBuilder:

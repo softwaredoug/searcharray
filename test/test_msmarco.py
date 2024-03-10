@@ -258,12 +258,22 @@ def msmarco_all(msmarco_all_raw):
 #
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
-def test_msmarco100k(phrase_search, msmarco100k, benchmark):
+def test_msmarco100k_phrase(phrase_search, msmarco100k, benchmark):
     profiler = Profiler(benchmark)
     phrase_search = phrase_search.split()
     print(f"STARTING {phrase_search}")
     print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     profiler.run(msmarco100k['body_ws'].array.score, phrase_search)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
+def test_msmarco1m_phrase(phrase_search, msmarco1m, benchmark):
+    profiler = Profiler(benchmark)
+    phrase_search = phrase_search.split()
+    print(f"STARTING {phrase_search}")
+    print(f"Memory Usage (BODY): {msmarco1m['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+    profiler.run(msmarco1m['body_ws'].array.score, phrase_search)
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
