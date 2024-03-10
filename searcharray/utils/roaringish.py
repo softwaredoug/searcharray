@@ -170,6 +170,10 @@ class RoaringishEncoder:
         """Return payload LSBs from encoded."""
         return encoded & self.payload_lsb_mask
 
+    def header(self, encoded: np.ndarray) -> np.ndarray:
+        """Return header from encoded -- all but lsb bits."""
+        return encoded & ~self.payload_lsb_mask
+
     def intersect_rshift(self, lhs: np.ndarray, rhs: np.ndarray,
                          rshift: np.int64 = _neg1) -> Tuple[np.ndarray, np.ndarray]:
         """Return the MSBs that are common to both lhs and rhs (same keys, same MSBs)

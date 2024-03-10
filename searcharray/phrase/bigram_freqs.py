@@ -5,6 +5,7 @@ from searcharray.utils.roaringish import RoaringishEncoder
 import logging
 
 from searcharray.utils.bitcount import bit_count64
+import sortednp as snp
 
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,11 @@ _0 = np.uint64(0)
 _neg1 = np.int64(-1)
 
 MAX_POSN = encoder.max_payload
+
+
+def _any_payload_empty(enc: np.ndarray):
+    """Check if the payload has any empty of enc."""
+    return np.any((enc & encoder.payload_lsb_mask) == 0)
 
 
 def adj_to_phrase_freq(overlap: np.ndarray, adjacents: np.ndarray) -> np.ndarray:
@@ -127,14 +133,36 @@ def adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     matches = ((lhs_int & upper_bit) != 0) & ((rhs_int & _1) != 0)
     unique, counts = np.unique(lhs_doc_ids[matches], return_counts=True)
     phrase_freqs[unique] += counts
-    rhs_next = rhs_int
-    rhs_next[~matches] |= ~encoder.payload_lsb_mask
-    rhs_next[matches] |= (encoder.payload_lsb_mask & _1)
+    # Set lsb to 0 where no match, lsb to 1 where match
+    rhs_next = np.array([], dtype=np.uint64)
+    if np.any(matches):
+        rhs_next = rhs_int[matches]
+        rhs_next |= _1
+        assert not _any_payload_empty(rhs_next)
     return phrase_freqs, rhs_next
 
 
+def _set_lsb_at_header(enc1: np.ndarray, just_lsb_enc: np.ndarray) -> np.ndarray:
+    """Merge two encoded arrays on their headers."""
+    if len(enc1) == 0:
+        return just_lsb_enc
+    if len(just_lsb_enc) == 0:
+        return enc1
+
+    enc1_header = encoder.header(enc1)
+    just_lsb_enc_header = encoder.header(just_lsb_enc)
+
+    _, (same_header_enc1, same_header_just_lsb) = snp.intersect(enc1_header, just_lsb_enc_header, indices=True)
+    # Set _1 on intersection
+    if len(same_header_enc1) > 0:
+        enc1[same_header_enc1] |= _1
+        # Delete these from just_lsb_enc
+        just_lsb_enc = just_lsb_enc[~same_header_just_lsb]
+    return np.sort(np.concatenate([enc1, just_lsb_enc]))
+
+
 def bigram_freqs(lhs: np.ndarray, rhs: np.ndarray, phrase_freqs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Count bigram matches between two encoded arrays.
+    """Count bigram matches between two roaringish encoded posn arrays.
 
     Returns:
     --------
@@ -143,6 +171,11 @@ def bigram_freqs(lhs: np.ndarray, rhs: np.ndarray, phrase_freqs: np.ndarray) -> 
               (use as lhs on subsequent calls to continue the phrase)
 
     """
+    # assert np.all(encoder.payload_lsb(lhs)), "lhs has no payload"
+    # assert np.all(encoder.payload_lsb(rhs)), "rhs has no payload"
+
+    # print("--- lhs", encoder.decode(lhs))
+    # print("--- rhs", encoder.decode(rhs))
     # Combine lhs and rhs matches from two strategies
     phrase_freqs, rhs_next_inner = inner_bigram_freqs(lhs, rhs, phrase_freqs)
     # print("--- pfi", phrase_freqs)
@@ -150,6 +183,33 @@ def bigram_freqs(lhs: np.ndarray, rhs: np.ndarray, phrase_freqs: np.ndarray) -> 
     phrase_freqs, rhs_next_adj = adjacent_bigram_freqs(lhs, rhs, phrase_freqs)
     # print("--- pfa", phrase_freqs)
     # print("--- coa", encoder.decode(rhs_next_adj))
-    rhs_next = np.sort(np.concatenate([rhs_next_inner, rhs_next_adj]))
+    # Bitwise OR shared MSBs
+    rhs_next = _set_lsb_at_header(rhs_next_inner, rhs_next_adj)
+
+    # rhs_next = np.sort(np.concatenate([rhs_next_inner, rhs_next_adj]))
+    # rhs_next_header = encoder.header(rhs_next)
+    # rhs_next = rhs_next[rhs_next_header != rhs_next]
+    # print("--- nxt", encoder.decode(rhs_next))
+    try:
+        rhs_next_header = encoder.header(rhs_next)
+        assert np.unique(rhs_next_header).size == rhs_next.size
+    except AssertionError:
+        pass
 
     return phrase_freqs, rhs_next
+
+# Either we need to merge rhs_next to include only one item per header
+# OR we need to intersect and handle the case below
+
+
+def quick_tests():
+    # lhs [(0, array([ 1, 19], dtype=uint64))]
+    # rhs [(0, array([ 2, 20], dtype=uint64))]
+    lhs = np.asarray([2, 262144, 262146], dtype=np.uint64)
+    rhs = np.asarray([4, 262148], dtype=np.uint64)
+    phrase_freqs = np.zeros(2, dtype=np.float64)
+    phrase_freqs, rhs_next = bigram_freqs(lhs, rhs, phrase_freqs)
+    assert (phrase_freqs == [2, 0]).all()
+    # assert np.all(encoder.decode(rhs_next) == [(0, np.array([2, 20], dtype=uint64))])
+
+# quick_tests()
