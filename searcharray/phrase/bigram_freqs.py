@@ -164,52 +164,68 @@ def _set_lsb_at_header(enc1: np.ndarray, just_lsb_enc: np.ndarray) -> np.ndarray
 def bigram_freqs(lhs: np.ndarray, rhs: np.ndarray, phrase_freqs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Count bigram matches between two roaringish encoded posn arrays.
 
+    Parameters:
+    -----------
+    lhs: roaringish encoded posn array of left term
+    rhs: roaringish encoded posn array of right term
+    phrase_freqs: np.ndarray, preallocated phrase freqs for output
+
     Returns:
     --------
-    count: number of matches per doc
+    phrase_freqs: number of matches per doc (updated input)
     rhs_next: encoded array of end of each bigram
               (use as lhs on subsequent calls to continue the phrase)
 
     """
-    # assert np.all(encoder.payload_lsb(lhs)), "lhs has no payload"
-    # assert np.all(encoder.payload_lsb(rhs)), "rhs has no payload"
-
-    # print("--- lhs", encoder.decode(lhs))
-    # print("--- rhs", encoder.decode(rhs))
-    # Combine lhs and rhs matches from two strategies
+    # Example zooming into just one 64 bit word (this of course is repeated over
+    # the entire array, for all docs and posn msbs)
+    #
+    # ***************************************************************************
+    # "Inner" matches:
+    # As roaringish arrays put posns on a 64 bit word, we first search for
+    # simpler matches within 64 bit words from same docs with same posn header
+    #
+    #           doc_id  posns_msb   posns_bits
+    # lhs_term:   1234        101   0010001010
+    # rhs_term:   1234        101   0101000100
+    #                                 ^^  ^^  <- inner matches, terms next to each other
+    #
     phrase_freqs, rhs_next_inner = inner_bigram_freqs(lhs, rhs, phrase_freqs)
-    # print("--- pfi", phrase_freqs)
-    # print("--- coi", encoder.decode(rhs_next_inner))
+
+    # ***************************************************************************
+    # "Adjacent" matches:
+    # Of course we also need to check for matches that span two 64 bit words,
+    # thats what adjacent matches do
+    #
+    #           doc_id  posns_msb   posns_bits
+    # lhs_term:   1234        101   1010000000
+    # rhs_term:   1234        111   0001000101
+    #                               ^        ^  <- adjacent matches, terms next to each other
+    #                                              but note the posn_msb of lhs is
+    #                                              1 less than the posn_msb of rhs
+    #                                              so we detect these differently
     phrase_freqs, rhs_next_adj = adjacent_bigram_freqs(lhs, rhs, phrase_freqs)
-    # print("--- pfa", phrase_freqs)
-    # print("--- coa", encoder.decode(rhs_next_adj))
-    # Bitwise OR shared MSBs
+
+    # ***************************************************************************
+    # rhs_next is where the bigram ends on the rhs side, we can use this
+    # to continue the phrase matching
+    #
+    # Combining the examples above:
+    #     rhs_next_inner:   1234        101   0001000100
+    #                                            ^    ^  <- where we had a match (inner)
+    #
+    # Merged with
+    #     rhs_next_adj:      1234        111   0000000001
+    #                                                   ^  <- where we had a match (adjacent)
+    #
+    # So we merge these... in this case, we have a two-value array
+    #
+    #     rhs_next:   1234,101,0001000100|1234,111,0000000001
+    #
+    #
+    # Now rhs_next can be the LHS of the next call to bigram_freqs
+    # to continue the phrase
+    #
     rhs_next = _set_lsb_at_header(rhs_next_inner, rhs_next_adj)
 
-    # rhs_next = np.sort(np.concatenate([rhs_next_inner, rhs_next_adj]))
-    # rhs_next_header = encoder.header(rhs_next)
-    # rhs_next = rhs_next[rhs_next_header != rhs_next]
-    # print("--- nxt", encoder.decode(rhs_next))
-    try:
-        rhs_next_header = encoder.header(rhs_next)
-        assert np.unique(rhs_next_header).size == rhs_next.size
-    except AssertionError:
-        pass
-
     return phrase_freqs, rhs_next
-
-# Either we need to merge rhs_next to include only one item per header
-# OR we need to intersect and handle the case below
-
-
-def quick_tests():
-    # lhs [(0, array([ 1, 19], dtype=uint64))]
-    # rhs [(0, array([ 2, 20], dtype=uint64))]
-    lhs = np.asarray([2, 262144, 262146], dtype=np.uint64)
-    rhs = np.asarray([4, 262148], dtype=np.uint64)
-    phrase_freqs = np.zeros(2, dtype=np.float64)
-    phrase_freqs, rhs_next = bigram_freqs(lhs, rhs, phrase_freqs)
-    assert (phrase_freqs == [2, 0]).all()
-    # assert np.all(encoder.decode(rhs_next) == [(0, np.array([2, 20], dtype=uint64))])
-
-# quick_tests()
