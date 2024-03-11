@@ -81,16 +81,21 @@ def _inner_bigram_same_term(lhs_int: np.ndarray, rhs_int: np.ndarray,
     overlap = lhs_int & rhs_shift
     adj_count = encoder.payload_lsb(overlap)
     adjacents = bit_count64(adj_count).astype(np.int64)
+
     phrase_freqs[lhs_doc_ids] += _adj_to_phrase_freq(overlap, adjacents)
     # Continue with ?? ?? foo foo
     # term_int without lsbs
     term_int_msbs = lhs_int & ~encoder.payload_lsb_mask
     rhs_cont = None
     lhs_cont = None
-    if cont in [Continuation.RHS, Continuation.BOTH]:
-        rhs_cont = term_int_msbs | encoder.payload_lsb(rhs_shift)
-    if cont in [Continuation.LHS, Continuation.BOTH]:
-        lhs_cont = rhs_int
+    # rhs_cont = term_int_msbs | encoder.payload_lsb(rhs_shift)
+    rhs_cont = encoder.payload_lsb(rhs_shift & rhs_int) | term_int_msbs
+
+    lhs_cont = term_int_msbs | encoder.payload_lsb(lhs_int & (lhs_int >> _1))
+    if cont not in [Continuation.RHS, Continuation.BOTH]:
+        rhs_cont = None
+    if cont not in [Continuation.LHS, Continuation.BOTH]:
+        lhs_cont = None
     return phrase_freqs, (lhs_cont, rhs_cont)
 
 
@@ -126,7 +131,7 @@ def _inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     # For perf we don't check all values, but if overlapping posns allowed in future, maybe we should
     same_term = (len(lhs_int) == len(rhs_int) and lhs_int[0] == rhs_int[0])
     if same_term:
-        return _inner_bigram_same_term(lhs_int, rhs_int, lhs_doc_ids, phrase_freqs)
+        return _inner_bigram_same_term(lhs_int, rhs_int, lhs_doc_ids, phrase_freqs, cont)
 
     overlap_bits = (lhs_int & encoder.payload_lsb_mask) & ((rhs_int & encoder.payload_lsb_mask) >> _1)
     rhs_next = None
@@ -135,7 +140,7 @@ def _inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
         rhs_next = (overlap_bits << _1) & encoder.payload_lsb_mask
         rhs_next |= (rhs_int & (encoder.key_mask | encoder.payload_msb_mask))
     if cont in [Continuation.LHS, Continuation.BOTH]:
-        lhs_next = overlap_bits
+        lhs_next = overlap_bits.copy()
         lhs_next |= (lhs_int & (encoder.key_mask | encoder.payload_msb_mask))
 
     matches2 = overlap_bits > 0

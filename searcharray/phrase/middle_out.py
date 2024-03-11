@@ -10,7 +10,7 @@ import sortednp as snp
 from copy import deepcopy
 from typing import List, Tuple, Dict, Union, cast, Optional
 from searcharray.utils.roaringish import RoaringishEncoder, convert_keys, sorted_unique
-from searcharray.phrase.bigram_freqs import bigram_freqs
+from searcharray.phrase.bigram_freqs import bigram_freqs, Continuation
 import numbers
 import logging
 from collections import defaultdict
@@ -72,26 +72,52 @@ def trim_phrase_search(encoded_posns: List[np.ndarray],
     return encoded_posns
 
 
-def _compute_phrase_freqs(encoded_posns: List[np.ndarray],
-                          phrase_freqs: np.ndarray,
-                          begin: int = 0,
-                          trim: bool = True) -> np.ndarray:
+def _compute_phrase_freqs_rhs(encoded_posns: List[np.ndarray],
+                              phrase_freqs: np.ndarray,
+                              trim: bool = True) -> np.ndarray:
     """Compute phrase freqs from a set of encoded positions."""
     if len(encoded_posns) < 2:
         raise ValueError("phrase must have at least two terms")
 
     # Trim long phrases by searching the rarest terms first
-    # if trim and len(encoded_posns) > 3:
-    #     encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
-
+    if trim and len(encoded_posns) > 3:
+        encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
     mask = np.ones(len(phrase_freqs), dtype=bool)
-    lhs = encoded_posns[begin]
-    for rhs in encoded_posns[begin + 1:]:
+
+    lhs = encoded_posns[0]
+    for rhs in encoded_posns[1:]:
         # Only count the count of the last bigram (ignoring the ones where priors did not match)
         phrase_freqs[mask] = 0
-        phrase_freqs, conts = bigram_freqs(lhs, rhs, phrase_freqs)
+        phrase_freqs, conts = bigram_freqs(lhs, rhs, phrase_freqs, cont=Continuation.RHS)
         assert conts[1] is not None
         lhs = conts[1]
+        mask &= (phrase_freqs > 0)
+        # print("-- pf", phrase_freqs)
+        # dec = encoder.decode(lhs)
+        # print("-- co", dec)
+    phrase_freqs[~mask] = 0
+    return phrase_freqs
+
+
+def _compute_phrase_freqs_lhs(encoded_posns: List[np.ndarray],
+                              phrase_freqs: np.ndarray,
+                              trim: bool = True) -> np.ndarray:
+    """Compute phrase freqs from a set of encoded positions."""
+    if len(encoded_posns) < 2:
+        raise ValueError("phrase must have at least two terms")
+
+    # Trim long phrases by searching the rarest terms first
+    if trim and len(encoded_posns) > 3:
+        encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
+    mask = np.ones(len(phrase_freqs), dtype=bool)
+
+    rhs = encoded_posns[-1]
+    for lhs in encoded_posns[-2::-1]:
+        # Only count the count of the last bigram (ignoring the ones where priors did not match)
+        phrase_freqs[mask] = 0
+        phrase_freqs, conts = bigram_freqs(lhs, rhs, phrase_freqs, cont=Continuation.LHS)
+        assert conts[0] is not None
+        rhs = conts[0]
         mask &= (phrase_freqs > 0)
         # print("-- pf", phrase_freqs)
         # dec = encoder.decode(lhs)
@@ -314,7 +340,7 @@ class PosnBitArray:
                                             keys=doc_ids.view(np.uint64),
                                             min_payload=min_posn,
                                             max_payload=max_posn) for term_id in term_ids]
-        return _compute_phrase_freqs(enc_term_posns, phrase_freqs)
+        return _compute_phrase_freqs_rhs(enc_term_posns, phrase_freqs)
 
     def positions(self, term_id: int, doc_ids) -> Union[List[np.ndarray], np.ndarray]:
         if isinstance(doc_ids, numbers.Number):
