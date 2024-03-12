@@ -29,6 +29,7 @@ _2 = np.uint64(2)
 _1 = np.uint64(1)
 _0 = np.uint64(0)
 _neg1 = np.int64(-1)
+_upper_bit = _1 << (encoder.payload_lsb_bits - _1)
 
 MAX_POSN = encoder.max_payload
 
@@ -129,7 +130,7 @@ def _inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
         return phrase_freqs, (lhs_int, rhs_int)
 
     # For perf we don't check all values, but if overlapping posns allowed in future, maybe we should
-    same_term = (len(lhs_int) == len(rhs_int) and lhs_int[0] == rhs_int[0])
+    same_term = (len(lhs_int) == len(rhs_int) and np.all(lhs_int == rhs_int))
     if same_term:
         return _inner_bigram_same_term(lhs_int, rhs_int, lhs_doc_ids, phrase_freqs, cont)
 
@@ -168,8 +169,7 @@ def _adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     lhs_int, rhs_int = encoder.intersect_rshift(lhs, rhs, rshift=_neg1)
     lhs_doc_ids = encoder.keys(lhs_int)
     # lhs lsb set and rhs lsb's most significant bit set
-    upper_bit = _1 << (encoder.payload_lsb_bits - _1)
-    matches = ((lhs_int & upper_bit) != 0) & ((rhs_int & _1) != 0)
+    matches = ((lhs_int & _upper_bit) != 0) & ((rhs_int & _1) != 0)
     unique, counts = np.unique(lhs_doc_ids[matches], return_counts=True)
     phrase_freqs[unique] += counts
     # Set lsb to 0 where no match, lsb to 1 where match
@@ -178,12 +178,16 @@ def _adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     if np.any(matches):
         if cont in [Continuation.RHS, Continuation.BOTH]:
             rhs_next = rhs_int[matches]
-            assert rhs_next is not None  # Kind of shitty assert casting
+            assert rhs_next is not None
+            rhs_next = encoder.header(rhs_int) | _1
+        elif cont in [Continuation.LHS, Continuation.BOTH]:
+            rhs_next = rhs_int[matches]
+            assert rhs_next is not None
             rhs_next |= _1
-        else:
+            rhs_next = encoder.header(rhs_int) | _1
             lhs_next = lhs_int[matches]
-            assert lhs_next is not None
-            lhs_next |= (_1 << (encoder.payload_lsb_bits - _1))
+            lhs_next = encoder.header(lhs_int) | _upper_bit
+            rhs_next = None
     return phrase_freqs, (lhs_next, rhs_next)
 
 
@@ -200,12 +204,14 @@ def _set_adjbit_at_header(enc1: np.ndarray, just_lsb_enc: np.ndarray,
 
     _, (same_header_enc1, same_header_just_lsb) = snp.intersect(enc1_header, just_lsb_enc_header, indices=True)
     # Set _1 on intersection
+    ignore_mask = np.ones(len(just_lsb_enc), dtype=bool)
+    ignore_mask[same_header_just_lsb] = False
     if len(same_header_enc1) > 0 and cont == Continuation.RHS:
         enc1[same_header_enc1] |= _1
-        just_lsb_enc = just_lsb_enc[~same_header_just_lsb]
+        just_lsb_enc = just_lsb_enc[ignore_mask]
     if len(same_header_just_lsb) > 0 and cont == Continuation.LHS:
-        enc1[same_header_enc1] |= (_1 << (encoder.payload_lsb_bits - _1))
-        just_lsb_enc = just_lsb_enc[~same_header_just_lsb]
+        enc1[same_header_enc1] |= _upper_bit
+        just_lsb_enc = just_lsb_enc[ignore_mask]
     return np.sort(np.concatenate([enc1, just_lsb_enc]))
 
 
@@ -289,10 +295,10 @@ def bigram_freqs(lhs: np.ndarray,
     if cont in [Continuation.RHS, Continuation.BOTH]:
         assert rhs_next_inner is not None
         assert rhs_next_adj is not None
-        rhs_next = _set_adjbit_at_header(rhs_next_inner, rhs_next_adj, cont)
+        rhs_next = _set_adjbit_at_header(rhs_next_inner, rhs_next_adj, Continuation.RHS)
     if cont in [Continuation.LHS, Continuation.BOTH]:
         assert lhs_next_inner is not None
         assert lhs_next_adj is not None
-        lhs_next = _set_adjbit_at_header(lhs_next_inner, lhs_next_adj, cont)
+        lhs_next = _set_adjbit_at_header(lhs_next_inner, lhs_next_adj, Continuation.LHS)
 
     return phrase_freqs, (lhs_next, rhs_next)

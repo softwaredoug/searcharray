@@ -340,7 +340,7 @@ class PosnBitArray:
                                             keys=doc_ids.view(np.uint64),
                                             min_payload=min_posn,
                                             max_payload=max_posn) for term_id in term_ids]
-        return _compute_phrase_freqs_rhs(enc_term_posns, phrase_freqs)
+        return _compute_phrase_freqs_lhs(enc_term_posns, phrase_freqs)
 
     def positions(self, term_id: int, doc_ids) -> Union[List[np.ndarray], np.ndarray]:
         if isinstance(doc_ids, numbers.Number):
