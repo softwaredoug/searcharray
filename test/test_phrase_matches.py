@@ -86,9 +86,9 @@ scenarios = {
         "expected": [1, 0, 0, 0] * 25,
     },
     "same_term_matches_4": {
-        "docs": lambda: SearchArray.index(["foo foo foo foo", "data2", "data3 bar", "bunny funny wunny"] * 2),
+        "docs": lambda: SearchArray.index(["foo foo foo foo", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "foo", "foo", "foo"],
-        "expected": [1, 0, 0, 0] * 2,
+        "expected": [1, 0, 0, 0] * 25,
     },
     "same_term_phrase_repeats": {
         "docs": lambda: SearchArray.index(["foo foo foo foo", "data2", "data3 bar", "bunny funny wunny"] * 25),

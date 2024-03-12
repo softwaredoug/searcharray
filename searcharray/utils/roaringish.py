@@ -174,6 +174,25 @@ class RoaringishEncoder:
         """Return header from encoded -- all but lsb bits."""
         return encoded & ~self.payload_lsb_mask
 
+    def _no_underflow_mask(self, rhs: np.ndarray, rshift: np.int64 = _neg1):
+        mask = None
+        if rshift == _neg1:
+            mask = (rhs & self.payload_msb_mask) != 0
+        else:
+            mask = self.payload_msb(rhs) >= np.abs(rshift)
+        return mask
+
+    def _actual_shift(self, rhs: np.ndarray, rshift: np.int64 = _neg1):
+        return (rhs >> self.payload_lsb_bits) + rshift.view(np.uint64)
+
+    def _rhs_shifted(self, rhs: np.ndarray, rshift: np.int64 = _neg1):
+        assert rshift < 0, "rshift must be negative"
+        # Prevent overflow by removing the MSBs that will be shifted off
+        mask = self._no_underflow_mask(rhs, rshift)
+        rhs_int = rhs[mask]
+        rhs_shifted = self._actual_shift(rhs_int, rshift)
+        return rhs_int, rhs_shifted
+
     def intersect_rshift(self, lhs: np.ndarray, rhs: np.ndarray,
                          rshift: np.int64 = _neg1) -> Tuple[np.ndarray, np.ndarray]:
         """Return the MSBs that are common to both lhs and rhs (same keys, same MSBs)
@@ -184,12 +203,7 @@ class RoaringishEncoder:
         rhs : np.ndarray of uint64 (encoded) values
         rshift : int how much to shift rhs by to the right
         """
-        rhs_int = rhs
-        assert rshift < 0, "rshift must be negative"
-        rhs_int = rhs[self.payload_msb(rhs) >= np.abs(rshift)]
-        rshft = rshift.view(np.uint64)
-        rhs_shifted = (rhs_int >> self.payload_lsb_bits) + rshft
-
+        rhs_int, rhs_shifted = self._rhs_shifted(rhs, rshift)
         # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
         _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits,
                                               rhs_shifted,

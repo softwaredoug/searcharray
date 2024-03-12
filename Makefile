@@ -23,6 +23,14 @@ clean: deps
 	rm -rf build dist
 	@echo "Clean any .so files..."
 	find . -name "searcharray/*.so" -type f -delete
+	@echo "Cleaning extensions..."
+	rm -rf searcharray/*.so
+	rm -rf searcharray/*.c
+	rm -rf searcharray/phrase/*.so
+	rm -rf searcharray/phrase/*.c
+	rm -rf searcharray/utils/*.so
+	rm -rf searcharray/utils/*.c
+	rm -rf build
 
 
 
@@ -32,7 +40,12 @@ destroy: clean
 	rm -rf venv
 
 
-test: deps
+extensions:
+	@echo "Building extensions..."
+	python setup.py build_ext --inplace
+
+
+test: deps extensions
 	@echo "Running tests..."
 	python -m pytest --benchmark-skip test
 

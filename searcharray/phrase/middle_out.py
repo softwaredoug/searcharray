@@ -126,15 +126,23 @@ def _compute_phrase_freqs_lhs(encoded_posns: List[np.ndarray],
     return phrase_freqs
 
 
-# def _compute_phrase_freqs_long(encoded_posns: List[np.ndarray],
-#                                phrase_freqs: np.ndarray) -> np.ndarray:
-#   """Compute phrase freqs from a set of encoded positions."""
-#   one_before_shortest = np.argsort(encoded_posns, key=lambda x: len(x))[0] - 1
-#   if one_before_shortest == 0:
-#       return _compute_phrase_freqs(encoded_posns, phrase_freqs, begin=0)
-#
-#   phrase_freqs = _compute_phrase_freqs(encoded_posns, phrase_freqs,
-#                                         begin=one_before_shortest)
+def compute_phrase_freqs(encoded_posns: List[np.ndarray],
+                         phrase_freqs: np.ndarray,
+                         trim: bool = False) -> np.ndarray:
+    """Compute phrase freqs from a set of encoded positions."""
+    shortest_len_index = min(enumerate(encoded_posns), key=lambda x: len(x[1]))[0]
+    # Slice LHS / RHS at shortest_len_index
+    if shortest_len_index <= 1:
+        return _compute_phrase_freqs_lhs(encoded_posns, phrase_freqs, trim=trim)
+    elif shortest_len_index >= len(encoded_posns) - 2:
+        return _compute_phrase_freqs_rhs(encoded_posns, phrase_freqs, trim=trim)
+    else:
+        # We optimize this case by going middle-out
+        # We can take the min of both directions phrase freqs
+        lhs = _compute_phrase_freqs_lhs(encoded_posns[:shortest_len_index], phrase_freqs, trim=trim)
+        rhs = _compute_phrase_freqs_rhs(encoded_posns[shortest_len_index:], phrase_freqs, trim=trim)
+        phrase_freqs = np.minimum(lhs, rhs)
+        return phrase_freqs
 
 
 class PosnBitArrayFromFlatBuilder:
@@ -340,7 +348,7 @@ class PosnBitArray:
                                             keys=doc_ids.view(np.uint64),
                                             min_payload=min_posn,
                                             max_payload=max_posn) for term_id in term_ids]
-        return _compute_phrase_freqs_lhs(enc_term_posns, phrase_freqs)
+        return compute_phrase_freqs(enc_term_posns, phrase_freqs)
 
     def positions(self, term_id: int, doc_ids) -> Union[List[np.ndarray], np.ndarray]:
         if isinstance(doc_ids, numbers.Number):
