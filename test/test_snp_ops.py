@@ -1,7 +1,8 @@
 from typing import Tuple
 import numpy as np
 import pytest
-from searcharray.utils.snp_ops import binary_search, galloping_search
+from searcharray.utils.snp_ops import binary_search, galloping_search, intersect
+from test_utils import w_scenarios
 
 
 def u64arr(lst):
@@ -63,6 +64,12 @@ mask_search_scenarios = [
 @pytest.mark.parametrize("algorithm", [binary_search, galloping_search])
 @pytest.mark.parametrize("mask", [np.uint64(0xFFFFFFFF00000000)])
 def test_search_masks(mask, algorithm, array: np.ndarray, target: np.uint64, expected: Tuple[np.uint64, bool]):
+    # Reset expected to first in array with mask
+    for idx, val in enumerate(array):
+        if val & mask == target & mask:
+            expected = (np.uint64(idx), True)
+            break
+
     idx, found = algorithm(array, target, mask)
     if expected[1]:
         assert array[idx] & mask == target & mask
@@ -70,3 +77,33 @@ def test_search_masks(mask, algorithm, array: np.ndarray, target: np.uint64, exp
         assert found == expected[1]
     else:
         assert not found
+
+
+intersect_scenarios = {
+    "base": {
+        "lhs": u64([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+        "rhs": u64arr([2, 4, 6, 8, 10]),
+        "mask": None,
+        "expected": u64arr([2, 4, 6, 8, 10])
+    },
+    "lsbs_differ": {
+        "lhs": u64([0x1F, 0x2F, 0x3F, 0x4F, 0x5F, 0x6F, 0x7F, 0x8F, 0x9F, 0xAF]),
+        "rhs": u64([0x2F, 0x4F, 0x6F, 0x8F, 0xAF]),
+        "mask": None,
+        "expected": u64arr([0x2F, 0x4F, 0x6F, 0x8F, 0xAF])
+    },
+    "base_mask": {
+        "lhs": u64([0x1F, 0x2F, 0x3F, 0x4F, 0x5F, 0x6F, 0x7F, 0x8F, 0x9F, 0xAF]),
+        "rhs": u64([0x2F, 0x4F, 0x6F, 0x8F, 0xAF]),
+        "mask": u64(0xF0),
+        "expected": u64arr([0x20, 0x40, 0x60, 0x80, 0xA0])
+    }
+}
+
+
+@w_scenarios(intersect_scenarios)
+def test_intersect(lhs, rhs, mask, expected):
+    if mask is None:
+        mask = np.uint64(0xFFFFFFFFFFFFFFFF)
+    result, lhs_idx, rhs_idx = intersect(lhs, rhs, mask)
+    assert np.all(result == expected)
