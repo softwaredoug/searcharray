@@ -2,7 +2,7 @@ from typing import Tuple
 import numpy as np
 import sortednp as snp
 import pytest
-from searcharray.utils.snp_ops import binary_search, galloping_search, intersect, unique
+from searcharray.utils.snp_ops import binary_search, galloping_search, intersect, adjacent, unique
 from test_utils import w_scenarios
 from test_utils import Profiler, profile_enabled
 
@@ -222,3 +222,65 @@ def test_profile_unique(benchmark):
 
     profiler = Profiler(benchmark)
     profiler.run(unique_many)
+
+
+adj_scenarios = {
+    "base": {
+        "lhs": u64([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+        "rhs": u64([2, 4, 6, 8, 10]),
+        "mask": None,
+        "lhs_idx_expected": u64arr([0, 2, 4, 6, 8]),
+        "rhs_idx_expected": u64arr([0, 1, 2, 3, 4])
+    },
+    "start_0s": {
+        "lhs": u64([0, 0, 3]),
+        "rhs": u64([0, 0, 1, 8, 10]),
+        "mask": None,
+        "lhs_idx_expected": u64arr([0]),
+        "rhs_idx_expected": u64arr([2])
+    },
+    "start_0s_2": {
+        "lhs": u64([0, 2, 3]),
+        "rhs": u64([0, 1, 2, 8, 10]),
+        "mask": None,
+        "lhs_idx_expected": u64arr([0]),
+        "rhs_idx_expected": u64arr([1])
+    },
+    "base_masked": {
+        "lhs": u64([0x1F, 0x2F, 0x3F, 0x4F, 0x5F, 0x6F, 0x7F, 0x8F, 0x9F, 0xAF]),
+        "rhs": u64([0x2F, 0x4F, 0x6F, 0x8F, 0xAF]),
+        "mask": 0xF0,
+        "lhs_idx_expected": u64arr([0, 2, 4, 6, 8]),
+        "rhs_idx_expected": u64arr([0, 1, 2, 3, 4])
+    },
+    "rhs_0": {
+        "lhs": u64([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+        "rhs": u64([0, 3]),
+        "mask": None,
+        "lhs_idx_expected": u64arr([1]),
+        "rhs_idx_expected": u64arr([1])
+    },
+    "many_adjacent": {
+        "lhs": u64([1, 1, 1, 1, 1, 2, 2, 2, 2, 2]),
+        "rhs": u64([2, 3]),
+        "mask": None,
+        "lhs_idx_expected": u64arr([0, 5]),  # As we drop dups
+        "rhs_idx_expected": u64arr([0, 1])
+    },
+    "trouble_scen": {
+        "lhs": u64([1, 274877906945, 549755813889, 824633720833]),
+        "rhs": u64([6, 137438953474, 274877906950, 412316860418]),
+        "mask": 0xfffffffffffc0000,
+        "lhs_expected": u64arr([]),
+        "rhs_expected": u64arr([])
+    }
+}
+
+
+@w_scenarios(adj_scenarios)
+def test_adjacent(lhs, rhs, mask, lhs_idx_expected, rhs_idx_expected):
+    if mask is None:
+        mask = np.uint64(0xFFFFFFFFFFFFFFFF)
+    lhs_idx, rhs_idx = adjacent(lhs, rhs, mask)
+    assert np.all(lhs_idx == lhs_idx_expected)
+    assert np.all(rhs_idx == rhs_idx_expected)

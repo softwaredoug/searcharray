@@ -8,7 +8,7 @@ import logging
 import numbers
 from typing import Optional, Tuple, List, Union
 
-from searcharray.utils.snp_ops import intersect, unique
+from searcharray.utils.snp_ops import intersect, unique, adjacent
 
 logger = logging.getLogger(__name__)
 
@@ -205,9 +205,10 @@ class RoaringishEncoder:
         rhs : np.ndarray of uint64 (encoded) values
         rshift : int how much to shift rhs by to the right
         """
-        rhs_int, rhs_shifted = self._rhs_shifted(rhs, rshift)
-        _, lhs_idx, rhs_idx = intersect(lhs, rhs_shifted, mask=self.header_mask)
-        return lhs[lhs_idx], rhs_int[rhs_idx]
+        # print(lhs, rhs, self.header_mask)
+        # import pdb; pdb.set_trace()
+        lhs_idx, rhs_idx = adjacent(lhs, rhs, mask=self.header_mask)
+        return lhs[lhs_idx], rhs[rhs_idx]
 
     def intersect(self, lhs: np.ndarray, rhs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Return the MSBs that are common to both lhs and rhs (same keys, same MSBs)

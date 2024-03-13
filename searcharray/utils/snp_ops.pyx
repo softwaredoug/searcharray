@@ -117,6 +117,8 @@ cdef _intersection(DTYPE_t[:] lhs,
     cdef np.intp_t i_rhs = 0
     cdef np.intp_t i_result = 0
     cdef DTYPE_t value_prev = -1
+    cdef DTYPE_t value_lhs = 0
+    cdef DTYPE_t value_rhs = 0
 
     # Outputs as numpy arrays
     cdef np.uint64_t[:] results = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
@@ -192,6 +194,98 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
     result, indices_lhs, indices_rhs, result_idx = _intersection(lhs, rhs, mask)
     return result[:result_idx], indices_lhs[:result_idx], indices_rhs[:result_idx]
     # return _u64(result), _u64(indices_lhs), _u64(indices_rhs)
+
+
+cdef _adjacent(DTYPE_t[:] lhs,
+               DTYPE_t[:] rhs,
+               DTYPE_t mask=ALL_BITS,
+               DTYPE_t delta=1):
+    # Find all LHS / RHS indices where LHS is 1 before RHS
+    cdef np.intp_t len_lhs = lhs.shape[0]
+    cdef np.intp_t len_rhs = rhs.shape[0]
+    cdef np.intp_t i_lhs = 0
+    cdef np.intp_t i_rhs = 0
+    cdef np.intp_t i_result = 0
+    cdef DTYPE_t value_prev = -1
+    cdef DTYPE_t value_lhs = 0
+    cdef DTYPE_t value_rhs = 0
+
+    # Outputs as numpy arrays
+    cdef np.int64_t result_idx = 0
+    cdef np.uint64_t[:] lhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
+    cdef np.uint64_t[:] rhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
+
+    # Read rhs until > delta
+    # print(f"MASKED {mask} | {rhs[0]} | {i_rhs} - ", rhs[i_rhs] & mask)
+    while i_rhs < len_rhs and rhs[i_rhs] & mask == 0:
+        i_rhs += 1
+
+    while i_lhs < len_lhs and i_rhs < len_rhs:
+        # Use gallping search to find the first element in the right array
+        value_lhs = lhs[i_lhs] & mask
+        value_rhs = rhs[i_rhs] & mask
+        
+        # print("=====================================")
+        # print(f"i_lhs: {i_lhs}, i_rhs: {i_rhs}")
+        # print(f"vals: {value_lhs:0x}, {value_rhs:0x} | {delta:0x}")
+
+        # Advance LHS to RHS
+        if value_lhs < value_rhs - delta:
+            # print(f"Advance lhs to rhs: {value_lhs} -> {value_rhs}-{delta}")
+            if i_lhs >= len_lhs - 1:
+                # print("EXIT (exhaust lhs)")
+                break
+            i_result = i_lhs
+            # lhs   0_  2*  2   lhs / rhs are at _, now advance to *
+            # rhs   0   3_  3
+            # Advance lhs to the 
+            _galloping_search(lhs, value_rhs - delta, mask, &i_result, len_lhs)
+            value_lhs = lhs[i_result] & mask
+            # print(f"search - i_result: {i_result}, value_lhs: {value_lhs}")
+            i_lhs = i_result
+        # Advance RHS to LHS
+        elif value_rhs - delta < value_lhs:
+            if i_rhs >= len_rhs - 1:
+                # print("EXIT (exhaust rhs)")
+                break
+            # print(f"Advance rhs to lhs: {value_rhs} | {value_rhs-delta} -> {value_lhs} | {i_result} {len_rhs}")
+            i_result = i_rhs
+            # lhs   0    2_   2   lhs / rhs are at _, now advance to *
+            # rhs   0_   3*   3    so that rhs is one past lhs
+            _galloping_search(rhs, value_lhs + delta,
+                              mask, &i_result, len_rhs)
+            value_rhs = rhs[i_result] & mask
+            # print(f"search - i_result: {i_result}, value_rhs: {value_rhs}")
+            i_rhs = i_result
+
+        if value_lhs == value_rhs - delta:
+            if value_prev != value_lhs:
+                # Not a dup so store it.
+                # print(f"Store: i_lhs:{i_lhs} | i_rhs:{i_rhs} | val_lhs:{lhs[i_lhs]} | val_rhs:{rhs[i_rhs]}")
+                lhs_indices[result_idx] = i_lhs
+                rhs_indices[result_idx] = i_rhs
+                result_idx += 1
+            value_prev = value_lhs
+            i_lhs += 1
+            i_rhs += 1
+
+    # Get view of each result and return
+    return np.asarray(lhs_indices), np.asarray(rhs_indices), result_idx
+
+
+def adjacent(np.ndarray[DTYPE_t, ndim=1] lhs,
+             np.ndarray[DTYPE_t, ndim=1] rhs,
+             DTYPE_t mask=ALL_BITS):
+    if mask == 0:
+        raise ValueError("Mask cannot be zero")
+    if mask is None:
+        mask = ALL_BITS
+        delta = 1
+    else:
+        delta = mask & -mask  # lest significant set bit on mask
+
+    indices_lhs, indices_rhs, result_idx = _adjacent(lhs, rhs, mask, delta)
+    return indices_lhs[:result_idx], indices_rhs[:result_idx]
 
 
 cdef _scan_unique(DTYPE_t[:] arr,
