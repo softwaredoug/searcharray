@@ -161,9 +161,8 @@ class RoaringishEncoder:
 
     def keys_unique(self, encoded: np.ndarray) -> np.ndarray:
         """Return keys from encoded."""
-        keys = self.keys(encoded)
-        intersected = sorted_unique(keys)
-        return intersected
+        rshift = _64 - self.key_bits
+        return unique(encoded, rshift)
 
     def payload_msb(self, encoded: np.ndarray) -> np.ndarray:
         """Return payload MSBs from encoded."""

@@ -213,21 +213,21 @@ cdef _scan_unique(DTYPE_t[:] arr,
     return result, result_idx
 
 
-cdef _scan_unique_masked(DTYPE_t[:] arr,
-                         DTYPE_t arr_len,
-                         DTYPE_t mask):
+cdef _scan_unique_shifted(DTYPE_t[:] arr,
+                          DTYPE_t arr_len,
+                          DTYPE_t rshift):
     cdef DTYPE_t i = 0
 
     cdef np.uint64_t[:] result = np.empty(arr_len, dtype=np.uint64)
     cdef DTYPE_t result_idx = 0
-    cdef DTYPE_t target = arr[i]
+    cdef DTYPE_t target = arr[i] >> rshift
 
     while i < arr_len:
-        target = arr[i]
+        target = arr[i] >> rshift
         result[result_idx] = target
         result_idx += 1
         i += 1
-        while i < arr_len and (arr[i] & mask) == (target & mask):
+        while i < arr_len and (arr[i] >> rshift) == target:
             i += 1
 
     return result, result_idx
@@ -236,6 +236,9 @@ cdef _scan_unique_masked(DTYPE_t[:] arr,
 
 
 def unique(np.ndarray[DTYPE_t, ndim=1] arr,
-           DTYPE_t mask=ALL_BITS):
-    result,  result_idx = _scan_unique(arr, arr.shape[0])
-    return result[:result_idx]
+           DTYPE_t rshift=0):
+    if rshift > 0:
+        result, result_idx = _scan_unique_shifted(arr, arr.shape[0], rshift)
+    else:
+        result, result_idx = _scan_unique(arr, arr.shape[0])
+    return np.array(result[:result_idx])

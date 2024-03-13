@@ -183,6 +183,13 @@ def test_unique(array):
     assert np.all(result == expected)
 
 
+@pytest.mark.parametrize("array,shift", [(u64([0xEE00, 0xFF00, 0xFF01]), 8)])
+def test_unique_shifted(array, shift):
+    expected = np.unique(array >> shift)
+    result = unique(array, shift)
+    assert np.all(result == expected)
+
+
 @pytest.mark.parametrize("seed", [0, 1, 2, 3, 4])
 def test_unique_matches_snp(seed):
     np.random.seed(seed)
