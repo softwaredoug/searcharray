@@ -8,6 +8,8 @@
 cimport numpy as np
 import numpy as np
 
+from time import perf_counter
+
 ctypedef np.uint64_t DTYPE_t
 DTYPE = np.uint64
 
@@ -109,12 +111,15 @@ cdef _intersection(np.ndarray[DTYPE_t, ndim=1] lhs,
     cdef DTYPE_t value_lhs_masked = 0
     cdef DTYPE_t value_rhs_masked = 0
 
-    # Resulting lhs indices, rhs indices, and result indices as python lists:
-    cdef list indices_lhs = []
-    cdef list indices_rhs = []
-    cdef list results = []
+    # Outputs as numpy arrays
+    cdef np.uint64_t[:] results = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
+    cdef np.int64_t result_idx = 0
+    cdef np.uint64_t[:] lhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
+    cdef np.uint64_t[:] rhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
 
-    print("Start intersection")
+    # print("INTERSECTING:")
+    # print(f"lhs: {lhs}")
+    # print(f"rhs: {rhs}")
 
     while i_lhs < len_lhs and i_rhs < len_rhs:
         # Use gallping search to find the first element in the right array
@@ -123,38 +128,50 @@ cdef _intersection(np.ndarray[DTYPE_t, ndim=1] lhs,
         value_lhs_masked = mskd(value_lhs, mask)
         value_rhs_masked = mskd(value_rhs, mask)
 
+        # print("=====================================")
+        # print(f"i_lhs: {i_lhs}, i_rhs: {i_rhs}")
+
         # Advance LHS to RHS
         if value_lhs_masked < value_rhs_masked:
+            # print(f"Advance lhs to rhs: {value_lhs_masked} < {value_rhs_masked}")
+            if i_lhs >= len_lhs - 1:
+                break
             _galloping_search(lhs, value_rhs, mask, &i_result, len_lhs)
-            print(f"Search lhs:{lhs} for {value_rhs} -- Found {i_result}")
             value_lhs = lhs[i_result]
             i_lhs = i_result
+            # print(f"search - i_result: {i_result}, value_lhs: {value_lhs}")
             value_lhs_masked = mskd(value_lhs, mask)
             # if value_lhs_masked != value_rhs_masked:
             #    print("EXIT-1")
             #     break
         # Advance RHS to LHS
         elif value_lhs_masked > value_rhs_masked:
-            _galloping_search(rhs, value_lhs, rhs, &i_result, len_rhs)
-            print(f"Search rhs:{rhs} for {value_lhs} -- Found {i_result}")
+            if i_rhs >= len_rhs - 1:
+                break
+            # print(f"Advance rhs to lhs: {value_lhs_masked} > {value_rhs_masked}")
+            _galloping_search(rhs, value_lhs, mask, &i_result, len_rhs)
             value_rhs = rhs[i_result]
             i_rhs = i_result
+            # print(f"search - i_result: {i_result}, value_rhs: {value_rhs}")
             value_rhs_masked = mskd(value_rhs, mask)
             # if value_lhs_masked != value_rhs_masked:
             #     print("EXIT-2")
             #     break
 
         if value_lhs_masked == value_rhs_masked:
-            print("Found intersection")
             if value_prev_masked != value_lhs_masked:
                 # Not a dup so store it.
-                results.append(value_lhs_masked)
-                indices_lhs.append(i_lhs)
-                indices_rhs.append(i_rhs)
-        value_prev_masked = value_lhs_masked
-        i_lhs += 1
-        i_rhs += 1
-    return results, indices_lhs, indices_rhs
+                # print(f"Store: {value_lhs_masked}")
+                results[result_idx] = value_lhs
+                lhs_indices[result_idx] = i_lhs
+                rhs_indices[result_idx] = i_rhs
+                result_idx += 1
+            value_prev_masked = value_lhs_masked
+            i_lhs += 1
+            i_rhs += 1
+
+    # Get view of each result and return
+    return np.asarray(results), np.asarray(lhs_indices), np.asarray(rhs_indices), result_idx
 
 
 def _u64(lst) -> np.ndarray:
@@ -168,5 +185,6 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
         mask = ALL_BITS
     if mask == 0:
         raise ValueError("Mask cannot be zero")
-    result, indices_lhs, indices_rhs = _intersection(lhs, rhs, mask)
-    return _u64(result), _u64(indices_lhs), _u64(indices_rhs)
+    result, indices_lhs, indices_rhs, result_idx = _intersection(lhs, rhs, mask)
+    return result[:result_idx], indices_lhs[:result_idx], indices_rhs[:result_idx]
+    # return _u64(result), _u64(indices_lhs), _u64(indices_rhs)

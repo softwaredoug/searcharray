@@ -60,7 +60,7 @@ benchmark_dry_run: deps
 	python -m pytest -x --benchmark-only
 
 
-benchmark: deps
+benchmark: deps extensions
 	# There is some interaction between doing MSMarco and TMDB benchmarks together 
 	# (maybe due to memory usage) that causes TMDB to show as slower. So we run them separately.
 	python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_tmdb test/test_tmdb.py
@@ -71,7 +71,7 @@ benchmark: deps
 benchmark_graph: deps
 	python scripts/graph_benchmarks.py "$(TEST)"
 
-profile:
+profile: extensions
 	python -m pytest -s -x --benchmark-disable "$(TEST)"
 	snakeviz ./.benchmarks/last.prof
 
