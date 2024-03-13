@@ -22,10 +22,6 @@ cdef extern from "stddef.h":
     # and portability, though it's not directly used here.
     int __builtin_popcountll(unsigned long long x)
 
-cpdef int popcount64(unsigned long long x):
-    return __builtin_popcountll(x)
-
-
 ctypedef uint64_t DTYPE_t
 
 cdef DTYPE_t ALL_BITS = 0xFFFFFFFFFFFFFFFF
@@ -39,6 +35,18 @@ class PostProcess(Enum):
 # interactions added
 cdef inline DTYPE_t mskd(DTYPE_t value, DTYPE_t mask):
     return value & mask
+
+
+cdef popcount64_arr(DTYPE_t[:] arr):
+    cdef np.uint64_t[:] result = np.empty(arr.shape[0], dtype=np.uint64)
+    cdef int i = 0
+    for i in range(arr.shape[0]):
+        result[i] = __builtin_popcountll(arr[i])
+    return result
+
+
+def popcount64(arr):
+    return np.array(popcount64_arr(arr))
 
 
 cdef void _binary_search(DTYPE_t[:] array,

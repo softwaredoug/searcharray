@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 from searcharray.utils.bitcount import bit_count64
+from searcharray.utils.snp_ops import popcount64
 from test_utils import w_scenarios
 from test_utils import Profiler, profile_enabled
 
@@ -40,6 +41,14 @@ def test_bitcount64(bits, expected):
     assert np.array_equal(bits, bits_before)
 
 
+@w_scenarios(scenarios)
+def test_popocount64(bits, expected):
+    bits_before = np.copy(bits)
+    popcont = popcount64(bits)
+    assert np.all(popcont == expected)
+    assert np.array_equal(bits, bits_before)
+
+
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 def test_bitcount64_benchmark(benchmark):
     profiler = Profiler(benchmark)
@@ -48,6 +57,14 @@ def test_bitcount64_benchmark(benchmark):
         for _ in range(times):
             bit_count64(arr)
 
-    arr_size = 100000
-    arr = np.random.randint(0, 2**64, size=arr_size, dtype=np.uint64)
-    profiler.run(bitcounts, arr, times=1000)
+    def popcounts(arr, times=100):
+        for _ in range(times):
+            popcount64(arr)
+
+    def run_bitcounts():
+        arr_size = 100000
+        arr = np.random.randint(0, 2**64, size=arr_size, dtype=np.uint64)
+        bitcounts(arr)
+        popcounts(arr)
+
+    profiler.run(run_bitcounts)
