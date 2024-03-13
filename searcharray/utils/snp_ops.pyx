@@ -195,11 +195,12 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
 
 
 cdef _scan_unique(DTYPE_t[:] arr,
-                       DTYPE_t arr_len):
-    cdef np.intp_t i = 0
+                  DTYPE_t arr_len):
+    cdef DTYPE_t i = 0
 
     cdef np.uint64_t[:] result = np.empty(arr_len, dtype=np.uint64)
-    cdef np.int64_t result_idx = 0
+    cdef DTYPE_t result_idx = 0
+    cdef DTYPE_t target = arr[i]
 
     while i < arr_len:
         target = arr[i]
@@ -209,9 +210,32 @@ cdef _scan_unique(DTYPE_t[:] arr,
         while i < arr_len and arr[i] == target:
             i += 1
 
-    return np.asarray(result[:result_idx]), result_idx
+    return result, result_idx
 
 
-def unique(np.ndarray[DTYPE_t, ndim=1] arr):
+cdef _scan_unique_masked(DTYPE_t[:] arr,
+                         DTYPE_t arr_len,
+                         DTYPE_t mask):
+    cdef DTYPE_t i = 0
+
+    cdef np.uint64_t[:] result = np.empty(arr_len, dtype=np.uint64)
+    cdef DTYPE_t result_idx = 0
+    cdef DTYPE_t target = arr[i]
+
+    while i < arr_len:
+        target = arr[i]
+        result[result_idx] = target
+        result_idx += 1
+        i += 1
+        while i < arr_len and (arr[i] & mask) == (target & mask):
+            i += 1
+
+    return result, result_idx
+
+
+
+
+def unique(np.ndarray[DTYPE_t, ndim=1] arr,
+           DTYPE_t mask=ALL_BITS):
     result,  result_idx = _scan_unique(arr, arr.shape[0])
     return result[:result_idx]

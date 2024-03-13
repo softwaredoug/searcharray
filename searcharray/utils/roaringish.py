@@ -207,11 +207,6 @@ class RoaringishEncoder:
         rshift : int how much to shift rhs by to the right
         """
         rhs_int, rhs_shifted = self._rhs_shifted(rhs, rshift)
-        # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
-        # _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits,
-        #                                       rhs_shifted,
-        #                                      indices=True,
-        #                                       algorithm=_algorithm)
         _, lhs_idx, rhs_idx = intersect(lhs, rhs_shifted, mask=self.header_mask)
         return lhs[lhs_idx], rhs_int[rhs_idx]
 
@@ -225,10 +220,6 @@ class RoaringishEncoder:
         """
         # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
         _, lhs_idx, rhs_idx = intersect(lhs, rhs, mask=self.header_mask)
-        # _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits,
-        #                                       rhs >> self.payload_lsb_bits,
-        #                                       indices=True,
-        #                                      algorithm=_algorithm)
         return lhs[lhs_idx], rhs[rhs_idx]
 
     def slice(self, encoded: np.ndarray,
