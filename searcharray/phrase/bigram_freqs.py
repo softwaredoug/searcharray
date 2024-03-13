@@ -6,7 +6,7 @@ import logging
 from enum import Enum
 
 from searcharray.utils.bitcount import bit_count64
-from searcharray.utils.snp_ops import intersect, PostProcess
+from searcharray.utils.snp_ops import intersect, PostProcess, popcount64
 import sortednp as snp
 
 
