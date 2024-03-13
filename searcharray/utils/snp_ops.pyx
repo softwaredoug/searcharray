@@ -8,13 +8,31 @@
 # cython: language_level=3
 cimport numpy as np
 import numpy as np
+from enum import Enum
 
 cdef extern from "stdint.h":
     ctypedef unsigned long long uint64_t
 
+# cdef extern from "x86intrin.h":
+#     int __builtin_popcountll(unsigned long long x)
+
+
+cdef extern from "stddef.h":
+    # Assuming size_t is available via stddef.h for the example's simplicity
+    # and portability, though it's not directly used here.
+    int __builtin_popcountll(unsigned long long x)
+
+cpdef int popcount64(unsigned long long x):
+    return __builtin_popcountll(x)
+
+
 ctypedef uint64_t DTYPE_t
 
 cdef DTYPE_t ALL_BITS = 0xFFFFFFFFFFFFFFFF
+
+class PostProcess(Enum):
+    NONE = 0
+    SHIFT_POPCOUNT = 1
 
 # For some reason this as an inline is faster than
 # just doing the operation, despite all the python
@@ -110,7 +128,8 @@ def galloping_search(np.ndarray[DTYPE_t, ndim=1] array,
 
 cdef _intersection(DTYPE_t[:] lhs,
                    DTYPE_t[:] rhs,
-                   DTYPE_t mask=ALL_BITS):
+                   DTYPE_t mask=ALL_BITS,
+                   DTYPE_t post_process=0):
     cdef np.intp_t len_lhs = lhs.shape[0]
     cdef np.intp_t len_rhs = rhs.shape[0]
     cdef np.intp_t i_lhs = 0
@@ -119,6 +138,7 @@ cdef _intersection(DTYPE_t[:] lhs,
     cdef DTYPE_t value_prev = -1
     cdef DTYPE_t value_lhs = 0
     cdef DTYPE_t value_rhs = 0
+    cdef DTYPE_t curr_result = 0
 
     # Outputs as numpy arrays
     cdef np.uint64_t[:] results = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
@@ -131,44 +151,31 @@ cdef _intersection(DTYPE_t[:] lhs,
         value_lhs = lhs[i_lhs] & mask
         value_rhs = rhs[i_rhs] & mask
 
-        # print("=====================================")
-        # print(f"i_lhs: {i_lhs}, i_rhs: {i_rhs}")
-        # print(f"vals: {value_lhs}, {value_rhs}")
-
         # Advance LHS to RHS
         if value_lhs < value_rhs:
-            # print(f"Advance lhs to rhs: {value_lhs}+{delta} -> {value_rhs}")
             if i_lhs >= len_lhs - 1:
-                # print("EXIT (lhs)")
                 break
             i_result = i_lhs
             _galloping_search(lhs, value_rhs, mask, &i_result, len_lhs)
             value_lhs = lhs[i_result] & mask
-            # print(f"search - i_result: {i_result}, value_lhs: {value_lhs}")
             i_lhs = i_result
-            # if value_lhs != value_rhs:
-            #     print("EXIT (lhs)")
-            #     break
         # Advance RHS to LHS
         elif value_rhs < value_lhs:
             if i_rhs >= len_rhs - 1:
-                # print("EXIT (rhs)")
                 break
-            # print(f"Advance rhs to lhs: {value_rhs} -> {value_lhs} | {i_result} {len_rhs}")
             i_result = i_rhs
             _galloping_search(rhs, value_lhs, mask, &i_result, len_rhs)
             value_rhs = rhs[i_result] & mask
-            # print(f"search - i_result: {i_result}, value_rhs: {value_rhs}")
             i_rhs = i_result
-            # if value_lhs != value_rhs:
-            #     print("EXIT (rhs)")
-            #     break
 
         if value_lhs == value_rhs:
             if value_prev != value_lhs:
                 # Not a dup so store it.
-                # print(f"Store: {lhs[i_lhs]}")
-                results[result_idx] = value_lhs
+                if post_process == 0:
+                    results[result_idx] = value_lhs
+                elif post_process == 1:
+                    curr_result = value_lhs & (value_rhs >> 1)
+                    results[result_idx] = __builtin_popcountll(curr_result)
                 lhs_indices[result_idx] = i_lhs
                 rhs_indices[result_idx] = i_rhs
                 result_idx += 1
@@ -186,14 +193,14 @@ def _u64(lst) -> np.ndarray:
 
 def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
               np.ndarray[DTYPE_t, ndim=1] rhs,
-              DTYPE_t mask=ALL_BITS):
+              DTYPE_t mask=ALL_BITS,
+              post_process=PostProcess.NONE):
     if mask is None:
         mask = ALL_BITS
     if mask == 0:
         raise ValueError("Mask cannot be zero")
-    result, indices_lhs, indices_rhs, result_idx = _intersection(lhs, rhs, mask)
+    result, indices_lhs, indices_rhs, result_idx = _intersection(lhs, rhs, mask, post_process.value)
     return result[:result_idx], indices_lhs[:result_idx], indices_rhs[:result_idx]
-    # return _u64(result), _u64(indices_lhs), _u64(indices_rhs)
 
 
 cdef _adjacent(DTYPE_t[:] lhs,
@@ -216,7 +223,6 @@ cdef _adjacent(DTYPE_t[:] lhs,
     cdef np.uint64_t[:] rhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
 
     # Read rhs until > delta
-    # print(f"MASKED {mask} | {rhs[0]} | {i_rhs} - ", rhs[i_rhs] & mask)
     while i_rhs < len_rhs and rhs[i_rhs] & mask == 0:
         i_rhs += 1
 
@@ -225,15 +231,9 @@ cdef _adjacent(DTYPE_t[:] lhs,
         value_lhs = lhs[i_lhs] & mask
         value_rhs = rhs[i_rhs] & mask
         
-        # print("=====================================")
-        # print(f"i_lhs: {i_lhs}, i_rhs: {i_rhs}")
-        # print(f"vals: {value_lhs:0x}, {value_rhs:0x} | {delta:0x}")
-
         # Advance LHS to RHS
         if value_lhs < value_rhs - delta:
-            # print(f"Advance lhs to rhs: {value_lhs} -> {value_rhs}-{delta}")
             if i_lhs >= len_lhs - 1:
-                # print("EXIT (exhaust lhs)")
                 break
             i_result = i_lhs
             # lhs   0_  2*  2   lhs / rhs are at _, now advance to *
@@ -241,27 +241,22 @@ cdef _adjacent(DTYPE_t[:] lhs,
             # Advance lhs to the 
             _galloping_search(lhs, value_rhs - delta, mask, &i_result, len_lhs)
             value_lhs = lhs[i_result] & mask
-            # print(f"search - i_result: {i_result}, value_lhs: {value_lhs}")
             i_lhs = i_result
         # Advance RHS to LHS
         elif value_rhs - delta < value_lhs:
             if i_rhs >= len_rhs - 1:
-                # print("EXIT (exhaust rhs)")
                 break
-            # print(f"Advance rhs to lhs: {value_rhs} | {value_rhs-delta} -> {value_lhs} | {i_result} {len_rhs}")
             i_result = i_rhs
             # lhs   0    2_   2   lhs / rhs are at _, now advance to *
             # rhs   0_   3*   3    so that rhs is one past lhs
             _galloping_search(rhs, value_lhs + delta,
                               mask, &i_result, len_rhs)
             value_rhs = rhs[i_result] & mask
-            # print(f"search - i_result: {i_result}, value_rhs: {value_rhs}")
             i_rhs = i_result
 
         if value_lhs == value_rhs - delta:
             if value_prev != value_lhs:
                 # Not a dup so store it.
-                # print(f"Store: i_lhs:{i_lhs} | i_rhs:{i_rhs} | val_lhs:{lhs[i_lhs]} | val_rhs:{rhs[i_rhs]}")
                 lhs_indices[result_idx] = i_lhs
                 rhs_indices[result_idx] = i_rhs
                 result_idx += 1

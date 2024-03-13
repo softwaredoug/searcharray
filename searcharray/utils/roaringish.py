@@ -8,7 +8,7 @@ import logging
 import numbers
 from typing import Optional, Tuple, List, Union
 
-from searcharray.utils.snp_ops import intersect, unique, adjacent
+from searcharray.utils.snp_ops import intersect, unique, adjacent, PostProcess
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +115,8 @@ class RoaringishEncoder:
         if boundaries is not None:
             change_indices = snp.merge(change_indices_one_doc, boundaries,
                                        duplicates=snp.DROP)
-            new_boundaries = snp.intersect(boundaries, change_indices, indices=True)[1][1]
+            new_boundaries = intersect(boundaries.view(np.uint64),
+                                       change_indices.view(np.uint64))[-1].view(np.int64)
             new_boundaries = np.concatenate([new_boundaries, [len(change_indices)]])
         else:
             change_indices = change_indices_one_doc
@@ -176,25 +177,6 @@ class RoaringishEncoder:
         """Return header from encoded -- all but lsb bits."""
         return encoded & ~self.payload_lsb_mask
 
-    def _no_underflow_mask(self, rhs: np.ndarray, rshift: np.int64 = _neg1):
-        mask = None
-        if rshift == _neg1:
-            mask = (rhs & self.payload_msb_mask) != 0
-        else:
-            mask = self.payload_msb(rhs) >= np.abs(rshift)
-        return mask
-
-    def _actual_shift(self, rhs: np.ndarray, rshift: np.int64 = _neg1):
-        return rhs + (rshift.view(np.uint64) << self.payload_lsb_bits)
-
-    def _rhs_shifted(self, rhs: np.ndarray, rshift: np.int64 = _neg1):
-        assert rshift < 0, "rshift must be negative"
-        # Prevent overflow by removing the MSBs that will be shifted off
-        mask = self._no_underflow_mask(rhs, rshift)
-        rhs_int = rhs[mask]
-        rhs_shifted = self._actual_shift(rhs_int, rshift)
-        return rhs_int, rhs_shifted
-
     def intersect_rshift(self, lhs: np.ndarray, rhs: np.ndarray,
                          rshift: np.int64 = _neg1) -> Tuple[np.ndarray, np.ndarray]:
         """Return the MSBs that are common to both lhs and rhs (same keys, same MSBs)
@@ -210,8 +192,8 @@ class RoaringishEncoder:
         lhs_idx, rhs_idx = adjacent(lhs, rhs, mask=self.header_mask)
         return lhs[lhs_idx], rhs[rhs_idx]
 
-    def intersect(self, lhs: np.ndarray, rhs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Return the MSBs that are common to both lhs and rhs (same keys, same MSBs)
+    def intersect(self, lhs: np.ndarray, rhs: np.ndarray, post_process: PostProcess = PostProcess.NONE) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Return the MSBs that are common to both lhs and rhs (same keys, same MSBs) as well as post processed values
 
         Parameters
         ----------
@@ -219,8 +201,9 @@ class RoaringishEncoder:
         rhs : np.ndarray of uint64 (encoded) values
         """
         # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
-        _, lhs_idx, rhs_idx = intersect(lhs, rhs, mask=self.header_mask)
-        return lhs[lhs_idx], rhs[rhs_idx]
+        values, lhs_idx, rhs_idx = intersect(lhs, rhs, mask=self.header_mask,
+                                             post_process=post_process)
+        return values, lhs[lhs_idx], rhs[rhs_idx]
 
     def slice(self, encoded: np.ndarray,
               keys: np.ndarray,

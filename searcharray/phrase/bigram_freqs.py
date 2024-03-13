@@ -6,6 +6,7 @@ import logging
 from enum import Enum
 
 from searcharray.utils.bitcount import bit_count64
+from searcharray.utils.snp_ops import intersect, PostProcess
 import sortednp as snp
 
 
@@ -118,7 +119,8 @@ def _inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     cont_next: the next (lhs or rhs) array to continue matching
 
     """
-    lhs_int, rhs_int = encoder.intersect(lhs, rhs)
+    _, lhs_int, rhs_int = encoder.intersect(lhs, rhs,
+                                            post_process=PostProcess.NONE)
     lhs_doc_ids = encoder.keys(lhs_int)
     if len(lhs_int) != len(rhs_int):
         raise ValueError("Encoding error, MSBs apparently are duplicated among your encoded posn arrays.")
@@ -134,9 +136,10 @@ def _inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     if same_term:
         return _inner_bigram_same_term(lhs_int, rhs_int, lhs_doc_ids, phrase_freqs, cont)
 
-    overlap_bits = (lhs_int & encoder.payload_lsb_mask) & ((rhs_int & encoder.payload_lsb_mask) >> _1)
     rhs_next = None
     lhs_next = None
+    overlap_bits = (lhs_int & encoder.payload_lsb_mask) & ((rhs_int & encoder.payload_lsb_mask) >> _1)
+
     if cont in [Continuation.RHS, Continuation.BOTH]:
         rhs_next = (overlap_bits << _1) & encoder.payload_lsb_mask
         rhs_next |= (rhs_int & (encoder.key_mask | encoder.payload_msb_mask))
@@ -199,10 +202,8 @@ def _set_adjbit_at_header(enc1: np.ndarray, just_lsb_enc: np.ndarray,
     if len(just_lsb_enc) == 0:
         return enc1
 
-    enc1_header = encoder.header(enc1)
-    just_lsb_enc_header = encoder.header(just_lsb_enc)
-
-    _, (same_header_enc1, same_header_just_lsb) = snp.intersect(enc1_header, just_lsb_enc_header, indices=True)
+    _, same_header_enc1, same_header_just_lsb = intersect(enc1, just_lsb_enc,
+                                                          mask=encoder.header_mask)
     # Set _1 on intersection
     ignore_mask = np.ones(len(just_lsb_enc), dtype=bool)
     ignore_mask[same_header_just_lsb] = False
@@ -212,7 +213,7 @@ def _set_adjbit_at_header(enc1: np.ndarray, just_lsb_enc: np.ndarray,
     if len(same_header_just_lsb) > 0 and cont == Continuation.LHS:
         enc1[same_header_enc1] |= _upper_bit
         just_lsb_enc = just_lsb_enc[ignore_mask]
-    return np.sort(np.concatenate([enc1, just_lsb_enc]))
+    return snp.merge(enc1, just_lsb_enc)
 
 
 def bigram_freqs(lhs: np.ndarray,
