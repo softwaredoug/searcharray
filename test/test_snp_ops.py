@@ -55,6 +55,15 @@ def test_search(algorithm, array: np.ndarray, target: np.uint64, expected: Tuple
         assert not found
 
 
+@pytest.mark.parametrize("array", [u64([0, 3, 11, 23, 32, 36, 41, 42])])
+@pytest.mark.parametrize("algorithm", [binary_search, galloping_search])
+def test_search_start_at_end(array, algorithm):
+    start = len(array) - 2
+    idx, found = algorithm(array, array[-1], start=start)
+    assert idx == u64(len(array) - 1)
+    assert found
+
+
 mask_search_scenarios = [
     [0x0000000100000000],
     [0x0000001100000000, 0x0000011100000000],
@@ -100,18 +109,25 @@ intersect_scenarios = {
         "mask": None,
         "expected": u64arr([2, 4, 6, 8, 10])
     },
+    "base_mask": {
+        "lhs": u64([0x1F, 0x2F, 0x3F, 0x4F, 0x5F, 0x6F, 0x7F, 0x8F, 0x9F, 0xAF]),
+        "rhs": u64([0x2F, 0x4F, 0x6F, 0x8F, 0xAF]),
+        "mask": u64(0xF0),
+        "expected": u64arr([0x20, 0x40, 0x60, 0x80, 0xA0])
+    },
+    # Cases from comparing random data to sortednp library
     "rand1": {
         "lhs": u64([10, 11, 13, 19, 21, 26, 26, 30, 41, 43]),
         "rhs": u64([2, 5, 19, 20, 46, 46, 46, 55, 56, 57]),
         "mask": None,
         "expected": u64([19])
     },
-    "base_mask": {
-        "lhs": u64([0x1F, 0x2F, 0x3F, 0x4F, 0x5F, 0x6F, 0x7F, 0x8F, 0x9F, 0xAF]),
-        "rhs": u64([0x2F, 0x4F, 0x6F, 0x8F, 0xAF]),
-        "mask": u64(0xF0),
-        "expected": u64arr([0x20, 0x40, 0x60, 0x80, 0xA0])
-    }
+    "intersect_at_end": {
+        "lhs": u64([9, 25, 28, 31, 31, 32, 38, 39, 42]),
+        "rhs": u64([0, 3, 11, 23, 32, 36, 41, 42]),
+        "mask": None,
+        "expected": u64([32, 42])
+    },
 }
 
 
@@ -123,15 +139,16 @@ def test_intersect(lhs, rhs, mask, expected):
     assert np.all(result == expected)
 
 
-def test_same_as_snp():
-    np.random.seed(0)
+@pytest.mark.parametrize("seed", [0, 1, 2, 3, 4])
+def test_same_as_snp(seed):
+    np.random.seed(seed)
     rand_arr_1 = np.random.randint(0, 500, 100, dtype=np.uint64)
     rand_arr_2 = np.random.randint(0, 500, 100, dtype=np.uint64)
     rand_arr_1.sort()
     rand_arr_2.sort()
-    snp_result, (snp_lhs_idx, snp_rhs_idx) = snp.intersect(rand_arr_1, rand_arr_2, indices=True)
+    snp_result, (snp_lhs_idx, snp_rhs_idx) = snp.intersect(rand_arr_1, rand_arr_2, indices=True,
+                                                           duplicates=snp.DROP)
     result, lhs_idx, rhs_idx = intersect(rand_arr_1, rand_arr_2)
-    import pdb; pdb.set_trace()
     assert np.all(result == snp_result)
 
 
@@ -139,20 +156,20 @@ def test_same_as_snp():
 def test_profile_masked_intersect(benchmark):
     profiler = Profiler(benchmark)
 
-    rand_arr_1 = np.random.randint(0, 50000, 10000, dtype=np.uint64)
-    rand_arr_2 = np.random.randint(0, 50000, 10000, dtype=np.uint64)
+    rand_arr_1 = np.random.randint(0, 50000, 1000000, dtype=np.uint64)
+    rand_arr_2 = np.random.randint(0, 50000, 1000000, dtype=np.uint64)
     mask = np.uint64(0xFFFFFFFF00000000)
     rand_arr_1.sort()
     rand_arr_2.sort()
 
     def with_snp():
-        snp.intersect(rand_arr_1 << 16, rand_arr_2 << 16, indices=True)
+        snp.intersect(rand_arr_1 << 16, rand_arr_2 << 16, indices=True, duplicates=snp.DROP)
 
     def with_snp_ops():
         intersect(rand_arr_1, rand_arr_2, mask)
 
     def intersect_many():
-        for _ in range(100):
+        for _ in range(10):
             with_snp_ops()
             with_snp()
 

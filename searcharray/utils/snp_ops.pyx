@@ -57,8 +57,9 @@ cdef void _binary_search(DTYPE_t[:] array,
 # Python wrapper for binary search
 def binary_search(np.ndarray[DTYPE_t, ndim=1] array,
                   DTYPE_t target,
-                  DTYPE_t mask=ALL_BITS):
-    cdef np.intp_t i = 0
+                  DTYPE_t mask=ALL_BITS,
+                  start=0):
+    cdef np.intp_t i = start
     cdef np.intp_t len = array.shape[0]
     _binary_search(array, target, mask, &i, len)
     return i, (array[i] & mask) == (target & mask)
@@ -99,8 +100,9 @@ cdef void _galloping_search(DTYPE_t[:] array,
 
 def galloping_search(np.ndarray[DTYPE_t, ndim=1] array,
                      DTYPE_t target,
-                     DTYPE_t mask=ALL_BITS):
-    cdef np.intp_t i = 0
+                     DTYPE_t mask=ALL_BITS,
+                     start=0):
+    cdef np.intp_t i = start
     cdef np.intp_t len = array.shape[0]
     _galloping_search(array, target, mask, &i, len)
     return i, (array[i] & mask) == (target & mask)
@@ -122,10 +124,6 @@ cdef _intersection(DTYPE_t[:] lhs,
     cdef np.uint64_t[:] lhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
     cdef np.uint64_t[:] rhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
 
-    # print("INTERSECTING:")
-    # print(f"lhs: {lhs}")
-    # print(f"rhs: {rhs}")
-
     while i_lhs < len_lhs and i_rhs < len_rhs:
         # Use gallping search to find the first element in the right array
         value_lhs = lhs[i_lhs] & mask
@@ -139,24 +137,30 @@ cdef _intersection(DTYPE_t[:] lhs,
         if value_lhs < value_rhs:
             # print(f"Advance lhs to rhs: {value_lhs} -> {value_rhs}")
             if i_lhs >= len_lhs - 1:
+                print("EXIT (lhs)")
                 break
+            i_result = i_lhs
             _galloping_search(lhs, value_rhs, mask, &i_result, len_lhs)
             value_lhs = lhs[i_result] & mask
             # print(f"search - i_result: {i_result}, value_lhs: {value_lhs}")
             i_lhs = i_result
-            if value_lhs != value_rhs:
-                break
+            # if value_lhs != value_rhs:
+            #     print("EXIT (lhs)")
+            #     break
         # Advance RHS to LHS
         elif value_rhs < value_lhs:
             if i_rhs >= len_rhs - 1:
+                print("EXIT (rhs)")
                 break
-            # print(f"Advance rhs to lhs: {value_rhs} -> {value_lhs}")
+            # print(f"Advance rhs to lhs: {value_rhs} -> {value_lhs} | {i_result} {len_rhs}")
+            i_result = i_rhs
             _galloping_search(rhs, value_lhs, mask, &i_result, len_rhs)
             value_rhs = rhs[i_result] & mask
             # print(f"search - i_result: {i_result}, value_rhs: {value_rhs}")
             i_rhs = i_result
-            if value_lhs != value_rhs:
-                break
+            # if value_lhs != value_rhs:
+            #     print("EXIT (rhs)")
+            #     break
 
         if value_lhs == value_rhs:
             if value_prev != value_lhs:
