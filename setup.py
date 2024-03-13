@@ -38,7 +38,7 @@ setup(
     # For a discussion on single-sourcing the version across setup.py and the
     # project code, see
     # https://packaging.python.org/guides/single-sourcing-package-version/
-    version="0.0.39",  # Required
+    version="0.0.40",  # Required
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
     # https://packaging.python.org/specifications/core-metadata/#summary
@@ -128,7 +128,7 @@ setup(
     #
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/discussions/install-requires-vs-requirements/
-    install_requires=["pandas>=2.0.0", "sortednp"],  # Optional
+    install_requires=["pandas>=2.0.0", "sortednp", "Cython"],  # Optional
     include_dirs=[np.get_include()],
     ext_modules=cythonize(["searcharray/utils/*.pyx"], annotate=True),
     # List additional groups of dependencies here (e.g. development
