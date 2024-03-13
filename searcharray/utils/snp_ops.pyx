@@ -138,7 +138,6 @@ cdef _intersection(DTYPE_t[:] lhs,
     cdef DTYPE_t value_prev = -1
     cdef DTYPE_t value_lhs = 0
     cdef DTYPE_t value_rhs = 0
-    cdef DTYPE_t curr_result = 0
 
     # Outputs as numpy arrays
     cdef np.uint64_t[:] results = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
@@ -171,11 +170,7 @@ cdef _intersection(DTYPE_t[:] lhs,
         if value_lhs == value_rhs:
             if value_prev != value_lhs:
                 # Not a dup so store it.
-                if post_process == 0:
-                    results[result_idx] = value_lhs
-                elif post_process == 1:
-                    curr_result = value_lhs & (value_rhs >> 1)
-                    results[result_idx] = __builtin_popcountll(curr_result)
+                results[result_idx] = value_lhs
                 lhs_indices[result_idx] = i_lhs
                 rhs_indices[result_idx] = i_rhs
                 result_idx += 1
