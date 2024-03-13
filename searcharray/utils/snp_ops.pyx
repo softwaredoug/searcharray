@@ -3,38 +3,43 @@
 # cython: boundscheck=False
 # cython: wraparound=False
 # cython: initializedcheck=False
+# cython: cdivision=True
 # cython: nonecheck=False
 # cython: language_level=3
 cimport numpy as np
 import numpy as np
 
-from time import perf_counter
+cdef extern from "stdint.h":
+    ctypedef unsigned long long uint64_t
 
-ctypedef np.uint64_t DTYPE_t
-DTYPE = np.uint64
+ctypedef uint64_t DTYPE_t
 
-cdef ALL_BITS = 0xFFFFFFFFFFFFFFFF
+cdef DTYPE_t ALL_BITS = 0xFFFFFFFFFFFFFFFF
 
-
-cdef inline mskd(DTYPE_t value, DTYPE_t mask):
+# For some reason this as an inline is faster than
+# just doing the operation, despite all the python
+# interactions added
+cdef inline DTYPE_t mskd(DTYPE_t value, DTYPE_t mask):
     return value & mask
 
 
-cdef _binary_search(np.ndarray[DTYPE_t, ndim=1] array,
-                    DTYPE_t target,
-                    DTYPE_t mask,
-                    np.intp_t* i, np.intp_t len):
+cdef void _binary_search(DTYPE_t[:] array,
+                         DTYPE_t target,
+                         DTYPE_t mask,
+                         np.intp_t* i,
+                         np.intp_t len):
     cdef DTYPE_t value = array[i[0]]
+    target &= mask
 
     # If already at correct location or beyond
-    if mskd(target, mask) <= mskd(value, mask):
+    if target <= value & mask:
         return
 
     cdef np.intp_t i_right = len - 1  # is always GREATER OR EQUAL
     cdef np.intp_t i_left = i[0]  # is always LESS than value
 
     cdef DTYPE_t right = array[i_right]
-    if mskd(right, mask) < mskd(target, mask):
+    if mskd(right, mask) < target:
         i[0] = i_right
         return # indicate target value too large
 
@@ -42,7 +47,7 @@ cdef _binary_search(np.ndarray[DTYPE_t, ndim=1] array,
         i[0] = (i_right + i_left) // 2
         value = array[i[0]]
 
-        if mskd(target, mask) <= mskd(value, mask):
+        if target <= mskd(value, mask):
             i_right = i[0]
         else:
             i_left = i[0]
@@ -58,15 +63,16 @@ def binary_search(np.ndarray[DTYPE_t, ndim=1] array,
     _binary_search(array, target, mask, &i, len)
     return i, (array[i] & mask) == (target & mask)
 
-cdef _galloping_search(np.ndarray[DTYPE_t, ndim=1] array,
-                       DTYPE_t target,
-                       DTYPE_t mask,
-                       np.intp_t* i, np.intp_t len):
+cdef void _galloping_search(DTYPE_t[:] array,
+                            DTYPE_t target,
+                            DTYPE_t mask,
+                            np.intp_t* i,
+                            np.intp_t len):
     cdef DTYPE_t value = array[i[0]]
 
     # If already at correct location or beyond
     if mskd(target, mask) <= mskd(value, mask):
-        return False
+        return
 
     cdef np.intp_t delta = 1
     cdef np.intp_t i_prev = i[0]
@@ -87,7 +93,7 @@ cdef _galloping_search(np.ndarray[DTYPE_t, ndim=1] array,
     cdef np.intp_t higher = i[0] + 1  # Convert pointer position to length.
     i[0] = i_prev  # This is the lower boundary and the active counter.
 
-    return _binary_search(array, target, mask, i, higher)
+    _binary_search(array, target, mask, i, higher)
 
 
 def galloping_search(np.ndarray[DTYPE_t, ndim=1] array,

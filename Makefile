@@ -45,6 +45,11 @@ extensions:
 	python setup.py build_ext --inplace
 
 
+annotate:
+	@cython -a "$(FILE)"
+	open "$(FILE:.pyx=.html)"
+
+
 test: deps extensions
 	@echo "Running tests..."
 	python -m pytest --benchmark-skip test
