@@ -15,7 +15,7 @@ import numbers
 import logging
 from collections import defaultdict
 
-from searcharray.utils.bitcount import bit_count64
+from searcharray.utils.snp_ops import popcount64
 
 
 logger = logging.getLogger(__name__)
@@ -407,7 +407,7 @@ class PosnBitArray:
         change_indices = np.nonzero(np.diff(doc_ids))[0]
         change_indices = np.concatenate((np.asarray([0]), change_indices + 1))
         posns = term_posns & encoder.payload_lsb_mask
-        bit_counts = bit_count64(posns)
+        bit_counts = popcount64(posns)
 
         term_freqs = np.add.reduceat(bit_counts, change_indices, dtype=np.float32)
         return sorted_unique(doc_ids), term_freqs

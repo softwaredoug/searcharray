@@ -5,7 +5,6 @@ from searcharray.utils.roaringish import RoaringishEncoder
 import logging
 from enum import Enum
 
-from searcharray.utils.bitcount import bit_count64
 from searcharray.utils.snp_ops import intersect, PostProcess, popcount64
 import sortednp as snp
 
@@ -59,7 +58,7 @@ def _adj_to_phrase_freq(overlap: np.ndarray, adjacents: np.ndarray) -> np.ndarra
     # [foo foo] [foo foo] foo -> 4 adjs, phrase freqs = 2
     # [foo foo] [foo foo] mal [foo foo] -> 4 adjs, phrase freqs = 3
     consecutive_ones = encoder.payload_lsb(overlap & (overlap << _1))
-    consecutive_ones = bit_count64(consecutive_ones)
+    consecutive_ones = popcount64(consecutive_ones)
     adjacents -= -np.floor_divide(consecutive_ones, -2).astype(np.int64)
     return adjacents
 
@@ -82,7 +81,7 @@ def _inner_bigram_same_term(lhs_int: np.ndarray, rhs_int: np.ndarray,
     # Count these bits...
     overlap = lhs_int & rhs_shift
     adj_count = encoder.payload_lsb(overlap)
-    adjacents = bit_count64(adj_count).astype(np.int64)
+    adjacents = popcount64(adj_count).astype(np.int64)
 
     phrase_freqs[lhs_doc_ids] += _adj_to_phrase_freq(overlap, adjacents)
     # Continue with ?? ?? foo foo
@@ -151,7 +150,7 @@ def _inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     if np.any(matches2):
         transitions = np.argwhere(np.diff(lhs_doc_ids[matches2]) != 0).flatten() + 1
         transitions = np.insert(transitions, 0, 0)
-        counted_bits = bit_count64(overlap_bits[matches2])
+        counted_bits = popcount64(overlap_bits[matches2])
         reduced = np.add.reduceat(counted_bits,
                                   transitions)
         phrase_freqs[np.unique(lhs_doc_ids[matches2])] += reduced
