@@ -110,7 +110,6 @@ def galloping_search(np.ndarray[DTYPE_t, ndim=1] array,
 
 cdef _intersection(DTYPE_t[:] lhs,
                    DTYPE_t[:] rhs,
-                   DTYPE_t delta=0,
                    DTYPE_t mask=ALL_BITS):
     cdef np.intp_t len_lhs = lhs.shape[0]
     cdef np.intp_t len_rhs = rhs.shape[0]
@@ -195,7 +194,7 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
     # return _u64(result), _u64(indices_lhs), _u64(indices_rhs)
 
 
-cdef _galloping_unique(DTYPE_t[:] arr,
+cdef _scan_unique(DTYPE_t[:] arr,
                        DTYPE_t arr_len):
     cdef np.intp_t i = 0
 
@@ -214,5 +213,5 @@ cdef _galloping_unique(DTYPE_t[:] arr,
 
 
 def unique(np.ndarray[DTYPE_t, ndim=1] arr):
-    result,  result_idx = _galloping_unique(arr, arr.shape[0])
+    result,  result_idx = _scan_unique(arr, arr.shape[0])
     return result[:result_idx]
