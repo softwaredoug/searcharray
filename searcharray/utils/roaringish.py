@@ -8,7 +8,7 @@ import logging
 import numbers
 from typing import Optional, Tuple, List, Union
 
-from searcharray.utils.snp_ops import intersect
+from searcharray.utils.snp_ops import intersect, unique
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def n_msb_mask(n: np.uint64) -> np.uint64:
 
 
 def sorted_unique(arr: np.ndarray) -> np.ndarray:
-    return intersect(arr, arr)[0]
+    return unique(arr)
 
 
 class RoaringishEncoder:

@@ -2,7 +2,7 @@ from typing import Tuple
 import numpy as np
 import sortednp as snp
 import pytest
-from searcharray.utils.snp_ops import binary_search, galloping_search, intersect
+from searcharray.utils.snp_ops import binary_search, galloping_search, intersect, unique
 from test_utils import w_scenarios
 from test_utils import Profiler, profile_enabled
 
@@ -174,3 +174,44 @@ def test_profile_masked_intersect(benchmark):
             with_snp()
 
     profiler.run(intersect_many)
+
+
+@pytest.mark.parametrize("array", [u64([0, 0, 11, 11, 11, 36, 41, 42])])
+def test_unique(array):
+    expected = np.unique(array)
+    result = unique(array)
+    assert np.all(result == expected)
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2, 3, 4])
+def test_unique_matches_snp(seed):
+    np.random.seed(seed)
+    rand_arr_1 = np.random.randint(0, 500, 100, dtype=np.uint64)
+    rand_arr_1.sort()
+    expected = np.unique(rand_arr_1)
+    result = unique(rand_arr_1)
+    assert np.all(result == expected)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_profile_unique(benchmark):
+    rand_arr_1 = np.random.randint(0, 50, 1000000, dtype=np.uint64)
+    rand_arr_1.sort()
+
+    def with_snp():
+        snp.intersect(rand_arr_1, rand_arr_1, duplicates=snp.DROP)
+
+    def with_np():
+        np.unique(rand_arr_1)
+
+    def with_snp_ops():
+        unique(rand_arr_1)
+
+    def unique_many():
+        for _ in range(10):
+            with_snp_ops()
+            with_snp()
+            with_np()
+
+    profiler = Profiler(benchmark)
+    profiler.run(unique_many)

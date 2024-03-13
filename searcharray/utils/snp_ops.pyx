@@ -110,6 +110,7 @@ def galloping_search(np.ndarray[DTYPE_t, ndim=1] array,
 
 cdef _intersection(DTYPE_t[:] lhs,
                    DTYPE_t[:] rhs,
+                   DTYPE_t delta=0,
                    DTYPE_t mask=ALL_BITS):
     cdef np.intp_t len_lhs = lhs.shape[0]
     cdef np.intp_t len_rhs = rhs.shape[0]
@@ -135,7 +136,7 @@ cdef _intersection(DTYPE_t[:] lhs,
 
         # Advance LHS to RHS
         if value_lhs < value_rhs:
-            # print(f"Advance lhs to rhs: {value_lhs} -> {value_rhs}")
+            # print(f"Advance lhs to rhs: {value_lhs}+{delta} -> {value_rhs}")
             if i_lhs >= len_lhs - 1:
                 # print("EXIT (lhs)")
                 break
@@ -192,3 +193,26 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
     result, indices_lhs, indices_rhs, result_idx = _intersection(lhs, rhs, mask)
     return result[:result_idx], indices_lhs[:result_idx], indices_rhs[:result_idx]
     # return _u64(result), _u64(indices_lhs), _u64(indices_rhs)
+
+
+cdef _galloping_unique(DTYPE_t[:] arr,
+                       DTYPE_t arr_len):
+    cdef np.intp_t i = 0
+
+    cdef np.uint64_t[:] result = np.empty(arr_len, dtype=np.uint64)
+    cdef np.int64_t result_idx = 0
+
+    while i < arr_len:
+        target = arr[i]
+        result[result_idx] = target
+        result_idx += 1
+        i += 1
+        while i < arr_len and arr[i] == target:
+            i += 1
+
+    return np.asarray(result[:result_idx]), result_idx
+
+
+def unique(np.ndarray[DTYPE_t, ndim=1] arr):
+    result,  result_idx = _galloping_unique(arr, arr.shape[0])
+    return result[:result_idx]
