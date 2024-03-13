@@ -137,7 +137,7 @@ cdef _intersection(DTYPE_t[:] lhs,
         if value_lhs < value_rhs:
             # print(f"Advance lhs to rhs: {value_lhs} -> {value_rhs}")
             if i_lhs >= len_lhs - 1:
-                print("EXIT (lhs)")
+                # print("EXIT (lhs)")
                 break
             i_result = i_lhs
             _galloping_search(lhs, value_rhs, mask, &i_result, len_lhs)
@@ -150,7 +150,7 @@ cdef _intersection(DTYPE_t[:] lhs,
         # Advance RHS to LHS
         elif value_rhs < value_lhs:
             if i_rhs >= len_rhs - 1:
-                print("EXIT (rhs)")
+                # print("EXIT (rhs)")
                 break
             # print(f"Advance rhs to lhs: {value_rhs} -> {value_lhs} | {i_result} {len_rhs}")
             i_result = i_rhs

@@ -8,6 +8,8 @@ import logging
 import numbers
 from typing import Optional, Tuple, List, Union
 
+from searcharray.utils.snp_ops import intersect
+
 logger = logging.getLogger(__name__)
 
 # When running in pytest
@@ -44,7 +46,7 @@ def n_msb_mask(n: np.uint64) -> np.uint64:
 
 
 def sorted_unique(arr: np.ndarray) -> np.ndarray:
-    return snp.intersect(arr, arr, duplicates=snp.DROP)
+    return intersect(arr, arr)[0]
 
 
 class RoaringishEncoder:
@@ -73,6 +75,7 @@ class RoaringishEncoder:
         self.payload_lsb_mask = (_1 << self.payload_lsb_bits) - np.uint64(1)
         assert self.payload_lsb_bits.dtype == np.uint64, f"LSB bits dtype was {self.payload_lsb_bits.dtype}"
         assert self.payload_lsb_mask.dtype == np.uint64, f"LSB mask dtype was {self.payload_lsb_mask.dtype}"
+        self.header_mask = self.key_mask | self.payload_msb_mask
         if key_bits == DEFAULT_KEY_BITS:
             assert self.key_mask == DEFAULT_KEY_MASK
             assert self.payload_msb_mask == DEFAULT_PAYLOAD_MSB_MASK
@@ -183,7 +186,7 @@ class RoaringishEncoder:
         return mask
 
     def _actual_shift(self, rhs: np.ndarray, rshift: np.int64 = _neg1):
-        return (rhs >> self.payload_lsb_bits) + rshift.view(np.uint64)
+        return rhs + (rshift.view(np.uint64) << self.payload_lsb_bits)
 
     def _rhs_shifted(self, rhs: np.ndarray, rshift: np.int64 = _neg1):
         assert rshift < 0, "rshift must be negative"
@@ -205,10 +208,11 @@ class RoaringishEncoder:
         """
         rhs_int, rhs_shifted = self._rhs_shifted(rhs, rshift)
         # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
-        _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits,
-                                              rhs_shifted,
-                                              indices=True,
-                                              algorithm=_algorithm)
+        # _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits,
+        #                                       rhs_shifted,
+        #                                      indices=True,
+        #                                       algorithm=_algorithm)
+        _, lhs_idx, rhs_idx = intersect(lhs, rhs_shifted, mask=self.header_mask)
         return lhs[lhs_idx], rhs_int[rhs_idx]
 
     def intersect(self, lhs: np.ndarray, rhs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -220,10 +224,11 @@ class RoaringishEncoder:
         rhs : np.ndarray of uint64 (encoded) values
         """
         # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
-        _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits,
-                                              rhs >> self.payload_lsb_bits,
-                                              indices=True,
-                                              algorithm=_algorithm)
+        _, lhs_idx, rhs_idx = intersect(lhs, rhs, mask=self.header_mask)
+        # _, (lhs_idx, rhs_idx) = snp.intersect(lhs >> self.payload_lsb_bits,
+        #                                       rhs >> self.payload_lsb_bits,
+        #                                       indices=True,
+        #                                      algorithm=_algorithm)
         return lhs[lhs_idx], rhs[rhs_idx]
 
     def slice(self, encoded: np.ndarray,
