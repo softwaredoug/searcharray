@@ -10,10 +10,8 @@ from setuptools import setup, find_packages
 from Cython.Build import cythonize
 import numpy as np
 import pathlib
-import os
 
-
-cwd = os.path.abspath(os.path.dirname(__file__))
+here = pathlib.Path(__file__).parent.resolve()
 
 # Get the long description from the README file
 long_description = (here / "README.md").read_text(encoding="utf-8")
@@ -147,7 +145,8 @@ setup(
     # If there are data files included in your packages that need to be
     # installed, specify them here.
     package_data={
-        "sample": ["searcharray/utils/*.pyx"],
+        # Ensure the package name matches your package's actual name
+        'searcharray': ['utils/*.pyx'],
     },
     # Entry points. The following would provide a command called `sample` which
     # executes the function `main` from this package when invoked:
