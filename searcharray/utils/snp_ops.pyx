@@ -337,6 +337,39 @@ cdef _scan_unique(DTYPE_t[:] arr,
     return result, result_ptr - &result[0]
 
 
+cdef _scan_unique_gallop(DTYPE_t[:] arr,
+                         DTYPE_t arr_len):
+    cdef np.uint64_t[:] result = np.empty(arr_len, dtype=np.uint64)
+    cdef np.uint64_t* result_ptr = &result[0]
+    cdef DTYPE_t* arr_ptr = &arr[0]
+    cdef DTYPE_t* last_arr_ptr = &arr[0]
+    cdef DTYPE_t* arr_end = &arr[arr_len-1]
+    cdef DTYPE_t* target_ptr = arr_ptr
+    cdef DTYPE_t delta = 1
+
+    while arr_ptr <= arr_end:
+        target_ptr = arr_ptr
+        result_ptr[0] = arr_ptr[0]
+        result_ptr += 1
+        arr_ptr += 1
+        delta = 1
+        last_arr_ptr = arr_ptr
+        # Gallop to first element that is not equal
+        while arr_ptr <= arr_end and arr_ptr[0] == target_ptr[0]:
+            last_arr_ptr = arr_ptr
+            arr_ptr += delta
+            delta *= 2
+        # Linearly search for the first element that is not equal
+        arr_ptr = last_arr_ptr
+        if arr_ptr <= arr_end:
+            while arr_ptr <= arr_end and arr_ptr[0] == target_ptr[0]:
+                arr_ptr += 1
+
+    return result, result_ptr - &result[0]
+
+
+
+
 cdef _scan_unique_shifted(DTYPE_t[:] arr,
                           DTYPE_t arr_len,
                           DTYPE_t rshift):
@@ -353,6 +386,38 @@ cdef _scan_unique_shifted(DTYPE_t[:] arr,
         arr_ptr += 1
         while arr_ptr <= arr_end and (arr_ptr[0] >> rshift) == target_shifted:
             arr_ptr += 1
+
+    return result, result_ptr - &result[0]
+
+
+cdef _scan_unique_shifted_gallop(DTYPE_t[:] arr,
+                                 DTYPE_t arr_len,
+                                 DTYPE_t rshift):
+    cdef np.uint64_t[:] result = np.empty(arr_len, dtype=np.uint64)
+    cdef np.uint64_t* result_ptr = &result[0]
+    cdef DTYPE_t* arr_ptr = &arr[0]
+    cdef DTYPE_t* last_arr_ptr = &arr[0]
+    cdef DTYPE_t* arr_end = &arr[arr_len-1]
+    cdef DTYPE_t  target_shifted = arr_ptr[0] >> rshift
+    cdef DTYPE_t delta = 1
+
+    while arr_ptr <= arr_end:
+        target_shifted = arr_ptr[0] >> rshift
+        result_ptr[0] = arr_ptr[0]
+        result_ptr += 1
+        arr_ptr += 1
+        delta = 1
+        last_arr_ptr = arr_ptr
+        # Gallop to first element that is not equal
+        while arr_ptr <= arr_end and (arr_ptr[0] >> rshift == target_shifted):
+            last_arr_ptr = arr_ptr
+            arr_ptr += delta
+            delta *= 2
+        # Linearly search for the first element that is not equal
+        arr_ptr = last_arr_ptr
+        if arr_ptr <= arr_end:
+            while arr_ptr <= arr_end and (arr_ptr[0] >> rshift == target_shifted):
+                arr_ptr += 1
 
     return result, result_ptr - &result[0]
 
