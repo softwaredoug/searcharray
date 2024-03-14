@@ -45,7 +45,7 @@ setup(
     description="Searchable pandas text extension arrays for prototyping search",  # Optional
     # This is an optional longer description of your project that represents
     # the body of text which users will see when they visit PyPI.
-    #
+    orted
     # Often, this is the same as your README, so you can just read it in from
     # that file directly (as we have already done above)
     #
@@ -128,7 +128,7 @@ setup(
     #
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/discussions/install-requires-vs-requirements/
-    install_requires=["pandas>=2.0.0", "sortednp", "Cython"],  # Optional
+    install_requires=["pandas>=2.0.0", "Cython"],  # Optional
     include_dirs=[np.get_include()],
     ext_modules=cythonize(["searcharray/utils/*.pyx"], annotate=True),
     # List additional groups of dependencies here (e.g. development

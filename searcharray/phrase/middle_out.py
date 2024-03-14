@@ -6,7 +6,6 @@ https://colab.research.google.com/drive/10tIEkdlCE_1J_CcgEcV0jkLfBc-0H4am?authus
 
 """
 import numpy as np
-import sortednp as snp
 from copy import deepcopy
 from typing import List, Tuple, Dict, Union, cast, Optional
 from searcharray.utils.roaringish import RoaringishEncoder, convert_keys, sorted_unique
@@ -15,7 +14,7 @@ import numbers
 import logging
 from collections import defaultdict
 
-from searcharray.utils.snp_ops import popcount64
+from searcharray.utils.snp_ops import popcount64, merge
 
 
 logger = logging.getLogger(__name__)
@@ -162,7 +161,10 @@ class PosnBitArrayFromFlatBuilder:
     def build(self):
         """Slice the flat array into a 2d array of doc ids and posns."""
         term_boundaries = np.argwhere(np.diff(self.flat_array[0]) > 0).flatten() + 1
-        term_boundaries = np.concatenate([[0], term_boundaries, [len(self.flat_array[1])]])
+        term_boundaries = np.concatenate([[_0],
+                                          term_boundaries.view(np.uint64),
+                                          np.asarray([len(self.flat_array[1])], dtype=np.uint64)])
+        term_boundaries = term_boundaries.view(np.uint64)
 
         encoded, enc_term_boundaries = encoder.encode(keys=self.flat_array[1].view(np.uint64),
                                                       boundaries=term_boundaries[:-1],
@@ -326,7 +328,7 @@ class PosnBitArray:
             else:
                 posns_self = self.encoded_term_posns[term_id]
                 posns_other = other.encoded_term_posns[term_id]
-                self.encoded_term_posns[term_id] = snp.merge(posns_self, posns_other)
+                self.encoded_term_posns[term_id] = merge(posns_self, posns_other)
         self.max_doc_id = self.max_doc_id + other.max_doc_id
         self.clear_cache()
 

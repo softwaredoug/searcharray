@@ -5,8 +5,7 @@ from searcharray.utils.roaringish import RoaringishEncoder
 import logging
 from enum import Enum
 
-from searcharray.utils.snp_ops import intersect, PostProcess, popcount64
-import sortednp as snp
+from searcharray.utils.snp_ops import intersect, popcount64, merge
 
 
 logger = logging.getLogger(__name__)
@@ -118,8 +117,7 @@ def _inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     cont_next: the next (lhs or rhs) array to continue matching
 
     """
-    _, lhs_int, rhs_int = encoder.intersect(lhs, rhs,
-                                            post_process=PostProcess.NONE)
+    lhs_int, rhs_int = encoder.intersect(lhs, rhs)
     lhs_doc_ids = encoder.keys(lhs_int)
     if len(lhs_int) != len(rhs_int):
         raise ValueError("Encoding error, MSBs apparently are duplicated among your encoded posn arrays.")
@@ -201,8 +199,8 @@ def _set_adjbit_at_header(enc1: np.ndarray, just_lsb_enc: np.ndarray,
     if len(just_lsb_enc) == 0:
         return enc1
 
-    _, same_header_enc1, same_header_just_lsb = intersect(enc1, just_lsb_enc,
-                                                          mask=encoder.header_mask)
+    same_header_enc1, same_header_just_lsb = intersect(enc1, just_lsb_enc,
+                                                       mask=encoder.header_mask)
     # Set _1 on intersection
     ignore_mask = np.ones(len(just_lsb_enc), dtype=bool)
     ignore_mask[same_header_just_lsb] = False
@@ -212,7 +210,7 @@ def _set_adjbit_at_header(enc1: np.ndarray, just_lsb_enc: np.ndarray,
     if len(same_header_just_lsb) > 0 and cont == Continuation.LHS:
         enc1[same_header_enc1] |= _upper_bit
         just_lsb_enc = just_lsb_enc[ignore_mask]
-    return snp.merge(enc1, just_lsb_enc)
+    return merge(enc1, just_lsb_enc)
 
 
 def bigram_freqs(lhs: np.ndarray,

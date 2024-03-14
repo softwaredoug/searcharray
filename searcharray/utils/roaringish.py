@@ -3,12 +3,11 @@
 See - https://softwaredoug.com/blog/2024/01/21/search-array-phrase-algorithm
 """
 import numpy as np
-import sortednp as snp
 import logging
 import numbers
 from typing import Optional, Tuple, List, Union
 
-from searcharray.utils.snp_ops import intersect, unique, adjacent, PostProcess
+from searcharray.utils.snp_ops import intersect, unique, adjacent, merge
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +34,6 @@ _2 = np.uint64(2)
 _1 = np.uint64(1)
 _0 = np.uint64(0)
 _neg1 = np.int64(-1)
-
-
-_algorithm = snp.GALLOPING_SEARCH
 
 
 def n_msb_mask(n: np.uint64) -> np.uint64:
@@ -110,14 +106,17 @@ class RoaringishEncoder:
             cols |= keys.astype(np.uint64) << (_64 - self.key_bits)
         values = payload % self.payload_lsb_bits   # Value to encode
 
-        change_indices_one_doc = np.nonzero(np.diff(cols))[0] + 1
-        change_indices_one_doc = np.concatenate([[0], change_indices_one_doc])
+        change_indices_one_doc = np.nonzero(np.diff(cols))[0] + _1
+        change_indices_one_doc = change_indices_one_doc.view(np.uint64)
+        change_indices_one_doc = np.concatenate([[_0], change_indices_one_doc], dtype=np.uint64)
         if boundaries is not None:
-            change_indices = snp.merge(change_indices_one_doc, boundaries,
-                                       duplicates=snp.DROP)
-            new_boundaries = intersect(boundaries.view(np.uint64),
-                                       change_indices.view(np.uint64))[-1].view(np.int64)
-            new_boundaries = np.concatenate([new_boundaries, [len(change_indices)]])
+            change_indices = merge(change_indices_one_doc, boundaries,
+                                   drop_duplicates=True)
+            new_boundaries = intersect(boundaries,
+                                       change_indices)[-1]
+            new_boundaries = np.concatenate([new_boundaries,
+                                             np.asarray([len(change_indices)], dtype=np.uint64)],
+                                            dtype=np.uint64)
         else:
             change_indices = change_indices_one_doc
             new_boundaries = None
@@ -129,7 +128,9 @@ class RoaringishEncoder:
         encoded = cols
         if len(encoded) == 0:
             return encoded, new_boundaries
-        reduced = np.bitwise_or.reduceat(encoded, change_indices)
+        # All this shitty numpy casting is annoying
+        reduced = np.bitwise_or.reduceat(encoded.view(np.int64), change_indices.view(np.int64))
+        reduced = reduced.view(np.uint64)
         return reduced, new_boundaries
 
     def decode(self, encoded: np.ndarray, get_keys: bool = True) -> Union[List[Tuple[np.uint64, np.ndarray]], List[np.ndarray]]:
@@ -192,7 +193,7 @@ class RoaringishEncoder:
         lhs_idx, rhs_idx = adjacent(lhs, rhs, mask=self.header_mask)
         return lhs[lhs_idx], rhs[rhs_idx]
 
-    def intersect(self, lhs: np.ndarray, rhs: np.ndarray, post_process: PostProcess = PostProcess.NONE) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def intersect(self, lhs: np.ndarray, rhs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Return the MSBs that are common to both lhs and rhs (same keys, same MSBs) as well as post processed values
 
         Parameters
@@ -201,9 +202,8 @@ class RoaringishEncoder:
         rhs : np.ndarray of uint64 (encoded) values
         """
         # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
-        values, lhs_idx, rhs_idx = intersect(lhs, rhs, mask=self.header_mask,
-                                             post_process=post_process)
-        return values, lhs[lhs_idx], rhs[rhs_idx]
+        lhs_idx, rhs_idx = intersect(lhs, rhs, mask=self.header_mask)
+        return lhs[lhs_idx], rhs[rhs_idx]
 
     def slice(self, encoded: np.ndarray,
               keys: np.ndarray,
@@ -212,10 +212,8 @@ class RoaringishEncoder:
         """Get list of encoded that have values in keys."""
         # encoded_keys = encoded.view(np.uint64) >> (_64 - self.key_bits)
         encoded_keys = self.keys(encoded)
-        _, (idx_docs, idx_enc) = snp.intersect(keys, encoded_keys, indices=True,
-                                               duplicates=snp.KEEP_MAX_N,
-                                               algorithm=_algorithm)
-
+        idx_docs, idx_enc = intersect(keys, encoded_keys,
+                                      drop_duplicates=False)
         if max_payload is None and min_payload is None:
             return encoded[idx_enc]
         else:

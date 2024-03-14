@@ -148,10 +148,68 @@ def galloping_search(np.ndarray[DTYPE_t, ndim=1] array,
     return i, (array[i] & mask) == (target & mask)
 
 
-cdef _intersection(DTYPE_t[:] lhs,
-                   DTYPE_t[:] rhs,
-                   DTYPE_t mask=ALL_BITS,
-                   DTYPE_t post_process=0):
+cdef _intersect_keep(DTYPE_t[:] lhs,
+                     DTYPE_t[:] rhs,
+                     DTYPE_t mask=ALL_BITS):
+    cdef np.intp_t len_lhs = lhs.shape[0]
+    cdef np.intp_t len_rhs = rhs.shape[0]
+    cdef np.intp_t i_lhs = 0
+    cdef np.intp_t i_rhs = 0
+    cdef np.intp_t i_result = 0
+    cdef DTYPE_t value_lhs = 0
+    cdef DTYPE_t value_rhs = 0
+    cdef DTYPE_t target = 0
+
+    # Outputs as numpy arrays
+    cdef np.uint64_t[:] lhs_indices = np.empty(len_lhs, dtype=np.uint64)
+    cdef np.uint64_t lhs_indices_idx = 0
+    cdef np.uint64_t[:] rhs_indices = np.empty(len_rhs, dtype=np.uint64)
+    cdef np.uint64_t rhs_indices_idx = 0
+
+
+    while i_lhs < len_lhs and i_rhs < len_rhs:
+        # Use gallping search to find the first element in the right array
+        value_lhs = lhs[i_lhs] & mask
+        value_rhs = rhs[i_rhs] & mask
+
+        # Advance LHS to RHS
+        if value_lhs < value_rhs:
+            if i_lhs >= len_lhs - 1:
+                break
+            i_result = i_lhs
+            _galloping_search(lhs, value_rhs, mask, &i_result, len_lhs)
+            value_lhs = lhs[i_result] & mask
+            i_lhs = i_result
+        # Advance RHS to LHS
+        elif value_rhs < value_lhs:
+            if i_rhs >= len_rhs - 1:
+                break
+            i_result = i_rhs
+            _galloping_search(rhs, value_lhs, mask, &i_result, len_rhs)
+            value_rhs = rhs[i_result] & mask
+            i_rhs = i_result
+
+        if value_rhs == value_lhs:
+            target = value_lhs & mask
+            # Store all LHS indices equal to RHS
+            while (lhs[i_lhs] & mask) == target and i_lhs < len_lhs:
+                lhs_indices[lhs_indices_idx] = i_lhs
+                lhs_indices_idx += 1
+                i_lhs += 1
+            # Store all RHS equal to LHS
+            while (rhs[i_rhs] & mask) == target and i_rhs < len_rhs:
+                rhs_indices[rhs_indices_idx] = i_rhs
+                rhs_indices_idx += 1
+                i_rhs += 1
+
+    # Get view of each result and return
+    return np.asarray(lhs_indices), np.asarray(rhs_indices), lhs_indices_idx, rhs_indices_idx
+
+
+
+cdef _intersect_drop(DTYPE_t[:] lhs,
+                     DTYPE_t[:] rhs,
+                     DTYPE_t mask=ALL_BITS):
     cdef np.intp_t len_lhs = lhs.shape[0]
     cdef np.intp_t len_rhs = rhs.shape[0]
     cdef np.intp_t i_lhs = 0
@@ -162,7 +220,6 @@ cdef _intersection(DTYPE_t[:] lhs,
     cdef DTYPE_t value_rhs = 0
 
     # Outputs as numpy arrays
-    cdef np.uint64_t[:] results = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
     cdef np.int64_t result_idx = 0
     cdef np.uint64_t[:] lhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
     cdef np.uint64_t[:] rhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
@@ -192,7 +249,6 @@ cdef _intersection(DTYPE_t[:] lhs,
         if value_lhs == value_rhs:
             if value_prev != value_lhs:
                 # Not a dup so store it.
-                results[result_idx] = value_lhs
                 lhs_indices[result_idx] = i_lhs
                 rhs_indices[result_idx] = i_rhs
                 result_idx += 1
@@ -201,7 +257,7 @@ cdef _intersection(DTYPE_t[:] lhs,
             i_rhs += 1
 
     # Get view of each result and return
-    return np.asarray(results), np.asarray(lhs_indices), np.asarray(rhs_indices), result_idx
+    return np.asarray(lhs_indices), np.asarray(rhs_indices), result_idx
 
 
 def _u64(lst) -> np.ndarray:
@@ -211,13 +267,17 @@ def _u64(lst) -> np.ndarray:
 def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
               np.ndarray[DTYPE_t, ndim=1] rhs,
               DTYPE_t mask=ALL_BITS,
-              post_process=PostProcess.NONE):
+              bint drop_duplicates=True):
     if mask is None:
         mask = ALL_BITS
     if mask == 0:
         raise ValueError("Mask cannot be zero")
-    result, indices_lhs, indices_rhs, result_idx = _intersection(lhs, rhs, mask, post_process.value)
-    return result[:result_idx], indices_lhs[:result_idx], indices_rhs[:result_idx]
+    if drop_duplicates:
+        indices_lhs, indices_rhs, result_idx = _intersect_drop(lhs, rhs, mask)
+        return indices_lhs[:result_idx], indices_rhs[:result_idx]
+    else:
+        indices_lhs, indices_rhs, indices_lhs_idx, indices_rhs_idx = _intersect_keep(lhs, rhs, mask)
+        return indices_lhs[:indices_lhs_idx], indices_rhs[:indices_rhs_idx]
 
 
 cdef _adjacent(DTYPE_t[:] lhs,
@@ -381,7 +441,7 @@ cdef _scan_unique_shifted(DTYPE_t[:] arr,
 
     while arr_ptr <= arr_end:
         target_shifted = arr_ptr[0] >> rshift
-        result_ptr[0] = arr_ptr[0]
+        result_ptr[0] = target_shifted
         result_ptr += 1
         arr_ptr += 1
         while arr_ptr <= arr_end and (arr_ptr[0] >> rshift) == target_shifted:
@@ -428,4 +488,138 @@ def unique(np.ndarray[DTYPE_t, ndim=1] arr,
         result, result_idx = _scan_unique_shifted(arr, arr.shape[0], rshift)
     else:
         result, result_idx = _scan_unique(arr, arr.shape[0])
+    return np.array(result[:result_idx])
+
+
+
+cdef _merge_naive(DTYPE_t[:] lhs,
+                  DTYPE_t[:] rhs):
+    cdef np.intp_t len_lhs = lhs.shape[0]
+    cdef np.intp_t len_rhs = rhs.shape[0]
+    cdef np.intp_t i_lhs = 0
+    cdef np.intp_t i_rhs = 0
+    cdef DTYPE_t value_lhs = 0
+    cdef DTYPE_t value_rhs = 0
+
+    # Outputs as numpy arrays
+    cdef np.uint64_t[:] results = np.empty(len_lhs + len_rhs, dtype=np.uint64)
+    cdef np.int64_t result_idx = 0
+
+    while i_lhs < len_lhs and i_rhs < len_rhs:
+        # Use gallping search to find the first element in the right array
+        value_lhs = lhs[i_lhs]
+        value_rhs = rhs[i_rhs]
+
+        if value_lhs < value_rhs:
+            results[result_idx] = value_lhs
+            i_lhs += 1
+        elif value_rhs < value_lhs:
+            results[result_idx] = value_rhs
+            i_rhs += 1
+        else:
+            results[result_idx] = value_lhs
+            result_idx += 1
+            results[result_idx] = value_rhs
+            i_lhs += 1
+            i_rhs += 1
+        result_idx += 1
+
+    return np.asarray(results), result_idx
+
+
+cdef _merge(DTYPE_t[:] lhs,
+            DTYPE_t[:] rhs):
+    cdef np.intp_t len_lhs = lhs.shape[0]
+    cdef np.intp_t len_rhs = rhs.shape[0]
+
+    cdef DTYPE_t* lhs_ptr = &lhs[0]
+    cdef DTYPE_t* end_lhs_ptr = &lhs[len_lhs]
+    cdef DTYPE_t* rhs_ptr = &rhs[0]
+    cdef DTYPE_t* end_rhs_ptr = &rhs[len_rhs]
+
+    # Outputs as numpy arrays
+    cdef np.uint64_t[:] results = np.empty(len_lhs + len_rhs, dtype=np.uint64)
+    cdef np.uint64_t* result_ptr = &results[0]
+
+    # Copy elements from both arrays
+    while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
+        if lhs_ptr[0] < rhs_ptr[0]:
+            result_ptr[0] = lhs_ptr[0]
+            lhs_ptr += 1
+        elif rhs_ptr[0] < lhs_ptr[0]:
+            result_ptr[0] = rhs_ptr[0]
+            rhs_ptr += 1
+        else:
+            result_ptr[0] = lhs_ptr[0]
+            result_ptr += 1
+            result_ptr[0] = rhs_ptr[0]
+            lhs_ptr += 1
+            rhs_ptr += 1
+        result_ptr += 1
+
+    # Copy remaining elements if one side not consumed
+    while lhs_ptr == end_lhs_ptr and rhs_ptr < end_rhs_ptr:
+        result_ptr[0] = rhs_ptr[0]
+        rhs_ptr += 1
+        result_ptr += 1
+
+    while rhs_ptr == end_rhs_ptr and lhs_ptr < end_lhs_ptr:
+        result_ptr[0] = lhs_ptr[0]
+        lhs_ptr += 1
+        result_ptr += 1
+
+    return np.asarray(results), result_ptr - &results[0]
+
+
+cdef _merge_w_drop(DTYPE_t[:] lhs,
+                   DTYPE_t[:] rhs):
+    cdef np.intp_t len_lhs = lhs.shape[0]
+    cdef np.intp_t len_rhs = rhs.shape[0]
+
+    cdef DTYPE_t* lhs_ptr = &lhs[0]
+    cdef DTYPE_t* end_lhs_ptr = &lhs[len_lhs]
+    cdef DTYPE_t* rhs_ptr = &rhs[0]
+    cdef DTYPE_t* end_rhs_ptr = &rhs[len_rhs]
+
+    # Outputs as numpy arrays
+    cdef np.uint64_t[:] results = np.empty(len_lhs + len_rhs, dtype=np.uint64)
+    cdef np.uint64_t* result_ptr = &results[0]
+
+    # Copy elements from both arrays
+    while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
+        if lhs_ptr[0] < rhs_ptr[0]:
+            result_ptr[0] = lhs_ptr[0]
+            lhs_ptr += 1
+        elif rhs_ptr[0] < lhs_ptr[0]:
+            result_ptr[0] = rhs_ptr[0]
+            rhs_ptr += 1
+        else:
+            result_ptr[0] = lhs_ptr[0]
+            lhs_ptr += 1
+            rhs_ptr += 1
+        result_ptr += 1
+
+    # Copy remaining elements if one side not consumed
+    while lhs_ptr == end_lhs_ptr and rhs_ptr < end_rhs_ptr:
+        result_ptr[0] = rhs_ptr[0]
+        rhs_ptr += 1
+        result_ptr += 1
+
+    while rhs_ptr == end_rhs_ptr and lhs_ptr < end_lhs_ptr:
+        result_ptr[0] = lhs_ptr[0]
+        lhs_ptr += 1
+        result_ptr += 1
+
+    return np.asarray(results), result_ptr - &results[0]
+
+
+
+
+def merge(np.ndarray[DTYPE_t, ndim=1] lhs,
+          np.ndarray[DTYPE_t, ndim=1] rhs,
+          bint drop_duplicates=False):
+    if drop_duplicates:
+        result, result_idx = _merge_w_drop(lhs, rhs)
+    else:
+        result, result_idx = _merge(lhs, rhs)
     return np.array(result[:result_idx])

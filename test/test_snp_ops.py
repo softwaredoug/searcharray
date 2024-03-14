@@ -2,7 +2,7 @@ from typing import Tuple
 import numpy as np
 import sortednp as snp
 import pytest
-from searcharray.utils.snp_ops import binary_search, galloping_search, intersect, adjacent, unique
+from searcharray.utils.snp_ops import binary_search, galloping_search, intersect, adjacent, unique, merge
 from test_utils import w_scenarios
 from test_utils import Profiler, profile_enabled
 
@@ -97,6 +97,12 @@ intersect_scenarios = {
         "mask": None,
         "expected": u64arr([2, 4, 6, 8, 10])
     },
+    "base_dups": {
+        "lhs": u64([1, 1, 2, 2, 3, 3, 4, 4, 5, 5]),
+        "rhs": u64([1, 2, 2, 10]),
+        "mask": None,
+        "expected": u64arr([1, 2])
+    },
     "lsbs_differ": {
         "lhs": u64([0x1F, 0x2F, 0x3F, 0x4F, 0x5F, 0x6F, 0x7F, 0x8F, 0x9F, 0xAF]),
         "rhs": u64([0x2F, 0x4F, 0x6F, 0x8F, 0xAF]),
@@ -135,21 +141,35 @@ intersect_scenarios = {
 def test_intersect(lhs, rhs, mask, expected):
     if mask is None:
         mask = np.uint64(0xFFFFFFFFFFFFFFFF)
-    result, lhs_idx, rhs_idx = intersect(lhs, rhs, mask)
+    lhs_idx, rhs_idx = intersect(lhs, rhs, mask)
+    result = lhs[lhs_idx] & mask
     assert np.all(result == expected)
 
 
+@w_scenarios(intersect_scenarios)
+def test_intersect_keep_both(lhs, rhs, mask, expected):
+    if mask is None:
+        mask = np.uint64(0xFFFFFFFFFFFFFFFF)
+    lhs_idx, rhs_idx = intersect(lhs, rhs, mask, drop_duplicates=False)
+    expected_lhs = np.argwhere(np.in1d(lhs, rhs)).flatten()
+    expected_rhs = np.argwhere(np.in1d(rhs, lhs)).flatten()
+    assert np.all(lhs_idx == expected_lhs)
+    assert np.all(rhs_idx == expected_rhs)
+
+
 @pytest.mark.parametrize("seed", [0, 1, 2, 3, 4])
-def test_same_as_snp(seed):
+def test_same_as_numpy(seed):
     np.random.seed(seed)
     rand_arr_1 = np.random.randint(0, 500, 100, dtype=np.uint64)
     rand_arr_2 = np.random.randint(0, 500, 100, dtype=np.uint64)
     rand_arr_1.sort()
     rand_arr_2.sort()
-    snp_result, (snp_lhs_idx, snp_rhs_idx) = snp.intersect(rand_arr_1, rand_arr_2, indices=True,
-                                                           duplicates=snp.DROP)
-    result, lhs_idx, rhs_idx = intersect(rand_arr_1, rand_arr_2)
-    assert np.all(result == snp_result)
+
+    expected_result = np.intersect1d(rand_arr_1, rand_arr_2)
+
+    lhs_idx, rhs_idx = intersect(rand_arr_1, rand_arr_2)
+    result = rand_arr_1[lhs_idx]
+    assert np.all(result == expected_result)
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
@@ -309,3 +329,51 @@ def test_adjacent(lhs, rhs, mask, lhs_idx_expected, rhs_idx_expected):
     lhs_idx, rhs_idx = adjacent(lhs, rhs, mask)
     assert np.all(lhs_idx == lhs_idx_expected)
     assert np.all(rhs_idx == rhs_idx_expected)
+
+
+merge_scenarios = {
+    "base": {
+        "lhs": u64([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+        "rhs": u64([2, 4, 6, 8, 10]),
+        "expected": u64arr([1, 2, 2, 3, 4, 4, 5, 6, 6, 7, 8, 8, 9, 10, 10])
+    },
+    "rhs_empty": {
+        "lhs": u64([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+        "rhs": u64([]),
+        "expected": u64([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    },
+}
+
+
+@w_scenarios(merge_scenarios)
+def test_merge(lhs, rhs, expected):
+    result = merge(lhs, rhs)
+    assert np.all(result == expected)
+
+
+@w_scenarios(merge_scenarios)
+def test_merge_w_drop(lhs, rhs, expected):
+    result = merge(lhs, rhs, drop_duplicates=True)
+    assert np.all(result == np.sort(np.unique(expected)))
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_profile_merge(benchmark):
+    rand_arr_1 = np.random.randint(0, 50, 1000000, dtype=np.uint64)
+    rand_arr_1.sort()
+    rand_arr_2 = np.random.randint(0, 50, 1000000, dtype=np.uint64)
+    rand_arr_2.sort()
+
+    def with_snp():
+        snp.merge(rand_arr_1, rand_arr_2)
+
+    def with_snp_ops():
+        merge(rand_arr_1, rand_arr_2)
+
+    def merge_many():
+        for _ in range(10):
+            with_snp_ops()
+            with_snp()
+
+    profiler = Profiler(benchmark)
+    profiler.run(merge_many)
