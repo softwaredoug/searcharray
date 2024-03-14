@@ -45,7 +45,6 @@ setup(
     description="Searchable pandas text extension arrays for prototyping search",  # Optional
     # This is an optional longer description of your project that represents
     # the body of text which users will see when they visit PyPI.
-    orted
     # Often, this is the same as your README, so you can just read it in from
     # that file directly (as we have already done above)
     #
