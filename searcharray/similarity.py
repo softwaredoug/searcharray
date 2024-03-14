@@ -18,7 +18,10 @@ def compute_idf(num_docs, sum_dfs):
 
 
 def compute_tfs(term_freqs: np.ndarray, doc_lens, avg_doc_lens, k1, b):
-    adj_doc_lens = k1 * (1 - b + b * doc_lens / avg_doc_lens)
+    adj_doc_lens = doc_lens / avg_doc_lens
+    adj_doc_lens *= b
+    adj_doc_lens += 1 - b
+    adj_doc_lens *= k1
     # Divide tf in place for perf, but this means
     # we can't use the same term_freqs for different k1, b
     term_freqs /= (term_freqs + adj_doc_lens)

@@ -540,6 +540,7 @@ class SearchArray(ExtensionArray):
             else:
                 doc_ids, termfreqs = self.posns.termfreqs(term_id,
                                                           doc_ids=slice_of_rows, min_posn=min_posn, max_posn=max_posn)
+
                 matches[doc_ids] = termfreqs
                 return matches
         except TermMissingError:
