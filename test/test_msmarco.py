@@ -344,11 +344,16 @@ def test_msmarco1m_or_search_no_cache(query, msmarco1m, benchmark, caplog):
 
     caplog.set_level(logging.DEBUG)
 
+    df_cache = msmarco1m['body_ws'].array.posns.docfreq_cache
+    tf_cache = msmarco1m['body_ws'].array.posns.termfreq_cache
     msmarco1m['body_ws'].array.posns.clear_cache()
 
     def sum_scores(query):
         return np.sum([msmarco1m['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
     scores = profiler.run(sum_scores, query)
+    # Restore cache
+    msmarco1m['body_ws'].array.posns.docfreq_cache = df_cache
+    msmarco1m['body_ws'].array.posns.termfreq_cache = tf_cache
     assert len(scores) == len(msmarco1m['body_ws'].array)
     assert np.any(scores > 0)
 
@@ -404,11 +409,16 @@ def test_msmarco100k_or_search_no_cache(query, msmarco100k, benchmark, caplog):
 
     caplog.set_level(logging.DEBUG)
 
+    df_cache = msmarco100k['body_ws'].array.posns.docfreq_cache
+    tf_cache = msmarco100k['body_ws'].array.posns.termfreq_cache
     msmarco100k['body_ws'].array.posns.clear_cache()
 
     def sum_scores(query):
         return np.sum([msmarco100k['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
     scores = profiler.run(sum_scores, query)
+    # Restore cache
+    msmarco100k['body_ws'].array.posns.docfreq_cache = df_cache
+    msmarco100k['body_ws'].array.posns.termfreq_cache = tf_cache
     assert len(scores) == len(msmarco100k['body_ws'].array)
     assert np.any(scores > 0)
 
