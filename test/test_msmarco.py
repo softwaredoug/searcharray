@@ -339,6 +339,22 @@ def test_msmarco1m_or_search_unwarmed(query, msmarco1m, benchmark, caplog):
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.mark.parametrize("query", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
+def test_msmarco1m_or_search_no_cache(query, msmarco1m, benchmark, caplog):
+    profiler = Profiler(benchmark)
+
+    caplog.set_level(logging.DEBUG)
+
+    msmarco1m['body_ws'].array.posns.clear_cache()
+
+    def sum_scores(query):
+        return np.sum([msmarco1m['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
+    scores = profiler.run(sum_scores, query)
+    assert len(scores) == len(msmarco1m['body_ws'].array)
+    assert np.any(scores > 0)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("query", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
 def test_msmarco1m_or_search_warmed(query, msmarco1m, benchmark, caplog):
     profiler = Profiler(benchmark)
 
@@ -373,6 +389,22 @@ def test_msmarco100k_or_search_unwarmed(query, msmarco100k, benchmark, caplog):
     profiler = Profiler(benchmark)
 
     caplog.set_level(logging.DEBUG)
+
+    def sum_scores(query):
+        return np.sum([msmarco100k['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
+    scores = profiler.run(sum_scores, query)
+    assert len(scores) == len(msmarco100k['body_ws'].array)
+    assert np.any(scores > 0)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("query", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
+def test_msmarco100k_or_search_no_cache(query, msmarco100k, benchmark, caplog):
+    profiler = Profiler(benchmark)
+
+    caplog.set_level(logging.DEBUG)
+
+    msmarco100k['body_ws'].array.posns.clear_cache()
 
     def sum_scores(query):
         return np.sum([msmarco100k['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
