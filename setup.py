@@ -38,7 +38,7 @@ setup(
     # For a discussion on single-sourcing the version across setup.py and the
     # project code, see
     # https://packaging.python.org/guides/single-sourcing-package-version/
-    version="0.0.41",  # Required
+    version="0.0.42",  # Required
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
     # https://packaging.python.org/specifications/core-metadata/#summary
@@ -118,7 +118,7 @@ setup(
     packages=find_packages(),
     # Specify which Python versions you support. In contrast to the
     # 'Programming Language' classifiers above, 'pip install' will check this
-    # and refuse to install the project if the version does not match. See
+    # and refuse to install the project if the version does not match. Sele
     # https://packaging.python.org/guides/distributing-packages-using-setuptools/#python-requires
     python_requires=">=3.7, <4",
     # This field lists other packages that your project depends on to run.
@@ -129,7 +129,7 @@ setup(
     # https://packaging.python.org/discussions/install-requires-vs-requirements/
     install_requires=["pandas>=2.0.0", "Cython"],  # Optional
     include_dirs=[np.get_include()],
-    ext_modules=cythonize(["searcharray/utils/*.pyx"], annotate=True),
+    ext_modules=cythonize(["searcharray/utils/*.pyx"]),
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"
     # syntax, for example:
