@@ -224,6 +224,31 @@ def test_profile_unique(benchmark):
     profiler.run(unique_many)
 
 
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_profile_unique_shifted(benchmark):
+    rand_arr_1 = np.random.randint(0, 50, 1000000, dtype=np.uint64)
+    rand_arr_1.sort()
+
+    def with_snp():
+        shifted = rand_arr_1 >> 16
+        snp.intersect(shifted, shifted, duplicates=snp.DROP)
+
+    def with_np():
+        np.unique(rand_arr_1 >> 16)
+
+    def with_snp_ops():
+        unique(rand_arr_1, 16)
+
+    def unique_many():
+        for _ in range(10):
+            with_snp_ops()
+            with_snp()
+            with_np()
+
+    profiler = Profiler(benchmark)
+    profiler.run(unique_many)
+
+
 adj_scenarios = {
     "base": {
         "lhs": u64([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),

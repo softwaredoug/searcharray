@@ -391,7 +391,7 @@ class PosnBitArray:
         if doc_ids is None and max_posn is None and min_posn is None:
             return self._termfreqs_with_cache(term_id)
         if doc_ids is None:
-            doc_ids = sorted_unique(encoder.keys(self.encoded_term_posns[term_id]))
+            doc_ids = encoder.keys_unique(self.encoded_term_posns[term_id])
 
         encoded = self.encoded_term_posns[term_id]
         term_posns = encoded

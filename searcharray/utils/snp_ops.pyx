@@ -300,8 +300,8 @@ def adjacent(np.ndarray[DTYPE_t, ndim=1] lhs,
     return indices_lhs[:result_idx], indices_rhs[:result_idx]
 
 
-cdef _scan_unique(DTYPE_t[:] arr,
-                  DTYPE_t arr_len):
+cdef _scan_unique_naive(DTYPE_t[:] arr,
+                        DTYPE_t arr_len):
     cdef DTYPE_t i = 0
 
     cdef np.uint64_t[:] result = np.empty(arr_len, dtype=np.uint64)
@@ -318,27 +318,43 @@ cdef _scan_unique(DTYPE_t[:] arr,
 
     return result, result_idx
 
+cdef _scan_unique(DTYPE_t[:] arr,
+                  DTYPE_t arr_len):
+    cdef np.uint64_t[:] result = np.empty(arr_len, dtype=np.uint64)
+    cdef np.uint64_t* result_ptr = &result[0]
+    cdef DTYPE_t* arr_ptr = &arr[0]
+    cdef DTYPE_t* arr_end = &arr[arr_len-1]
+    cdef DTYPE_t* target_ptr = arr_ptr
+
+    while arr_ptr <= arr_end:
+        target_ptr = arr_ptr
+        result_ptr[0] = arr_ptr[0]
+        result_ptr += 1
+        arr_ptr += 1
+        while arr_ptr <= arr_end and arr_ptr[0] == target_ptr[0]:
+            arr_ptr += 1
+
+    return result, result_ptr - &result[0]
+
 
 cdef _scan_unique_shifted(DTYPE_t[:] arr,
                           DTYPE_t arr_len,
                           DTYPE_t rshift):
-    cdef DTYPE_t i = 0
-
     cdef np.uint64_t[:] result = np.empty(arr_len, dtype=np.uint64)
-    cdef DTYPE_t result_idx = 0
-    cdef DTYPE_t target = arr[i] >> rshift
+    cdef np.uint64_t* result_ptr = &result[0]
+    cdef DTYPE_t* arr_ptr = &arr[0]
+    cdef DTYPE_t* arr_end = &arr[arr_len-1]
+    cdef DTYPE_t  target_shifted = arr_ptr[0] >> rshift
 
-    while i < arr_len:
-        target = arr[i] >> rshift
-        result[result_idx] = target
-        result_idx += 1
-        i += 1
-        while i < arr_len and (arr[i] >> rshift) == target:
-            i += 1
+    while arr_ptr <= arr_end:
+        target_shifted = arr_ptr[0] >> rshift
+        result_ptr[0] = arr_ptr[0]
+        result_ptr += 1
+        arr_ptr += 1
+        while arr_ptr <= arr_end and (arr_ptr[0] >> rshift) == target_shifted:
+            arr_ptr += 1
 
-    return result, result_idx
-
-
+    return result, result_ptr - &result[0]
 
 
 def unique(np.ndarray[DTYPE_t, ndim=1] arr,
