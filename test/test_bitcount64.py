@@ -63,6 +63,7 @@ def test_bitcount64_benchmark(benchmark):
 
     def run_bitcounts():
         arr_size = 100000
+        np.random.seed(0)
         arr = np.random.randint(0, 2**64, size=arr_size, dtype=np.uint64)
         bitcounts(arr)
         popcounts(arr)

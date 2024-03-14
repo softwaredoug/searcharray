@@ -39,7 +39,21 @@ cdef inline DTYPE_t mskd(DTYPE_t value, DTYPE_t mask):
 
 cdef popcount64_arr(DTYPE_t[:] arr):
     cdef np.uint64_t[:] result = np.empty(arr.shape[0], dtype=np.uint64)
+    # cdef int i = 0
+    cdef DTYPE_t* result_ptr = &result[0]
+    cdef DTYPE_t* arr_ptr = &arr[0]
+
+    for _ in range(arr.shape[0]):
+        result_ptr[0] = __builtin_popcountll(arr_ptr[0])
+        result_ptr += 1
+        arr_ptr += 1
+    return result
+
+
+cdef popcount64_arr_naive(DTYPE_t[:] arr):
+    cdef np.uint64_t[:] result = np.empty(arr.shape[0], dtype=np.uint64)
     cdef int i = 0
+
     for i in range(arr.shape[0]):
         result[i] = __builtin_popcountll(arr[i])
     return result
