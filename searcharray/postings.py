@@ -567,7 +567,9 @@ class SearchArray(ExtensionArray):
             term_freq = self.termfreqs(token)
         return term_freq > 0
 
-    def score(self, token: Union[str, List[str]], similarity: Similarity = default_bm25) -> np.ndarray:
+    def score(self, token: Union[str, List[str]], similarity: Similarity = default_bm25,
+              min_posn: Optional[int] = None,
+              max_posn: Optional[int] = None) -> np.ndarray:
         """Score each doc using a similarity function.
 
         Parameters
@@ -583,7 +585,7 @@ class SearchArray(ExtensionArray):
         tokens_l = [token] if isinstance(token, str) else token
         all_dfs = np.asarray([self.docfreq(token) for token in tokens_l])
 
-        tfs = self.termfreqs(token)
+        tfs = self.termfreqs(token, min_posn=min_posn, max_posn=max_posn)
         token = self._check_token_arg(token)
         doc_lens = self.doclengths()
         scores = similarity(term_freqs=tfs, doc_freqs=all_dfs,
