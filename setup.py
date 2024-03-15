@@ -6,7 +6,7 @@ https://github.com/pypa/sampleproject
 """
 
 # Always prefer setuptools over distutils
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
 import numpy as np
 import pathlib
@@ -129,7 +129,9 @@ setup(
     # https://packaging.python.org/discussions/install-requires-vs-requirements/
     install_requires=["pandas>=2.0.0", "Cython"],  # Optional
     include_dirs=[np.get_include()],
-    ext_modules=cythonize(["searcharray/utils/*.pyx"]),
+    ext_modules=cythonize([Extension("searcharray.roaringish.*",
+                                     ["searcharray/roaringish/*.pyx"])]),
+
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"
     # syntax, for example:

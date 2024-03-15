@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from searcharray.utils.bitcount import bit_count64
-from searcharray.utils.snp_ops import popcount64
+from searcharray.roaringish import popcount64
 from test_utils import w_scenarios
 from test_utils import Profiler, profile_enabled
 

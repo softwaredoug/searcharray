@@ -10,21 +10,17 @@ cimport numpy as np
 import numpy as np
 from enum import Enum
 
-cdef extern from "stdint.h":
-    ctypedef unsigned long long uint64_t
+# cimport snp_ops
+# from snp_ops cimport _galloping_search, DTYPE_t, ALL_BITS
+cimport searcharray.roaringish.snp_ops
+from searcharray.roaringish.snp_ops cimport _galloping_search, DTYPE_t
 
-# cdef extern from "x86intrin.h":
-#     int __builtin_popcountll(unsigned long long x)
-
+cdef DTYPE_t ALL_BITS = 0xFFFFFFFFFFFFFFFF
 
 cdef extern from "stddef.h":
     # Assuming size_t is available via stddef.h for the example's simplicity
     # and portability, though it's not directly used here.
     int __builtin_popcountll(unsigned long long x)
-
-ctypedef uint64_t DTYPE_t
-
-cdef DTYPE_t ALL_BITS = 0xFFFFFFFFFFFFFFFF
 
 
 cdef popcount64_arr(DTYPE_t[:] arr):

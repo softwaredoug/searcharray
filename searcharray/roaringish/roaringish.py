@@ -7,8 +7,8 @@ import logging
 import numbers
 from typing import Optional, Tuple, List, Union
 
-from searcharray.utils.snp_ops import intersect, unique, adjacent, merge
-from searcharray.utils.roaringish_ops import popcount64_reduce
+from searcharray.roaringish.snp_ops import intersect, unique, adjacent, merge
+from searcharray.roaringish.roaringish_ops import popcount64_reduce
 
 logger = logging.getLogger(__name__)
 

@@ -8,13 +8,11 @@ https://colab.research.google.com/drive/10tIEkdlCE_1J_CcgEcV0jkLfBc-0H4am?authus
 import numpy as np
 from copy import deepcopy
 from typing import List, Tuple, Dict, Union, cast, Optional
-from searcharray.utils.roaringish import RoaringishEncoder, convert_keys
+from searcharray.roaringish import RoaringishEncoder, convert_keys, merge
 from searcharray.phrase.bigram_freqs import bigram_freqs, Continuation
 import numbers
 import logging
 from collections import defaultdict
-
-from searcharray.utils.snp_ops import merge
 
 
 logger = logging.getLogger(__name__)

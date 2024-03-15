@@ -1,11 +1,11 @@
 """Given two roaringish encoded arrays, count bigram matches between them."""
 import numpy as np
 from typing import Tuple, Optional
-from searcharray.utils.roaringish import RoaringishEncoder
+from searcharray.roaringish import RoaringishEncoder
 import logging
 from enum import Enum
 
-from searcharray.utils.snp_ops import intersect, popcount64, merge
+from searcharray.roaringish import intersect, popcount64, merge
 
 
 logger = logging.getLogger(__name__)
