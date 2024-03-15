@@ -422,7 +422,8 @@ class PosnBitArray:
         return self.docfreq_cache[term_id]
 
     def _maybe_cache_docfreq(self, term_id: int, docfreq: np.uint64):
-        if self.max_doc_id >= 100000 and docfreq > (self.max_doc_id // 100):
+        # Cache the earliest doc ids as likely highest docfreq
+        if self.max_doc_id >= 99999 and docfreq > (self.max_doc_id // 100):
             self.docfreq_cache[term_id] = docfreq
 
     def docfreq(self, term_id: int) -> np.uint64:

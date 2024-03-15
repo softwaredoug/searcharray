@@ -222,6 +222,9 @@ class SearchArray(ExtensionArray):
             self.term_dict, self.avg_doc_length, \
             self.doc_lens = build_index_from_terms_list(postings, Terms)
 
+        # Turn doclens into a series
+        self.doc_lens = pd.Series(self.doc_lens)
+
     @classmethod
     def index(cls, array: Iterable,
               tokenizer=ws_tokenizer,
@@ -265,7 +268,7 @@ class SearchArray(ExtensionArray):
         postings.posns = posns
         postings.term_dict = term_dict
         postings.avg_doc_length = avg_doc_length
-        postings.doc_lens = doc_lens
+        postings.doc_lens = pd.Series(doc_lens)
         return postings
 
     def warm(self):
@@ -301,7 +304,7 @@ class SearchArray(ExtensionArray):
         if isinstance(key, numbers.Integral):
             try:
                 rows = self.term_mat[key]
-                doc_len = self.doc_lens[key]
+                doc_len = self.doc_lens.iloc[key]
                 doc_id = key
                 if doc_id < 0:
                     doc_id += len(self)
@@ -315,7 +318,7 @@ class SearchArray(ExtensionArray):
             sliced_posns = self.posns.slice(sliced_tfs.rows) if not self.avoid_copies else self.posns
             arr = SearchArray([], tokenizer=self.tokenizer)
             arr.term_mat = sliced_tfs
-            arr.doc_lens = self.doc_lens[key]
+            arr.doc_lens = pd.Series(self.doc_lens.to_numpy()[key])
             arr.posns = sliced_posns
             arr.term_dict = self.term_dict
             arr.avg_doc_length = self.avg_doc_length
@@ -344,23 +347,21 @@ class SearchArray(ExtensionArray):
             is_encoded = False
             posns = None
             term_mat = np.asarray([])
-            doc_lens = np.asarray([])
             if isinstance(value, float):
                 term_mat = np.asarray([value])
-                doc_lens = np.asarray([0])
+                self.doc_lens[key] = 0
             elif isinstance(value, Terms):
                 term_mat = np.asarray([value.tf_to_dense(self.term_dict)])
-                doc_lens = np.asarray([value.doc_len])
+                self.doc_lens[key] = value.doc_len
                 is_encoded = value.encoded
                 posns = [value.raw_positions(self.term_dict)]
             elif isinstance(value, np.ndarray):
                 term_mat = np.asarray([x.tf_to_dense(self.term_dict) for x in value])
-                doc_lens = np.asarray([x.doc_len for x in value])
+                self.doc_lens[key] = [x.doc_len for x in value]
                 is_encoded = value[0].encoded if len(value) > 0 else False
                 posns = [x.raw_positions(self.term_dict) for x in value]
             np.nan_to_num(term_mat, copy=False, nan=0)
             self.term_mat[key] = term_mat
-            self.doc_lens[key] = doc_lens
 
             if posns is not None:
                 self.posns.insert(key, posns, is_encoded)
@@ -541,8 +542,7 @@ class SearchArray(ExtensionArray):
                 doc_ids, termfreqs = self.posns.termfreqs(term_id,
                                                           doc_ids=slice_of_rows, min_posn=min_posn, max_posn=max_posn)
 
-                matches[doc_ids] = termfreqs
-                return matches
+                return pd.Series(index=doc_ids, data=termfreqs)
         except TermMissingError:
             return np.zeros(len(self), dtype=np.float32)
 
@@ -567,7 +567,8 @@ class SearchArray(ExtensionArray):
             term_freq = self.termfreqs(token)
         return term_freq > 0
 
-    def score(self, token: Union[str, List[str]], similarity: Similarity = default_bm25) -> np.ndarray:
+    def score(self, token: Union[str, List[str]], similarity: Similarity = default_bm25,
+              max_posn: Optional[int] = None, min_posn: Optional[int] = None) -> np.ndarray:
         """Score each doc using a similarity function.
 
         Parameters
@@ -583,7 +584,7 @@ class SearchArray(ExtensionArray):
         tokens_l = [token] if isinstance(token, str) else token
         all_dfs = np.asarray([self.docfreq(token) for token in tokens_l])
 
-        tfs = self.termfreqs(token)
+        tfs = self.termfreqs(token, min_posn=min_posn, max_posn=max_posn)
         token = self._check_token_arg(token)
         doc_lens = self.doclengths()
         scores = similarity(term_freqs=tfs, doc_freqs=all_dfs,
