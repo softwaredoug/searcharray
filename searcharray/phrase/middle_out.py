@@ -8,13 +8,13 @@ https://colab.research.google.com/drive/10tIEkdlCE_1J_CcgEcV0jkLfBc-0H4am?authus
 import numpy as np
 from copy import deepcopy
 from typing import List, Tuple, Dict, Union, cast, Optional
-from searcharray.utils.roaringish import RoaringishEncoder, convert_keys, sorted_unique
+from searcharray.utils.roaringish import RoaringishEncoder, convert_keys
 from searcharray.phrase.bigram_freqs import bigram_freqs, Continuation
 import numbers
 import logging
 from collections import defaultdict
 
-from searcharray.utils.snp_ops import popcount64, merge
+from searcharray.utils.snp_ops import merge
 
 
 logger = logging.getLogger(__name__)
@@ -405,14 +405,7 @@ class PosnBitArray:
         return self._computed_term_freqs(term_posns)
 
     def _computed_term_freqs(self, term_posns) -> Tuple[np.ndarray, np.ndarray]:
-        doc_ids = encoder.keys(term_posns)
-        change_indices = np.nonzero(np.diff(doc_ids))[0]
-        change_indices = np.concatenate((np.asarray([0]), change_indices + 1))
-        posns = term_posns & encoder.payload_lsb_mask
-        bit_counts = popcount64(posns)
-
-        term_freqs = np.add.reduceat(bit_counts, change_indices, dtype=np.float32)
-        return sorted_unique(doc_ids), term_freqs
+        return encoder.num_values_per_key(term_posns)
 
     def _termfreqs_with_cache(self, term_id: int) -> Tuple[np.ndarray, np.ndarray]:
         try:

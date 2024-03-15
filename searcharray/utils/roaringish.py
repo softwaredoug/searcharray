@@ -8,6 +8,7 @@ import numbers
 from typing import Optional, Tuple, List, Union
 
 from searcharray.utils.snp_ops import intersect, unique, adjacent, merge
+from searcharray.utils.roaringish_ops import popcount64_reduce
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +157,10 @@ class RoaringishEncoder:
             return list(zip(keys, grouped))
         else:
             return grouped
+
+    def num_values_per_key(self, encoded: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        pcr = popcount64_reduce(encoded, (_64 - self.key_bits), self.payload_lsb_mask)
+        return pcr
 
     def keys(self, encoded: np.ndarray) -> np.ndarray:
         """Return keys from encoded."""

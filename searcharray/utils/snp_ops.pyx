@@ -26,16 +26,6 @@ ctypedef uint64_t DTYPE_t
 
 cdef DTYPE_t ALL_BITS = 0xFFFFFFFFFFFFFFFF
 
-class PostProcess(Enum):
-    NONE = 0
-    SHIFT_POPCOUNT = 1
-
-# For some reason this as an inline is faster than
-# just doing the operation, despite all the python
-# interactions added
-cdef inline DTYPE_t mskd(DTYPE_t value, DTYPE_t mask):
-    return value & mask
-
 
 cdef popcount64_arr(DTYPE_t[:] arr):
     cdef np.uint64_t[:] result = np.empty(arr.shape[0], dtype=np.uint64)
