@@ -148,7 +148,7 @@ setup(
     # installed, specify them here.
     package_data={
         # Ensure the package name matches your package's actual name
-        'searcharray': ['utils/*.pyx'],
+        'searcharray': ['roaringish/*.pyx', 'roaringish/*.pxd'],
     },
     # Entry points. The following would provide a command called `sample` which
     # executes the function `main` from this package when invoked:
