@@ -78,6 +78,12 @@ benchmark: deps extensions
 benchmark_graph: deps
 	python scripts/graph_benchmarks.py "$(TEST)"
 
+favorite_graphs: deps
+	python scripts/graph_benchmarks.py "test_msmarco1m_or_search_unwarmed[what is the purpose of]"
+	python scripts/graph_benchmarks.py 'test_msmarco1m_phrase[what is the purpose of]'
+	python scripts/graph_benchmarks.py 'test_msmarco10k_indexing'
+
+
 profile: extensions
 	python -m pytest -s -x --benchmark-disable "$(TEST)"
 	snakeviz ./.benchmarks/last.prof

@@ -349,6 +349,7 @@ def test_msmarco1m_or_search_no_cache(query, msmarco1m, benchmark, caplog):
     msmarco1m['body_ws'].array.posns.clear_cache()
 
     def sum_scores(query):
+        msmarco1m['body_ws'].array.posns.clear_cache()
         return np.sum([msmarco1m['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
     scores = profiler.run(sum_scores, query)
     # Restore cache
@@ -414,6 +415,7 @@ def test_msmarco100k_or_search_no_cache(query, msmarco100k, benchmark, caplog):
     msmarco100k['body_ws'].array.posns.clear_cache()
 
     def sum_scores(query):
+        msmarco100k['body_ws'].array.posns.clear_cache()
         return np.sum([msmarco100k['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
     scores = profiler.run(sum_scores, query)
     # Restore cache
