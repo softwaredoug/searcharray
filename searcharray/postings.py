@@ -216,6 +216,7 @@ class SearchArray(ExtensionArray):
         if not is_list_like(postings):
             raise TypeError("Expected list-like object, got {}".format(type(postings)))
 
+        self.scoring_context = None
         self.avoid_copies = avoid_copies
         self.tokenizer = tokenizer
         self.term_mat, self.posns, \
@@ -486,6 +487,7 @@ class SearchArray(ExtensionArray):
         postings_arr.posns = self.posns
         postings_arr.term_dict = self.term_dict
         postings_arr.avg_doc_length = self.avg_doc_length
+        postings_arr.scoring_context = self.scoring_context
 
         if not self.avoid_copies:
             postings_arr.posns = self.posns.copy()
@@ -589,11 +591,14 @@ class SearchArray(ExtensionArray):
         token = self._check_token_arg(token)
         doc_lens = self.doclengths()
 
-        context = ScoringContext(term_freqs=tfs, doc_freqs=all_dfs,
+        context = ScoringContext(doc_freqs=all_dfs,
                                  doc_lens=doc_lens, avg_doc_lens=self.avg_doc_length,
                                  num_docs=len(self))
 
-        scores = similarity(context)
+        if not context.same_as(self.scoring_context):
+            self.scoring_context = context
+
+        scores = similarity(tfs, self.scoring_context)
         return scores
 
     def positions(self, token: str, key=None) -> List[np.ndarray]:

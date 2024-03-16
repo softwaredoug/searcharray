@@ -209,8 +209,8 @@ def test_edismax(frame, expected, params):
     assert np.allclose(scores, expected)
 
 
-def always_one_similarity(context: ScoringContext) -> np.ndarray:
-    term_freqs = context.term_freqs
+def always_one_similarity(term_freqs: np.ndarray, context: ScoringContext) -> np.ndarray:
+    term_freqs = term_freqs
     return term_freqs > 0
 
 
