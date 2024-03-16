@@ -15,7 +15,7 @@ import numpy as np
 from searcharray.phrase.scan_merge import scan_merge_ins
 from searcharray.phrase.posn_diffs import compute_phrase_freqs
 from searcharray.phrase.middle_out import PosnBitArray
-from searcharray.similarity import Similarity, default_bm25
+from searcharray.similarity import Similarity, default_bm25, ScoringContext
 from searcharray.indexing import build_index_from_tokenizer, build_index_from_terms_list
 from searcharray.term_dict import TermMissingError
 
@@ -588,9 +588,12 @@ class SearchArray(ExtensionArray):
         tfs = self.termfreqs(token, min_posn=min_posn, max_posn=max_posn)
         token = self._check_token_arg(token)
         doc_lens = self.doclengths()
-        scores = similarity(term_freqs=tfs, doc_freqs=all_dfs,
-                            doc_lens=doc_lens, avg_doc_lens=self.avg_doc_length,
-                            num_docs=len(self))
+
+        context = ScoringContext(term_freqs=tfs, doc_freqs=all_dfs,
+                                 doc_lens=doc_lens, avg_doc_lens=self.avg_doc_length,
+                                 num_docs=len(self))
+
+        scores = similarity(context)
         return scores
 
     def positions(self, token: str, key=None) -> List[np.ndarray]:
