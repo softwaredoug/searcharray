@@ -323,6 +323,7 @@ def test_msmarco_indexall(msmarco_unzipped, benchmark, caplog):
     df.to_pickle("data/msmarco_indexed.pkl")
 
 
+# FAILED test/test_msmarco.py::test_msmarco1m_or_search_unwarmed[what is] - assert False
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.mark.parametrize("query", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
 def test_msmarco1m_or_search_unwarmed(query, msmarco1m, benchmark, caplog):
@@ -333,8 +334,12 @@ def test_msmarco1m_or_search_unwarmed(query, msmarco1m, benchmark, caplog):
     def sum_scores(query):
         return np.sum([msmarco1m['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
     scores = profiler.run(sum_scores, query)
-    assert len(scores) == len(msmarco1m['body_ws'].array)
-    assert np.any(scores > 0)
+    assert len(scores) == len(msmarco1m['body_ws'].array), f"Expected {len(msmarco1m['body_ws'].array)}, got {len(scores)}"
+    if np.all(scores == 0):
+        print(f"Query: {query}")
+        print(f"Scores: {scores}")
+        import pdb; pdb.set_trace()
+    assert np.any(scores > 0), "No scores > 0"
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
@@ -368,9 +373,10 @@ def test_msmarco1m_or_search_warmed(query, msmarco1m, benchmark, caplog):
 
     def sum_scores(query):
         return np.sum([msmarco1m['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
-    sum_scores(query)  # Warmup
+    score_first = sum_scores(query)  # Warmup
     scores = profiler.run(sum_scores, query)
     assert len(scores) == len(msmarco1m['body_ws'].array)
+    assert np.all(score_first == scores)
     assert np.any(scores > 0)
 
 
@@ -450,9 +456,10 @@ def test_msmarco100k_or_search_warmed(query, msmarco100k, benchmark, caplog):
 
     def sum_scores(query):
         return np.sum([msmarco100k['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
-    sum_scores(query)  # Warmup
+    score_first = sum_scores(query)  # Warmup
     scores = profiler.run(sum_scores, query)
     assert len(scores) == len(msmarco100k['body_ws'].array)
+    assert np.all(score_first == scores)
     assert np.any(scores > 0)
 
 

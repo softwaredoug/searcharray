@@ -58,20 +58,16 @@ def bm25_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
     def bm25(term_freqs: np.ndarray, context: ScoringContext) -> np.ndarray:
         """Calculate BM25 scores."""
         # Sum doc freqs
-        try:
-            idf = context.working["idf"]
-        except KeyError:
-            sum_dfs = np.sum(context.doc_freqs, axis=0)
-            # Calculate idf
-            idf = compute_idf(context.num_docs, sum_dfs)
-            # context.working["idf"] = idf
+        sum_dfs = np.sum(context.doc_freqs, axis=0)
+        # Calculate idf
+        idf = compute_idf(context.num_docs, sum_dfs)
         # Calculate tf
         # tf = term_freqs / (term_freqs + k1 * (1 - b + b * doc_lens / avg_doc_lens))
         try:
             adj_doc_lens = context.working["adj_doc_lens"]
         except KeyError:
             adj_doc_lens = compute_adj_doc_lens(context.doc_lens, context.avg_doc_lens, k1, b)
-            # context.working["adj_doc_lens"] = adj_doc_lens
+            context.working["adj_doc_lens"] = adj_doc_lens
         term_freqs /= (term_freqs + adj_doc_lens)
         return idf * term_freqs
     return bm25
