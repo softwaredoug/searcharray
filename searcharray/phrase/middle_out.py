@@ -344,8 +344,12 @@ class PosnBitArray:
         if phrase_freqs.shape[0] == self.max_doc_id + 1 and min_posn is None and max_posn is None:
             enc_term_posns = [self.encoded_term_posns[term_id] for term_id in term_ids]
         else:
+            keys = None
+            if phrase_freqs.shape[0] != self.max_doc_id + 1:
+                keys = doc_ids.view(np.uint64)
+
             enc_term_posns = [encoder.slice(self.encoded_term_posns[term_id],
-                                            keys=doc_ids.view(np.uint64),
+                                            keys=keys,
                                             min_payload=min_posn,
                                             max_payload=max_posn) for term_id in term_ids]
         return compute_phrase_freqs(enc_term_posns, phrase_freqs)
@@ -390,13 +394,11 @@ class PosnBitArray:
         """Count term freqs using unique positions."""
         if doc_ids is None and max_posn is None and min_posn is None:
             return self._termfreqs_with_cache(term_id)
-        if doc_ids is None:
-            doc_ids = encoder.keys_unique(self.encoded_term_posns[term_id])
 
         encoded = self.encoded_term_posns[term_id]
         term_posns = encoded
         term_posns = encoder.slice(encoded,
-                                   keys=doc_ids.astype(np.uint64),
+                                   keys=doc_ids,
                                    min_payload=min_posn,
                                    max_payload=max_posn)
 

@@ -8,7 +8,7 @@ import numbers
 from typing import Optional, Tuple, List, Union
 
 from searcharray.roaringish.snp_ops import intersect, unique, adjacent, merge
-from searcharray.roaringish.roaringish_ops import popcount64_reduce
+from searcharray.roaringish.roaringish_ops import popcount64_reduce, payload_slice
 
 logger = logging.getLogger(__name__)
 
@@ -210,31 +210,35 @@ class RoaringishEncoder:
         lhs_idx, rhs_idx = intersect(lhs, rhs, mask=self.header_mask)
         return lhs[lhs_idx], rhs[rhs_idx]
 
-    def slice(self, encoded: np.ndarray,
-              keys: np.ndarray,
+    def slice(self,
+              encoded: np.ndarray,
+              keys: Optional[np.ndarray] = None,
               max_payload: Optional[int] = None,
               min_payload: Optional[int] = None) -> np.ndarray:
         """Get list of encoded that have values in keys."""
         # encoded_keys = encoded.view(np.uint64) >> (_64 - self.key_bits)
-        encoded_keys = self.keys(encoded)
-        idx_docs, idx_enc = intersect(keys, encoded_keys,
-                                      drop_duplicates=False)
+        if keys is not None:
+            encoded_keys = self.keys(encoded)
+            idx_docs, idx_enc = intersect(keys.view(np.uint64),
+                                          encoded_keys.view(np.uint64),
+                                          drop_duplicates=False)
+            encoded = encoded[idx_enc]
         if max_payload is None and min_payload is None:
-            return encoded[idx_enc]
+            return encoded
         else:
-            gt_min_payload = np.ones(len(encoded), dtype=bool)
-            lt_max_payload = np.ones(len(encoded), dtype=bool)
-            if min_payload is not None:
-                if min_payload % self.payload_lsb_bits != 0:
-                    raise ValueError(f"min_payload must be a multiple of {self.payload_lsb_bits}")
-                min_payload_bit = min_payload // self.payload_lsb_bits
-                gt_min_payload = self.payload_msb(encoded[idx_enc]) >= min_payload_bit
-            if max_payload is not None:
-                if max_payload % self.payload_lsb_bits != self.payload_lsb_bits - 1:
-                    raise ValueError(f"max_payload must be a multiple of {self.payload_lsb_bits} - 1")
-                max_payload_bit = max_payload // self.payload_lsb_bits
-                lt_max_payload = self.payload_msb(encoded[idx_enc]) <= max_payload_bit
-            return encoded[lt_max_payload & gt_min_payload]
+            if min_payload is not None and min_payload % self.payload_lsb_bits != 0:
+                raise ValueError(f"min_payload must be a multiple of {self.payload_lsb_bits}")
+            if max_payload is not None and max_payload % self.payload_lsb_bits != self.payload_lsb_bits - 1:
+                raise ValueError(f"max_payload must be a multiple of {self.payload_lsb_bits} - 1")
+            min_payload = 0 if min_payload is None else min_payload
+            max_payload = 0xFFFFFFFFFFFFFFFF if max_payload is None else max_payload
+
+            def payl_slice():
+                return payload_slice(encoded, self.payload_msb_mask,
+                                     min_payload // self.payload_lsb_bits,
+                                     max_payload // self.payload_lsb_bits)
+
+            return payl_slice()
 
 
 def convert_keys(keys) -> np.ndarray:
