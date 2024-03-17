@@ -56,6 +56,6 @@ if __name__ == '__main__':
     if len(sys.argv) == 2:
         graph_benchmark(sys.argv[1])
     elif len(sys.argv) == 3:
-        graph_benchmark(sys.argv[1], sys.argv[2])
+        graph_benchmark(sys.argv[1], sys.argv[2] == 'clean')
     else:
         print('Usage: python graph_benchmarks.py benchmark_name [benchmark_dir]')

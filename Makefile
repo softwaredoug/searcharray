@@ -78,6 +78,11 @@ benchmark: deps extensions
 benchmark_graph: deps
 	python scripts/graph_benchmarks.py "$(TEST)"
 
+
+benchmark_graph_clean: deps
+	python scripts/graph_benchmarks.py "$(TEST)" clean
+
+
 favorite_graphs: deps
 	python scripts/graph_benchmarks.py "test_msmarco1m_or_search_unwarmed[what is the purpose of]"
 	python scripts/graph_benchmarks.py 'test_msmarco1m_phrase[what is the purpose of]'
