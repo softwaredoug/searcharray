@@ -335,10 +335,6 @@ def test_msmarco1m_or_search_unwarmed(query, msmarco1m, benchmark, caplog):
         return np.sum([msmarco1m['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
     scores = profiler.run(sum_scores, query)
     assert len(scores) == len(msmarco1m['body_ws'].array), f"Expected {len(msmarco1m['body_ws'].array)}, got {len(scores)}"
-    if np.all(scores == 0):
-        print(f"Query: {query}")
-        print(f"Scores: {scores}")
-        import pdb; pdb.set_trace()
     assert np.any(scores > 0), "No scores > 0"
 
 

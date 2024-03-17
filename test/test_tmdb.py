@@ -92,8 +92,11 @@ def test_tokenize_tmdb(tmdb_raw_data):
 def test_slice_then_search(tmdb_data):
     star_wars_in_title = tmdb_data['title_tokens'].array.match(["Star", "Wars"])
     star_wars_in_title = tmdb_data[star_wars_in_title]
+    skywalkec_docfreq = star_wars_in_title['overview_tokens'].array.docfreq("Skywalker")
+    assert skywalkec_docfreq <= star_wars_in_title['overview_tokens'].array.corpus_size
     skywalker_bm25 = star_wars_in_title['overview_tokens'].array.score(["Skywalker"])
-    assert skywalker_bm25.shape[0] == 3
+    assert skywalker_bm25.shape[0] == len(star_wars_in_title)
+    assert np.all(skywalker_bm25 >= 0)
 
 
 def test_batch_sizes_give_same(tmdb_data):

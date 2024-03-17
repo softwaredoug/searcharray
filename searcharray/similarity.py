@@ -12,10 +12,8 @@ class ScoringContext:
 
     """
 
-    def __init__(self, doc_freqs: np.ndarray,
-                 doc_lens: np.ndarray, avg_doc_lens: int, num_docs: int):
+    def __init__(self, doc_lens: np.ndarray, avg_doc_lens: int, num_docs: int):
         """Initialize."""
-        self.doc_freqs = doc_freqs
         self.doc_lens = doc_lens
         self.avg_doc_lens = avg_doc_lens
         self.num_docs = num_docs
@@ -33,14 +31,15 @@ class ScoringContext:
 class Similarity(Protocol):
     """Similarity function protocol."""
 
-    def __call__(self, term_freqs: np.ndarray, context: ScoringContext) -> np.ndarray:
+    def __call__(self, term_freqs: np.ndarray, doc_freqs: np.ndarray,
+                 context: ScoringContext) -> np.ndarray:
         """Calculate similarity scores."""
         ...
 
 
-def compute_idf(num_docs, sum_dfs):
+def compute_idf(num_docs, dfs):
     """Calculate idf."""
-    return np.log(1 + (num_docs - sum_dfs + 0.5) / (sum_dfs + 0.5))
+    return np.sum(np.log(1 + (num_docs - dfs + 0.5) / (dfs + 0.5)))
 
 
 def compute_adj_doc_lens(doc_lens, avg_doc_lens, k1, b):
@@ -55,12 +54,12 @@ def compute_adj_doc_lens(doc_lens, avg_doc_lens, k1, b):
 
 def bm25_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
     """BM25 similarity function, as in Lucene 9."""
-    def bm25(term_freqs: np.ndarray, context: ScoringContext) -> np.ndarray:
+    def bm25(term_freqs: np.ndarray, doc_freqs: np.ndarray,
+             context: ScoringContext) -> np.ndarray:
         """Calculate BM25 scores."""
         # Sum doc freqs
-        sum_dfs = np.sum(context.doc_freqs, axis=0)
         # Calculate idf
-        idf = compute_idf(context.num_docs, sum_dfs)
+        idf = compute_idf(context.num_docs, doc_freqs)
         # Calculate tf
         # tf = term_freqs / (term_freqs + k1 * (1 - b + b * doc_lens / avg_doc_lens))
         try:
@@ -69,19 +68,18 @@ def bm25_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
             adj_doc_lens = compute_adj_doc_lens(context.doc_lens, context.avg_doc_lens, k1, b)
             context.working["adj_doc_lens"] = adj_doc_lens
         term_freqs /= (term_freqs + adj_doc_lens)
-        return idf * term_freqs
+        result = idf * term_freqs
+        return result
     return bm25
 
 
 def bm25_legacy_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
     """BM25 similarity prior to LUCENE-8563 with k1 + 1 in numerator."""
     # (freq * (k1 + 1)) / (freq + k1 * (1 - b + b * fieldLength / avgFieldLength))
-    def bm25(term_freqs: np.ndarray, context: ScoringContext) -> np.ndarray:
+    def bm25(term_freqs: np.ndarray, doc_freqs: np.ndarray, context: ScoringContext) -> np.ndarray:
         """Calculate BM25 scores."""
-        # Sum doc freqs
-        sum_dfs = np.sum(context.doc_freqs, axis=0)
         # Calculate idf
-        idf = np.log(1 + (context.num_docs - sum_dfs + 0.5) / (sum_dfs + 0.5))
+        idf = compute_idf(context.num_docs, doc_freqs)
         # Calculate tf
         tf = (term_freqs * (k1 + 1)) / (term_freqs + k1 * (1 - b + b * context.doc_lens / context.avg_doc_lens))
         return idf * tf
@@ -90,10 +88,10 @@ def bm25_legacy_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
 
 def classic_similarity() -> Similarity:
     """Classic Lucene TF-IDF similarity function."""
-    def classic(term_freqs: np.ndarray, context: ScoringContext) -> np.ndarray:
+    def classic(term_freqs: np.ndarray, doc_freqs: np.ndarray, context: ScoringContext) -> np.ndarray:
         """Calculate classic TF-IDF scores."""
         # Sum doc freqs
-        sum_dfs = np.sum(context.doc_freqs, axis=0)
+        sum_dfs = np.sum(doc_freqs, axis=0)
         # Calculate idf as log((docCount+1)/(docFreq+1)) + 1
         idf = np.log((context.num_docs + 1) / (sum_dfs + 1)) + 1
         length_norm = 1.0 / np.sqrt(context.doc_lens)
