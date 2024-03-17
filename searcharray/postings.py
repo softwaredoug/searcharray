@@ -18,6 +18,7 @@ from searcharray.phrase.middle_out import PosnBitArray
 from searcharray.similarity import Similarity, default_bm25, ScoringContext
 from searcharray.indexing import build_index_from_tokenizer, build_index_from_terms_list
 from searcharray.term_dict import TermMissingError
+from searcharray.roaringish.roaringish_ops import as_dense
 
 logger = logging.getLogger(__name__)
 
@@ -539,9 +540,9 @@ class SearchArray(ExtensionArray):
 
         try:
             term_id = self.term_dict.get_term_id(token)
-            matches = np.zeros(len(self), dtype=np.float32)
             slice_of_rows = None
             if self.term_mat.subset:
+                matches = np.zeros(len(self), dtype=np.float32)
                 slice_of_rows = self.term_mat.rows
                 doc_ids, termfreqs = self.posns.termfreqs(term_id,
                                                           doc_ids=slice_of_rows, min_posn=min_posn, max_posn=max_posn)
@@ -551,9 +552,9 @@ class SearchArray(ExtensionArray):
             else:
                 doc_ids, termfreqs = self.posns.termfreqs(term_id,
                                                           doc_ids=slice_of_rows, min_posn=min_posn, max_posn=max_posn)
-
-                matches[doc_ids] = termfreqs
-                return matches
+                # import pdb; pdb.set_trace()
+                # matches[doc_ids] = termfreqs
+                return as_dense(doc_ids, termfreqs, len(self))
         except TermMissingError:
             return np.zeros(len(self), dtype=np.float32)
 

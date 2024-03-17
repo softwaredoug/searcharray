@@ -30,10 +30,10 @@ cdef extern from "stddef.h":
 cdef _popcount64_reduce(DTYPE_t[:] arr,
                         DTYPE_t key_shift,
                         DTYPE_t value_mask):
-    cdef DTYPE_t[:] popcounts = np.zeros(arr.shape[0], dtype=np.uint64)
+    cdef float[:] popcounts = np.zeros(arr.shape[0], dtype=np.float32)
     cdef DTYPE_t[:] keys = np.empty(arr.shape[0], dtype=np.uint64)
     # cdef int i = 0
-    cdef DTYPE_t* popcounts_ptr = &popcounts[0]
+    cdef float* popcounts_ptr = &popcounts[0]
     cdef DTYPE_t* keys_ptr = &keys[0]
     cdef DTYPE_t* arr_ptr = &arr[0]
     cdef DTYPE_t last_key = 0xFFFFFFFFFFFFFFFF
@@ -78,3 +78,27 @@ def payload_slice(arr, payload_msb_mask,
     sliced, sliced_len = _payload_slice(arr_view, payload_msb_mask,
                                         min_payload, max_payload)
     return np.array(sliced[:sliced_len])
+
+
+cdef _as_dense_array(DTYPE_t[:] indices,  # Its likely these indices are sorted, if that helps
+                     float[:] values,
+                     DTYPE_t size):
+
+    cdef DTYPE_t* indices_ptr = &indices[0]
+    cdef float* values_ptr = &values[0]
+    cdef float[:] arr = np.zeros(size, dtype=np.float32)
+
+    while indices_ptr < &indices[indices.shape[0]]:
+        arr[indices_ptr[0]] = values_ptr[0]
+        indices_ptr += 1
+        values_ptr += 1
+
+    return arr
+
+
+def as_dense(indices, values, size):
+    cdef DTYPE_t[:] indices_view = indices
+    cdef float[:] values_view = values
+    if len(indices) != len(values):
+        raise ValueError("indices and values must have the same length")
+    return np.array(_as_dense_array(indices_view, values_view, size))

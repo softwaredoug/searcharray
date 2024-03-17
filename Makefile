@@ -84,9 +84,10 @@ benchmark_graph_clean: deps
 
 
 favorite_graphs: deps
-	python scripts/graph_benchmarks.py "test_msmarco1m_or_search_unwarmed[what is the purpose of]"
-	python scripts/graph_benchmarks.py 'test_msmarco1m_phrase[what is the purpose of]'
-	python scripts/graph_benchmarks.py 'test_msmarco10k_indexing'
+	python scripts/graph_benchmarks.py "test_msmarco1m_or_search_unwarmed[what is the purpose of]" "$(CLEAN)"
+	python scripts/graph_benchmarks.py "test_msmarco1m_or_search_warmed[what is the purpose of]" "$(CLEAN)"
+	python scripts/graph_benchmarks.py 'test_msmarco1m_phrase[what is the purpose of]' "$(CLEAN)"
+	python scripts/graph_benchmarks.py 'test_msmarco10k_indexing' "$(CLEAN)"
 
 
 profile: extensions
