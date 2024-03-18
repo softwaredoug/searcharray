@@ -7,6 +7,7 @@ from searcharray.phrase.middle_out import MAX_POSN, PosnBitArrayFromFlatBuilder,
 from searcharray.term_dict import TermDict
 from searcharray.utils.mat_set import SparseMatSetBuilder
 from searcharray.utils.row_viewable_matrix import RowViewableMatrix
+from searcharray.roaringish.roaringish_ops import invert_tokens
 
 import logging
 logger = logging.getLogger(__name__)
@@ -86,8 +87,10 @@ def _invert_docs_terms(terms_w_posns):
     # An in place sort could be faster if we could figure this out,
     # an np.sort(arr) is about 1/3 the time of np.argsort(arr)
     # possibly more with just arr.sort()
-    lexsort = _lex_sort(terms_w_posns)
-    return terms_w_posns[:, lexsort]
+    invert_tokens(terms_w_posns)
+    # import pdb; pdb.set_trace()
+    # assert np.all(orig == terms_w_posns)
+    return terms_w_posns
 
 
 def _tokenize_batch(array, tokenizer, term_dict, term_doc, batch_size, batch_beg, truncate=False):

@@ -102,3 +102,45 @@ def as_dense(indices, values, size):
     if len(indices) != len(values):
         raise ValueError("indices and values must have the same length")
     return np.array(_as_dense_array(indices_view, values_view, size))
+
+
+cdef void insertion_sort(long[:] term_ids, long[:] doc_ids, long[:] positions):
+    cdef long i, j, key_term, key_doc, key_pos, n = term_ids.size
+    cdef bint swap = False
+    
+    # Iterate through each element in the array
+    for i in range(1, n):
+        # Store the current values to be inserted
+        key_term = term_ids[i]
+        key_doc = doc_ids[i]
+        key_pos = positions[i]
+        
+        # Move elements of term_ids[0..i-1], that are greater than key_term,
+        # to one position ahead of their current position
+        j = i - 1
+        # Check first term ids, if same check doc ids, if same check posns
+        while j >= 0 and term_ids[j] > key_term:
+            term_ids[j + 1] = term_ids[j]
+            doc_ids[j + 1] = doc_ids[j]
+            positions[j + 1] = positions[j]
+            j -= 1
+        term_ids[j + 1] = key_term
+        doc_ids[j + 1] = key_doc
+        positions[j + 1] = key_pos
+
+
+cdef _invert_tokens(long[:, :] tokens):
+    # tokens is a 3xN array, where N is the total term positions in the corpus
+    # tokens[0] is the term IDs
+    # tokens[1] is the document IDs
+    # tokens[2] is the position of the term in the document
+    # Let's stable sort these 3 parallel arrays on the term IDs
+    cdef long[:] term_ids = tokens[0]
+    cdef long[:] doc_ids = tokens[1]
+    cdef long[:] positions = tokens[2]
+    insertion_sort(term_ids, doc_ids, positions)
+
+
+def invert_tokens(tokens):
+    cdef long[:, :] tokens_view = tokens
+    _invert_tokens(tokens_view)
