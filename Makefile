@@ -78,6 +78,9 @@ benchmark: deps extensions
 benchmark_graph: deps
 	python scripts/graph_benchmarks.py "$(TEST)"
 
+benchmark_graph_all: deps
+	python scripts/graph_benchmarks.py "$(TEST)" scour
+
 
 benchmark_graph_clean: deps
 	python scripts/graph_benchmarks.py "$(TEST)" clean

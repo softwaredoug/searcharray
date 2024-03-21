@@ -12,6 +12,7 @@ __pycache__/
 # Benchmarks
 .benchmarks
 .benchmarks*
+shas.txt
 
 # Distribution / packaging
 .Python
