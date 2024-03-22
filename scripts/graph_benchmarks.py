@@ -94,6 +94,18 @@ def show_plot(name, commits, times, std_devs):
     plt.show()
 
 
+def is_buggy_sha(sha):
+    """Benchmarks ran but with big bugs and should be ignored.
+
+    Some of these are weird runs with a buggy tag, or from a debugging session.
+    """
+    banned_shas = [
+        '330ba9a9',
+        '0b6d94c3',
+    ]
+    return sha[:8] in banned_shas
+
+
 def graph_benchmark(benchmark_name,
                     only_clean=False,
                     directories='.benchmarks/Darwin-CPython-3.11-64bit/'):
@@ -105,6 +117,8 @@ def graph_benchmark(benchmark_name,
     # Data structure to hold the extracted data
     benchmarks = {}
 
+    legit_shas = git_shas()
+
     # Extract data
     for file in files:
         with open(file, 'r') as f:
@@ -112,10 +126,11 @@ def graph_benchmark(benchmark_name,
             for bench in data['benchmarks']:
                 benchmark = json_to_benchmark(bench, file, data)
 
-                if benchmark.name not in benchmarks:
-                    benchmarks[benchmark.name] = []
-                if not only_clean or (only_clean and not benchmark.dirty):
-                    benchmarks[benchmark.name].append(benchmark)
+                if benchmark.commit_sha in legit_shas and not is_buggy_sha(benchmark.commit_sha):
+                    if benchmark.name not in benchmarks:
+                        benchmarks[benchmark.name] = []
+                    if not only_clean or (only_clean and not benchmark.dirty):
+                        benchmarks[benchmark.name].append(benchmark)
 
     benchmarks[benchmark_name].sort(key=lambda x: (x.commit_time, x.commit_sha))
     show_plot(benchmark_name,
@@ -131,7 +146,7 @@ if __name__ == '__main__':
         if sys.argv[2] == 'clean':
             graph_benchmark(sys.argv[1], True)
         elif sys.argv[2] == 'scour':
-            graph_benchmark(sys.argv[1], only_clean=True,
+            graph_benchmark(sys.argv[1], only_clean=False,
                             directories=all_benchmark_dirs())
     else:
         print('Usage: python graph_benchmarks.py benchmark_name [benchmark_dir]')
