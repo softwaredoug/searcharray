@@ -12,6 +12,7 @@ __pycache__/
 # Benchmarks
 .benchmarks
 .benchmarks*
+git_shas.txt
 shas.txt
 
 # Distribution / packaging
