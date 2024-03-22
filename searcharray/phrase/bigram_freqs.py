@@ -58,7 +58,7 @@ def _adj_to_phrase_freq(overlap: np.ndarray, adjacents: np.ndarray) -> np.ndarra
     # [foo foo] [foo foo] mal [foo foo] -> 4 adjs, phrase freqs = 3
     consecutive_ones = encoder.payload_lsb(overlap & (overlap << _1))
     consecutive_ones = popcount64(consecutive_ones)
-    adjacents -= -np.floor_divide(consecutive_ones, -2).astype(np.int64)
+    adjacents -= -np.floor_divide(consecutive_ones, -2, dtype=np.int64)
     return adjacents
 
 
@@ -80,7 +80,7 @@ def _inner_bigram_same_term(lhs_int: np.ndarray, rhs_int: np.ndarray,
     # Count these bits...
     overlap = lhs_int & rhs_shift
     adj_count = encoder.payload_lsb(overlap)
-    adjacents = popcount64(adj_count).astype(np.int64)
+    adjacents = popcount64(adj_count).view(np.int64)
 
     phrase_freqs[lhs_doc_ids] += _adj_to_phrase_freq(overlap, adjacents)
     # Continue with ?? ?? foo foo
