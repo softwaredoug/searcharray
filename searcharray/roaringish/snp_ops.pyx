@@ -13,7 +13,7 @@ from enum import Enum
 # cimport snp_ops
 # from snp_ops cimport _galloping_search, DTYPE_t, ALL_BITS
 cimport searcharray.roaringish.snp_ops
-from searcharray.roaringish.snp_ops cimport _galloping_search, DTYPE_t
+from searcharray.roaringish.snp_ops cimport _galloping_search, DTYPE_t, int64_t
 
 cdef DTYPE_t ALL_BITS = 0xFFFFFFFFFFFFFFFF
 
@@ -340,7 +340,7 @@ def adjacent(np.ndarray[DTYPE_t, ndim=1] lhs,
         mask = ALL_BITS
         delta = 1
     else:
-        delta = mask & -mask  # lest significant set bit on mask
+        delta = (mask & -mask)  # lest significant set bit on mask
 
     indices_lhs, indices_rhs, result_idx = _adjacent(lhs, rhs, mask, delta)
     return indices_lhs[:result_idx], indices_rhs[:result_idx]

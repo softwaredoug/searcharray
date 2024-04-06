@@ -24,7 +24,7 @@ def _self_adjs(prior_posns, next_posns):
 
 
 def scan_merge_ins(term_posns: List[List[np.ndarray]],
-                   phrase_freqs: np.ndarray, slop=1) -> np.ndarray:
+                   phrase_freqs: np.ndarray, slop=0) -> np.ndarray:
     """Merge bigram, by bigram, using np.searchsorted to find if insert posns match slop.
 
     Description:

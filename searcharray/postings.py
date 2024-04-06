@@ -570,7 +570,7 @@ class SearchArray(ExtensionArray):
     def doclengths(self) -> np.ndarray:
         return self.doc_lens
 
-    def match(self, token: Union[List[str], str], slop: int = 1) -> np.ndarray:
+    def match(self, token: Union[List[str], str], slop: int = 0) -> np.ndarray:
         """Return a boolean numpy array indicating which elements contain the given term."""
         token = self._check_token_arg(token)
         if isinstance(token, list):
@@ -633,10 +633,10 @@ class SearchArray(ExtensionArray):
         return mask
 
     def phrase_freq(self, tokens: List[str],
-                    slop=1,
+                    slop=0,
                     min_posn: Optional[int] = None,
                     max_posn: Optional[int] = None) -> np.ndarray:
-        if slop == 1:
+        if slop == 0:
             phrase_freqs = np.zeros(len(self))
             try:
                 doc_ids = self.term_mat.rows
@@ -650,7 +650,7 @@ class SearchArray(ExtensionArray):
         else:
             return self.phrase_freq_every_diff(tokens, slop=slop)
 
-    def phrase_freq_scan(self, tokens: List[str], mask=None, slop=1) -> np.ndarray:
+    def phrase_freq_scan(self, tokens: List[str], mask=None, slop=0) -> np.ndarray:
         if mask is None:
             mask = self.and_query(tokens)
 
@@ -661,10 +661,10 @@ class SearchArray(ExtensionArray):
         posns = [self.positions(token, mask) for token in tokens]
         phrase_freqs = np.zeros(len(self))
 
-        phrase_freqs[mask] = scan_merge_ins(posns, phrase_freqs[mask], slop=slop)
+        phrase_freqs[mask] = scan_merge_ins(posns, phrase_freqs[mask], slop=slop + 1)
         return phrase_freqs
 
-    def phrase_freq_every_diff(self, tokens: List[str], slop=1) -> np.ndarray:
+    def phrase_freq_every_diff(self, tokens: List[str], slop=0) -> np.ndarray:
         phrase_freqs = -np.ones(len(self))
 
         mask = self.and_query(tokens)
@@ -676,7 +676,7 @@ class SearchArray(ExtensionArray):
         for width in [10, 20, 30, 40]:
             phrase_freqs[mask] = compute_phrase_freqs(term_posns,
                                                       phrase_freqs[mask],
-                                                      slop=slop,
+                                                      slop=slop + 1,
                                                       width=width)
 
         remaining_mask = phrase_freqs == -1

@@ -7,6 +7,7 @@
 
 cdef extern from "stdint.h":
     ctypedef unsigned long long uint64_t
+    ctypedef long long int64_t
 
 
 ctypedef unsigned long long DTYPE_t
