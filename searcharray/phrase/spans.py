@@ -2,8 +2,8 @@
 import numpy as np
 from typing import List
 from searcharray.roaringish import intersect, adjacent
-from searcharary.roaringish import intersect_all
-from searcharary.roaringish.roaringish import RoaringishEncoder
+# from searcharary.roaringish import intersect_all
+from searcharray.roaringish.roaringish import RoaringishEncoder
 
 encoder = RoaringishEncoder()
 
@@ -14,6 +14,7 @@ _1 = np.uint64(1)
 _0 = np.uint64(0)
 _neg1 = np.int64(-1)
 _upper_bit = _1 << (encoder.payload_lsb_bits - _1)
+
 
 # ---
 # How to find max spans in roaringish
@@ -53,9 +54,9 @@ def _intersect_all(posns_encoded: List[np.ndarray]) -> np.ndarray:
 
     # Get active MSBs now
     # Intersect all the rest to grab them
+    return np.array([])
 
-
-    return np.merge([lhs_int, lhs_to_left, lhs_to_right])
+    # return np.merge([lhs_int, lhs_to_left, lhs_to_right])
 
 
 def inner_span_candidates(posns_encoded: List[np.ndarray], slop) -> np.ndarray:
@@ -68,3 +69,4 @@ def inner_span_candidates(posns_encoded: List[np.ndarray], slop) -> np.ndarray:
         orred |= intersected
 
     # Find gaps of 0s >= slop to split into candidate spans
+    return np.array([])
