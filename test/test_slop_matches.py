@@ -44,8 +44,9 @@ In the year 10,191, the world is at war for control of the desert planet Dune—
 @w_scenarios(scenarios)
 @pytest.mark.skip(reason="Not implemented")
 def test_phrase_slop(phrase, doc, slop):
-    sa = SearchArray.index([phrase])
-    for no_match_slop in range(0, slop):
-        assert not sa.match(doc, slop=no_match_slop)
+    sa = SearchArray.index([doc])
+    phrase_toks = sa.tokenizer(phrase)
     for match_slop in range(slop, max(slop, 10)):
-        assert sa.match(doc, slop=match_slop)
+        assert sa.match(phrase_toks, slop=match_slop)
+    for no_match_slop in range(0, slop):
+        assert not sa.match(phrase_toks, slop=no_match_slop)

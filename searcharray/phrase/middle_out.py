@@ -10,6 +10,7 @@ from copy import deepcopy
 from typing import List, Tuple, Dict, Union, cast, Optional
 from searcharray.roaringish import RoaringishEncoder, convert_keys, merge
 from searcharray.phrase.bigram_freqs import bigram_freqs, Continuation
+from searcharray.phrase.spans import span_search
 import numbers
 import logging
 from collections import defaultdict
@@ -337,6 +338,7 @@ class PosnBitArray:
 
     def phrase_freqs(self, term_ids: List[int], phrase_freqs: np.ndarray,
                      doc_ids: np.ndarray,
+                     slop: int = 0,
                      min_posn: Optional[int] = None,
                      max_posn: Optional[int] = None) -> np.ndarray:
         if len(term_ids) < 2:
@@ -352,7 +354,11 @@ class PosnBitArray:
                                             keys=keys,
                                             min_payload=min_posn,
                                             max_payload=max_posn) for term_id in term_ids]
-        return compute_phrase_freqs(enc_term_posns, phrase_freqs)
+
+        if slop == 0:
+            return compute_phrase_freqs(enc_term_posns, phrase_freqs)
+        else:
+            return span_search(enc_term_posns, phrase_freqs, slop)
 
     def positions(self, term_id: int, doc_ids) -> Union[List[np.ndarray], np.ndarray]:
         if isinstance(doc_ids, numbers.Number):
