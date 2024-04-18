@@ -2,6 +2,7 @@
 import numpy as np
 import pytest
 from searcharray.postings import SearchArray
+from searcharray.similarity import bm25_similarity
 from test_utils import w_scenarios
 
 
@@ -38,6 +39,22 @@ def test_doc_lengths(data):
     assert doc_lengths.shape == (100,)
     assert (doc_lengths == [4, 1, 2, 3] * 25).all()
     assert data.avg_doc_length == 2.5
+
+
+def test_sim_change_is_different(data):
+    bm25 = data.score("bar")
+    custom_bm25 = bm25_similarity(k1=10, b=0.01)
+    bm25_custom = data.score("bar", similarity=custom_bm25)
+    assert not np.isclose(bm25[bm25 > 0],
+                          bm25_custom[bm25_custom > 0]).any()
+
+
+def test_custom_sim_multiple_calls(data):
+    custom_bm25 = bm25_similarity(k1=10, b=0.01)
+    bm25_custom1 = data.score("bar", similarity=custom_bm25)
+    bm25_custom2 = data.score("bar", similarity=custom_bm25)
+    assert np.isclose(bm25_custom1,
+                      bm25_custom2).all()
 
 
 def test_default_score_matches_lucene(data):

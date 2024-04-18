@@ -5,7 +5,6 @@ from test_utils import w_scenarios
 import pandas as pd
 import numpy as np
 
-from searcharray.similarity import ScoringContext
 from searcharray.solr import parse_min_should_match, edismax
 from searcharray.postings import SearchArray
 
@@ -209,7 +208,8 @@ def test_edismax(frame, expected, params):
     assert np.allclose(scores, expected)
 
 
-def always_one_similarity(term_freqs: np.ndarray, doc_freqs: np.ndarray, context: ScoringContext) -> np.ndarray:
+def always_one_similarity(term_freqs: np.ndarray, doc_freqs: np.ndarray,
+                          doc_lens: np.ndarray, avg_doc_lens: int, num_docs: int) -> np.ndarray:
     term_freqs = term_freqs
     return term_freqs > 0
 

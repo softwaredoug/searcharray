@@ -15,7 +15,7 @@ import numpy as np
 from searcharray.phrase.scan_merge import scan_merge_ins
 from searcharray.phrase.posn_diffs import compute_phrase_freqs
 from searcharray.phrase.middle_out import PosnBitArray
-from searcharray.similarity import Similarity, default_bm25, ScoringContext
+from searcharray.similarity import Similarity, default_bm25
 from searcharray.indexing import build_index_from_tokenizer, build_index_from_terms_list
 from searcharray.term_dict import TermMissingError
 from searcharray.roaringish.roaringish_ops import as_dense
@@ -217,7 +217,6 @@ class SearchArray(ExtensionArray):
         if not is_list_like(postings):
             raise TypeError("Expected list-like object, got {}".format(type(postings)))
 
-        self.scoring_context = None
         self.avoid_copies = avoid_copies
         self.tokenizer = tokenizer
         self.term_mat, self.posns, \
@@ -495,11 +494,9 @@ class SearchArray(ExtensionArray):
         postings_arr.posns = self.posns
         postings_arr.term_dict = self.term_dict
         postings_arr.avg_doc_length = self.avg_doc_length
-        postings_arr.scoring_context = self.scoring_context
         postings_arr.corpus_size = self.corpus_size
 
         if not self.avoid_copies:
-            postings_arr.scoring_context = None
             postings_arr.posns = self.posns.copy()
             postings_arr.term_dict = self.term_dict.copy()
         return postings_arr
@@ -601,14 +598,7 @@ class SearchArray(ExtensionArray):
         token = self._check_token_arg(token)
         doc_lens = self.doclengths()
 
-        context = ScoringContext(doc_lens=doc_lens,
-                                 avg_doc_lens=self.avg_doc_length,
-                                 num_docs=self.corpus_size)
-
-        if not context.same_as(self.scoring_context):
-            self.scoring_context = context
-
-        scores = similarity(tfs, all_dfs, self.scoring_context)
+        scores = similarity(tfs, all_dfs, doc_lens, self.avg_doc_length, self.corpus_size)
         return scores
 
     def positions(self, token: str, key=None) -> List[np.ndarray]:

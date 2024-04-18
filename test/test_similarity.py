@@ -1,6 +1,6 @@
 import numpy as np
 
-from searcharray.similarity import bm25_similarity, ScoringContext
+from searcharray.similarity import bm25_similarity
 from test_utils import w_scenarios
 
 
@@ -36,10 +36,9 @@ lucene_bm25_scenarios = {
 @w_scenarios(lucene_bm25_scenarios)
 def test_bm25_similarity_matches_lucene(term_freqs, doc_freqs, doc_lens, avg_doc_len, num_docs, expected):
     default_bm25 = bm25_similarity(k1=1.2, b=0.75)
-    context = ScoringContext(num_docs=num_docs,
-                             doc_lens=arr(doc_lens),
-                             avg_doc_lens=avg_doc_len)
     bm25 = default_bm25(arr(term_freqs),
                         arr(doc_freqs),
-                        context)
+                        arr(doc_lens),
+                        avg_doc_len,
+                        num_docs)
     assert np.isclose(bm25, expected).all()
