@@ -1,12 +1,12 @@
 
 venv:
 	@echo "Checking virtualenv..."
-	@if [ ! -d "venv" ]; then \
+	if [ ! -d "venv" ]; then \
 		echo "Creating virtualenv..."; \
 		python3 -m venv venv; \
 		. venv/bin/activate; \
 		pip install --upgrade pip; \
-		pip install -r requirements.txt
+		pip install -r requirements.txt; \
 	fi
 
 
