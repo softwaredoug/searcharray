@@ -2,7 +2,7 @@
 import re
 import pandas as pd
 import numpy as np
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict, Tuple, Union
 from searcharray.postings import SearchArray
 from searcharray.similarity import Similarity, default_bm25
 
@@ -113,7 +113,7 @@ def _edismax_term_centric(frame: pd.DataFrame,
                           num_search_terms: int,
                           search_terms: Dict[str, List[str]],
                           mm: str,
-                          similarity: Similarity) -> Tuple[np.ndarray, str]:
+                          similarity: Dict[str, Similarity]) -> Tuple[np.ndarray, str]:
     explain = []
     term_scores = []
     for term_posn in range(num_search_terms):
@@ -122,7 +122,7 @@ def _edismax_term_centric(frame: pd.DataFrame,
         for field, boost in query_fields.items():
             term = search_terms[field][term_posn]
             post_arr = get_field(frame, field)
-            field_term_score = post_arr.score(term, similarity=similarity) * (1 if boost is None else boost)
+            field_term_score = post_arr.score(term, similarity=similarity[field]) * (1 if boost is None else boost)
             boost_exp = f"{boost}" if boost is not None else "1"
             term_explain.append(f"{field}:{term}^{boost_exp}")
             max_scores = np.maximum(max_scores, field_term_score)
@@ -142,12 +142,12 @@ def _edismax_field_centric(frame: pd.DataFrame,
                            num_search_terms: int,
                            search_terms: Dict[str, List[str]],
                            mm: str,
-                           similarity: Similarity = default_bm25) -> Tuple[np.ndarray, str]:
+                           similarity: Dict[str, Similarity]) -> Tuple[np.ndarray, str]:
     field_scores = []
     explain = []
     for field, boost in query_fields.items():
         post_arr = get_field(frame, field)
-        term_scores = np.array([post_arr.score(term, similarity=similarity)
+        term_scores = np.array([post_arr.score(term, similarity=similarity[field])
                                 for term in search_terms[field]])
         min_should_match = parse_min_should_match(len(search_terms[field]), spec=mm)
         exp = " ".join([f"{field}:{term}" for term in search_terms[field]])
@@ -169,12 +169,12 @@ def _edismax_field_centric(frame: pd.DataFrame,
 def edismax(frame: pd.DataFrame,
             q: str,
             qf: List[str],
-            mm: Optional[str] = None,
+            mm: Optional[Union[str, int]] = None,
             pf: Optional[List[str]] = None,
             pf2: Optional[List[str]] = None,
             pf3: Optional[List[str]] = None,
             q_op: str = "OR",
-            similarity: Similarity = default_bm25) -> Tuple[np.ndarray, str]:
+            similarity: Union[Similarity, Dict[str, Similarity]] = default_bm25) -> Tuple[np.ndarray, str]:
     """Run edismax search over dataframe with searcharray fields.
 
     Parameters
@@ -193,6 +193,8 @@ def edismax(frame: pd.DataFrame,
         The fields to search for trigram matches
     q_op : str, optional
         The default operator, by default "OR"
+    similarity : Union[Similarity, Dict[str, Similarity]], optional
+        The similarity to use per field, by default default_bm25
 
     Returns
     -------
@@ -206,8 +208,17 @@ def edismax(frame: pd.DataFrame,
     phrase_fields = parse_field_boosts(listify(pf)) if pf else {}
     if mm is None:
         mm = "1"
+    if isinstance(mm, int):
+        mm = f"{mm}"
     if q_op == "AND":
         mm = "100%"
+
+    if not isinstance(similarity, dict):
+        similarity = {field: similarity for field in query_fields}
+
+    for field in query_fields:
+        if field not in similarity:
+            similarity[field] = default_bm25
 
     # bigram_fields = parse_field_boosts(pf2) if pf2 else {}
     # trigram_fields = parse_field_boosts(pf3) if pf3 else {}
@@ -226,7 +237,7 @@ def edismax(frame: pd.DataFrame,
     for field, boost in phrase_fields.items():
         arr = get_field(frame, field)
         terms = search_terms[field]
-        field_phrase_score = arr.score(terms, similarity=similarity) * (1 if boost is None else boost)
+        field_phrase_score = arr.score(terms, similarity=similarity[field]) * (1 if boost is None else boost)
         boost_exp = f"{boost}" if boost is not None else "1"
         explain += f" ({field}:\"{' '.join(terms)}\")^{boost_exp}"
         phrase_scores.append(field_phrase_score)

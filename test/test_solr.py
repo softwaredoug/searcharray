@@ -214,6 +214,15 @@ def always_one_similarity(term_freqs: np.ndarray, doc_freqs: np.ndarray,
     return term_freqs > 0
 
 
+def always_tiny_similarity(term_freqs: np.ndarray, doc_freqs: np.ndarray,
+                           doc_lens: np.ndarray, avg_doc_lens: int, num_docs: int) -> np.ndarray:
+    term_freqs = term_freqs
+    r_val = term_freqs > 0
+    r_val = r_val.astype(np.float32)
+    r_val *= 0.0001  # type: ignore
+    return r_val
+
+
 @w_scenarios(edismax_scenarios)
 def test_edismax_custom_similarity(frame, expected, params):
     frame = build_df(frame)
@@ -221,3 +230,14 @@ def test_edismax_custom_similarity(frame, expected, params):
     params['similarity'] = always_one_similarity
     scores, explain = edismax(frame, **params)
     assert np.all(scores.astype(np.int64) == scores)
+
+
+@w_scenarios(edismax_scenarios)
+def test_edismax_custom_similarity_per_field(frame, expected, params):
+    frame = build_df(frame)
+    expected = list(compute_expected(expected, frame))
+    params['similarity'] = {"title": always_one_similarity,
+                            "body": always_tiny_similarity}
+    scores, explain = edismax(frame, **params)
+    assert np.allclose(scores.astype(np.int64).astype(np.float32),
+                       scores, atol=0.001)
