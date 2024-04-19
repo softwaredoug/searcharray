@@ -59,7 +59,7 @@ def _gather_tokens(array, tokenizer, term_dict, term_doc, start_doc_id=0, trunc_
         term_doc.append(np.unique(terms))
 
         if idx % 10000 == 0 and idx > 0:
-            logger.info(f"Tokenized {doc_id} ({100.0 * (idx/len(array))}%)")
+            logger.info(f"Tokenized {doc_id} ({100.0 * (idx / len(array))}%)")
 
     # Flatten each
     all_terms = np.concatenate(all_terms)
