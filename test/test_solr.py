@@ -107,6 +107,20 @@ edismax_scenarios = {
                      0],
         "params": {'q': "foo bar", 'qf': ["title", "body"]},
     },
+    "field_centric_tie": {
+        "frame": {
+            'title': lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
+            'body': lambda: SearchArray.index(["foo bar", "data2", "data3 bar", "bunny funny wunny"],
+                                              tokenizer=just_lowercasing_tokenizer)
+        },
+        "expected": [lambda frame: sum([sum([frame['title'].array.score("foo")[0],
+                                            frame['title'].array.score("bar")[0]]),
+                                        0.1 * frame['body'].array.score("foo bar")[0]]),
+                     0,
+                     lambda frame: frame['title'].array.score("bar")[2],
+                     0],
+        "params": {'q': "foo bar", 'qf': ["title", "body"], 'tie': 0.1},
+    },
     "field_centric_mm": {
         "frame": {
             'title': lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"]),
@@ -162,6 +176,17 @@ edismax_scenarios = {
                      0],
         "params": {'q': "foo bar", 'qf': ["title", "body"],
                    'pf': ["title"]}
+    },
+    "with_tie": {
+        "frame": {
+            'title': lambda: SearchArray.index(["foo bar bar baz"]),
+            'body': lambda: SearchArray.index(["foo"])
+        },
+        "expected": [lambda frame: sum([0.1 * frame['title'].array.score("foo")[0],
+                                        frame['body'].array.score("foo")[0]])],
+        "params": {'q': "foo",
+                   'qf': ["title", "body"],
+                   'tie': 0.1}
     },
     "different_analyzers": {
         "frame": {
@@ -225,6 +250,9 @@ def always_tiny_similarity(term_freqs: np.ndarray, doc_freqs: np.ndarray,
 
 @w_scenarios(edismax_scenarios)
 def test_edismax_custom_similarity(frame, expected, params):
+    if 'tie' in params:
+        return
+
     frame = build_df(frame)
     expected = list(compute_expected(expected, frame))
     params['similarity'] = always_one_similarity
@@ -234,6 +262,9 @@ def test_edismax_custom_similarity(frame, expected, params):
 
 @w_scenarios(edismax_scenarios)
 def test_edismax_custom_similarity_per_field(frame, expected, params):
+    if 'tie' in params:
+        return
+
     frame = build_df(frame)
     expected = list(compute_expected(expected, frame))
     params['similarity'] = {"title": always_one_similarity,

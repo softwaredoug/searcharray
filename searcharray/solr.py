@@ -113,11 +113,13 @@ def _edismax_term_centric(frame: pd.DataFrame,
                           num_search_terms: int,
                           search_terms: Dict[str, List[str]],
                           mm: str,
+                          tie: float,
                           similarity: Dict[str, Similarity]) -> Tuple[np.ndarray, str]:
     explain = []
     term_scores = []
     for term_posn in range(num_search_terms):
         max_scores = np.zeros(len(frame))
+        sum_scores = np.zeros(len(frame))
         term_explain = []
         for field, boost in query_fields.items():
             term = search_terms[field][term_posn]
@@ -125,8 +127,11 @@ def _edismax_term_centric(frame: pd.DataFrame,
             field_term_score = post_arr.score(term, similarity=similarity[field]) * (1 if boost is None else boost)
             boost_exp = f"{boost}" if boost is not None else "1"
             term_explain.append(f"{field}:{term}^{boost_exp}")
+            sum_scores += field_term_score
             max_scores = np.maximum(max_scores, field_term_score)
-        term_scores.append(max_scores)
+
+        remainder_scores = sum_scores - max_scores
+        term_scores.append(max_scores + remainder_scores * tie)
         explain.append("(" + " | ".join(term_explain) + ")")
 
     min_should_match = parse_min_should_match(num_search_terms, spec=mm)
@@ -142,6 +147,7 @@ def _edismax_field_centric(frame: pd.DataFrame,
                            num_search_terms: int,
                            search_terms: Dict[str, List[str]],
                            mm: str,
+                           tie: float,
                            similarity: Dict[str, Similarity]) -> Tuple[np.ndarray, str]:
     field_scores = []
     explain = []
@@ -162,8 +168,10 @@ def _edismax_field_centric(frame: pd.DataFrame,
         explain.append(exp)
     # Take maximum field scores as qf
     qf_scores = np.asarray(field_scores)
+    summed_scores = np.sum(qf_scores, axis=0)
     qf_scores = np.max(qf_scores, axis=0)
-    return qf_scores, " | ".join(explain)
+    qf_with_tie_scores = qf_scores + (summed_scores - qf_scores) * tie
+    return qf_with_tie_scores, " | ".join(explain)
 
 
 def edismax(frame: pd.DataFrame,
@@ -173,6 +181,7 @@ def edismax(frame: pd.DataFrame,
             pf: Optional[List[str]] = None,
             pf2: Optional[List[str]] = None,
             pf3: Optional[List[str]] = None,
+            tie: float = 0.0,
             q_op: str = "OR",
             similarity: Union[Similarity, Dict[str, Similarity]] = default_bm25) -> Tuple[np.ndarray, str]:
     """Run edismax search over dataframe with searcharray fields.
@@ -193,6 +202,8 @@ def edismax(frame: pd.DataFrame,
         The fields to search for trigram matches
     q_op : str, optional
         The default operator, by default "OR"
+    tie : float, optional
+        The tie breaker, by default 0.0
     similarity : Union[Similarity, Dict[str, Similarity]], optional
         The similarity to use per field, by default default_bm25
 
@@ -227,10 +238,12 @@ def edismax(frame: pd.DataFrame,
     if term_centric:
         qf_scores, explain = _edismax_term_centric(frame, query_fields,
                                                    num_search_terms, search_terms, mm,
+                                                   tie=tie,
                                                    similarity=similarity)
     else:
         qf_scores, explain = _edismax_field_centric(frame, query_fields,
                                                     num_search_terms, search_terms, mm,
+                                                    tie=tie,
                                                     similarity=similarity)
 
     phrase_scores = []
