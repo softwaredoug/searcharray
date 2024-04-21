@@ -250,6 +250,8 @@ def edismax(frame: pd.DataFrame,
     for field, boost in phrase_fields.items():
         arr = get_field(frame, field)
         terms = search_terms[field]
+        if len(terms) < 2:
+            continue
         field_phrase_score = arr.score(terms, similarity=similarity[field]) * (1 if boost is None else boost)
         boost_exp = f"{boost}" if boost is not None else "1"
         explain += f" ({field}:\"{' '.join(terms)}\")^{boost_exp}"
