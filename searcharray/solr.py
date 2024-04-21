@@ -231,8 +231,8 @@ def edismax(frame: pd.DataFrame,
         if field not in similarity:
             similarity[field] = default_bm25
 
-    # bigram_fields = parse_field_boosts(pf2) if pf2 else {}
-    # trigram_fields = parse_field_boosts(pf3) if pf3 else {}
+    bigram_fields = parse_field_boosts(pf2) if pf2 else {}
+    trigram_fields = parse_field_boosts(pf3) if pf3 else {}
 
     num_search_terms, search_terms, term_centric = parse_query_terms(frame, q, list(query_fields.keys()))
     if term_centric:
@@ -257,10 +257,49 @@ def edismax(frame: pd.DataFrame,
         explain += f" ({field}:\"{' '.join(terms)}\")^{boost_exp}"
         phrase_scores.append(field_phrase_score)
 
+    bigram_scores = []
+    for field, boost in bigram_fields.items():
+        arr = get_field(frame, field)
+        terms = search_terms[field]
+        if len(terms) < 2:
+            continue
+        # For each bigram
+        for term, next_term in zip(terms, terms[1:]):
+            field_bigram_score = arr.score([term, next_term], similarity=similarity[field]) * (1 if boost is None else boost)
+            boost_exp = f"{boost}" if boost is not None else "1"
+            explain += f" ({field}:\"{term} {next_term}\")^{boost_exp}"
+            bigram_scores.append(field_bigram_score)
+        bigram_scores.append(field_bigram_score)
+
+    trigram_scores = []
+    for field, boost in trigram_fields.items():
+        arr = get_field(frame, field)
+        terms = search_terms[field]
+        if len(terms) < 3:
+            continue
+        # For each trigram
+        for term, next_term, next_next_term in zip(terms, terms[1:], terms[2:]):
+            field_trigram_score = arr.score([term, next_term, next_next_term], similarity=similarity[field]) * (1 if boost is None else boost)
+            boost_exp = f"{boost}" if boost is not None else "1"
+            explain += f" ({field}:\"{term} {next_term} {next_next_term}\")^{boost_exp}"
+            trigram_scores.append(field_trigram_score)
+
     if len(phrase_scores) > 0:
         phrase_scores = np.sum(phrase_scores, axis=0)
         # Add where term_scores > 0
         term_match_idx = np.where(qf_scores)[0]
-
         qf_scores[term_match_idx] += phrase_scores[term_match_idx]
+
+    if len(bigram_scores) > 0:
+        bigram_scores = np.sum(bigram_scores, axis=0)
+        # Add where term_scores > 0
+        term_match_idx = np.where(qf_scores)[0]
+        qf_scores[term_match_idx] += bigram_scores[term_match_idx]
+
+    if len(trigram_scores) > 0:
+        trigram_scores = np.sum(trigram_scores, axis=0)
+        # Add where term_scores > 0
+        term_match_idx = np.where(qf_scores)[0]
+        qf_scores[term_match_idx] += trigram_scores[term_match_idx]
+
     return qf_scores, explain

@@ -272,3 +272,43 @@ def test_edismax_custom_similarity_per_field(frame, expected, params):
     scores, explain = edismax(frame, **params)
     assert np.allclose(scores.astype(np.int64).astype(np.float32),
                        scores, atol=0.001)
+
+
+def test_edismax_with_single_term_no_pf():
+    data = SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"])
+    score_direct = data.score("foo")
+    scores, explain = edismax(pd.DataFrame({'title': data}), q="foo",
+                              qf=["title"], pf=["title"])
+    assert np.allclose(scores, score_direct)
+    scores_two_term, explain = edismax(pd.DataFrame({'title': data}),
+                                       q="foo bar", qf=["title"],
+                                       pf=["title"])
+    assert not np.allclose(scores_two_term, score_direct)
+
+
+def test_edismax_with_pf2():
+    data = SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"])
+    score_direct = data.score("foo")
+    scores, explain = edismax(pd.DataFrame({'title': data}), q="foo", qf=["title"], pf2=["title"])
+    assert np.allclose(scores, score_direct)
+    scores_two_term, explain = edismax(pd.DataFrame({'title': data}),
+                                       q="foo bar", qf=["title"],
+                                       pf2=["title"])
+    assert not np.allclose(scores_two_term, score_direct)
+
+
+def test_edismax_with_pf3():
+    data = SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"])
+    score_direct = data.score("foo")
+    score_direct_two_terms = data.score("foo") + data.score("bar")
+    scores, explain = edismax(pd.DataFrame({'title': data}), q="foo", qf=["title"], pf3=["title"])
+    assert np.allclose(scores, score_direct)
+    scores_two_term, explain = edismax(pd.DataFrame({'title': data}),
+                                       q="foo bar",
+                                       qf=["title"],
+                                       pf3=["title"])
+    assert np.allclose(scores_two_term, score_direct_two_terms)
+    scores_three_term, explain = edismax(pd.DataFrame({'title': data}),
+                                         q="foo bar bar", qf=["title"],
+                                         pf3=["title"])
+    assert not np.allclose(scores_two_term, score_direct)
