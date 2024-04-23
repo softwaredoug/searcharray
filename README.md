@@ -1,6 +1,6 @@
 # SearchArray 
 
-[![Python package](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml/badge.svg)](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml)
+[![Python package](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml/badge.svg)](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml) | Find help on [Relevance Slack](https://join.slack.com/t/relevancy/shared_invite/zt-2ccxvzn1w-2_50zf9xBOSv3n06Cu15jg)
 
 SearchArray turns Pandas string columns into a term index. It alows efficient BM25 / TFIDF scoring of phrases and individual tokens.
 
