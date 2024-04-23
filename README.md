@@ -1,6 +1,6 @@
 # SearchArray 
 
-[![Python package](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml/badge.svg)](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml) | Find help on [Relevance Slack](https://join.slack.com/t/relevancy/shared_invite/zt-2ccxvzn1w-2_50zf9xBOSv3n06Cu15jg)
+[![Python package](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml/badge.svg)](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml) | Discuss at [Relevance Slack](https://join.slack.com/t/relevancy/shared_invite/zt-2ccxvzn1w-2_50zf9xBOSv3n06Cu15jg)
 
 SearchArray turns Pandas string columns into a term index. It alows efficient BM25 / TFIDF scoring of phrases and individual tokens.
 
@@ -176,6 +176,10 @@ df['score'] = df['title_indexed'].score('Cat') * df['hrs_into_past']
 ### Vector search
 
 We focus on the lexical, ie "BM25-ish" and adjacent problems. There are other great tools for vector search out there.
+
+## Need help?
+
+Visit the [#searcharray channel on Relevance Slack](https://join.slack.com/t/relevancy/shared_invite/zt-2ccxvzn1w-2_50zf9xBOSv3n06Cu15jg)
 
 ## TODOs / Future Work / Known issues
 
