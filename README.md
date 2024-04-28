@@ -124,13 +124,13 @@ We want you to be able to work with a reasonable dataset (100X-1M docs) relative
 
 ### Experimentation, reranking, functionality over scalability
 
-Instead of building for 'big data' our goal is to build for for *small-data*. That is, focus on capabilities and expressiveness of Pandas, over limiting functionality in favor of scalability.
+Instead of building for 'big data' our goal is to build for *small-data*. That is, focus on capabilities and expressiveness of Pandas, over limiting functionality in favor of scalability.
 
 To this end, the applications of searcharray will tend to be focused on experimentation and top N candidate reranking. For experimentation, we want any ideas expressed in Pandas to have a somewhat clear path / "contract" in how they'd be implemented in a classical lexical search engine. For reranking, we want to load some top N results from a base system and be able to modify them.
 
 ### Make lexical search compatible with the data stack
 
-We know in search, RAG, and other retrieval problems,s [hybrid search](https://www.pinecone.io/learn/hybrid-search-intro/) techniques dominate. Yet often its cast in terms of a giant, weird, big data lexical search engine that looks odd to most data scientists being joined with a vector database. We want lexical search to be more approachable to data scientists and ML engineers building these systems.
+We know in search, RAG, and other retrieval problems [hybrid search](https://www.pinecone.io/learn/hybrid-search-intro/) techniques dominate. Yet often its cast in terms of a giant, weird, big data lexical search engine that looks odd to most data scientists being joined with a vector database. We want lexical search to be more approachable to data scientists and ML engineers building these systems.
 
 ## Non-goals
 
