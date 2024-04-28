@@ -8,7 +8,9 @@ import requests
 import string
 import logging
 import sys
+from typing import Dict, List, Any, Optional
 from searcharray import SearchArray
+from searcharray.utils.sort import SetOfResults
 from test_utils import Profiler, profile_enabled
 
 
@@ -457,6 +459,75 @@ def test_msmarco100k_or_search_warmed(query, msmarco100k, benchmark, caplog):
     assert len(scores) == len(msmarco100k['body_ws'].array)
     assert np.all(score_first == scores)
     assert np.any(scores > 0)
+
+
+class SetOfResultsNaive:
+    """Gather multiple sets of search results, ie for testing."""
+
+    def __init__(self, df: pd.DataFrame):
+        self.all_results: List[pd.DataFrame] = []
+        self.df = df
+
+    def ins_top_n(self, scores, N=10,
+                  query: str = '', metadata: Optional[Dict[str, List[Any]]] = None):
+        """Sort a dataframe by a score column.
+
+        Args:
+            df (pd.DataFrame): The dataframe to sort.
+            score_col (str): The column to sort by.
+            N (int): The number of rows to return.
+
+        Returns:
+            pd.DataFrame: The sorted dataframe.
+        """
+        top_n = np.argpartition(scores, -N)[-N:]
+        results = self.df.iloc[top_n, :]
+        results['score'] = scores[top_n]
+        results['query'] = query
+        results_sorted = results.sort_values('score', ascending=False)
+        results_sorted['rank'] = np.arange(N) + 1
+        self.all_results.append(results_sorted)
+
+    def get_all(self) -> pd.DataFrame:
+        return pd.concat(self.all_results).sort_values(['query', 'rank']).reset_index(drop=True)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_msmarco100k_gather(msmarco100k, benchmark, caplog):
+    """Run a query for a set of queries and compile a DF of results."""
+    profiler = Profiler(benchmark)
+
+    caplog.set_level(logging.DEBUG)
+
+    queries = ['star trek',
+               'star trek the next generation',
+               'what is the purpose of cats',
+               'what is the purpose of',
+               'what is the purpose',
+               'what is the',
+               'what is',
+               'what what what',
+               'best buy',
+               'beauty and the beast',
+               'beauty and the beast the musical',
+               'bears',
+               'hat',
+               'what is a hat',
+               'what is a hat made of',
+               'who are the beatles']
+
+    def search_many(df, queries):
+        results = SetOfResults(df)
+        for query in queries:
+            query_tokenized = msmarco100k['body_ws'].array.tokenizer(query)
+            scores = np.sum([msmarco100k['body_ws'].array.score(query_term)
+                             for query_term in query_tokenized], axis=0)
+            results.ins_top_n(scores, query=query)
+
+        return results.get_all()
+
+    df = profiler.run(search_many, msmarco100k, queries)
+    assert len(df) == len(queries) * 10
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")

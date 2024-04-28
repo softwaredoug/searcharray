@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from dataclasses import dataclass
 
 
-def all_benchmark_dirs(subdir='Darwin-CPython-3.11-64bit/'):
+def all_benchmark_dirs(subdir='Darwin-CPython-3.12-64bit/'):
     return [os.path.join(f, subdir)
             for f in os.listdir('.') if f.startswith('.benchmarks')]
 
@@ -108,7 +108,7 @@ def is_buggy_sha(sha):
 
 def graph_benchmark(benchmark_name,
                     only_clean=False,
-                    directories='.benchmarks/Darwin-CPython-3.11-64bit/'):
+                    directories='.benchmarks/Darwin-CPython-3.12-64bit/'):
 
     if isinstance(directories, str):
         directories = [directories]
