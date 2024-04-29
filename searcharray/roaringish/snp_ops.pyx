@@ -156,62 +156,55 @@ def galloping_search(np.ndarray[DTYPE_t, ndim=1] array,
 cdef _intersect_keep(DTYPE_t[:] lhs,
                      DTYPE_t[:] rhs,
                      DTYPE_t mask=ALL_BITS):
-    cdef np.intp_t len_lhs = lhs.shape[0]
-    cdef np.intp_t len_rhs = rhs.shape[0]
+    cdef np.intp_t end_lhs = lhs.shape[0] - 1
+    cdef np.intp_t end_rhs = rhs.shape[0] - 1
     cdef np.intp_t i_lhs = 0
     cdef np.intp_t i_rhs = 0
     cdef np.intp_t i_result = 0
-    cdef DTYPE_t value_lhs = 0
-    cdef DTYPE_t value_rhs = 0
-    cdef DTYPE_t target = 0
-
+    cdef DTYPE_t value_prev = -1
+    cdef np.int64_t diff = 0
+    
     # Outputs as numpy arrays
-    cdef np.uint64_t[:] lhs_indices = np.empty(len_lhs, dtype=np.uint64)
-    cdef np.uint64_t lhs_indices_idx = 0
-    cdef np.uint64_t[:] rhs_indices = np.empty(len_rhs, dtype=np.uint64)
-    cdef np.uint64_t rhs_indices_idx = 0
+    cdef np.uint64_t[:] lhs_indices = np.empty(max(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef np.uint64_t[:] rhs_indices = np.empty(max(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
 
-
-    while i_lhs < len_lhs and i_rhs < len_rhs:
+    # Output locations as pointers
+    cdef np.uint64_t* lhs_result_ptr = &lhs_indices[0]
+    cdef np.uint64_t* rhs_result_ptr = &rhs_indices[0]
+    
+    while i_lhs < lhs.shape[0] and i_rhs < rhs.shape[0]:
         # Use gallping search to find the first element in the right array
-        value_lhs = lhs[i_lhs] & mask
-        value_rhs = rhs[i_rhs] & mask
+        diff = (lhs[i_lhs] & mask) - (rhs[i_rhs] & mask)
 
         # Advance LHS to RHS
-        if value_lhs < value_rhs:
-            if i_lhs >= len_lhs - 1:
+        if diff < 0:
+            if i_lhs >= end_lhs:
                 break
-            i_result = i_lhs
-            _galloping_search(lhs, value_rhs, mask, &i_result, len_lhs)
-            value_lhs = lhs[i_result] & mask
+            i_result = i_lhs   # Why is this faster than just passing &i_lhs?
+            _galloping_search(lhs, rhs[i_rhs], mask, &i_result, lhs.shape[0])
             i_lhs = i_result
         # Advance RHS to LHS
-        elif value_rhs < value_lhs:
-            if i_rhs >= len_rhs - 1:
+        elif diff > 0:
+            if i_rhs >= end_rhs:
                 break
             i_result = i_rhs
-            _galloping_search(rhs, value_lhs, mask, &i_result, len_rhs)
-            value_rhs = rhs[i_result] & mask
+            _galloping_search(rhs, lhs[i_lhs], mask, &i_result, rhs.shape[0])
             i_rhs = i_result
-
-        if value_rhs == value_lhs:
-            target = value_lhs & mask
+        else:
+            target = lhs[i_lhs] & mask
             # Store all LHS indices equal to RHS
-            while (lhs[i_lhs] & mask) == target and i_lhs < len_lhs:
-                lhs_indices[lhs_indices_idx] = i_lhs
-                lhs_indices_idx += 1
+            while (lhs[i_lhs] & mask) == target and i_lhs <  lhs.shape[0]:
+                lhs_result_ptr[0] = i_lhs; lhs_result_ptr += 1
                 i_lhs += 1
             # Store all RHS equal to LHS
-            while (rhs[i_rhs] & mask) == target and i_rhs < len_rhs:
-                rhs_indices[rhs_indices_idx] = i_rhs
-                rhs_indices_idx += 1
+            while (rhs[i_rhs] & mask) == target and i_rhs < rhs.shape[0]:
+                rhs_result_ptr[0] = i_rhs; rhs_result_ptr += 1
                 i_rhs += 1
 
     # Get view of each result and return
-    return np.asarray(lhs_indices), np.asarray(rhs_indices), lhs_indices_idx, rhs_indices_idx
+    return np.asarray(lhs_indices), np.asarray(rhs_indices), \
+            lhs_result_ptr - &lhs_indices[0], rhs_result_ptr - &rhs_indices[0]
 
-
-from time import perf_counter
 
 cdef _intersect_drop(DTYPE_t[:] lhs,
                      DTYPE_t[:] rhs,
