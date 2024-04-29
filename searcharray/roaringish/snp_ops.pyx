@@ -205,45 +205,52 @@ cdef _intersect_keep(DTYPE_t[:] lhs,
             lhs_result_ptr - &lhs_indices[0], rhs_result_ptr - &rhs_indices[0]
 
 
-cdef _intersect_drop(DTYPE_t[:] lhs,
-                     DTYPE_t[:] rhs,
-                     DTYPE_t mask=ALL_BITS):
-    cdef np.intp_t end_lhs = lhs.shape[0] - 1
-    cdef np.intp_t end_rhs = rhs.shape[0] - 1
+cdef _intersect_drop_old(DTYPE_t[:] lhs,
+                         DTYPE_t[:] rhs,
+                         DTYPE_t mask=ALL_BITS):
+    cdef np.intp_t len_lhs = lhs.shape[0]
+    cdef np.intp_t len_rhs = rhs.shape[0]
     cdef np.intp_t i_lhs = 0
     cdef np.intp_t i_rhs = 0
+    cdef np.intp_t i_result = 0
     cdef DTYPE_t value_prev = -1
-    cdef np.int64_t diff = 0
+    cdef DTYPE_t value_lhs = 0
+    cdef DTYPE_t value_rhs = 0
 
     # Outputs as numpy arrays
-    cdef np.uint64_t[:] lhs_indices = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
-    cdef np.uint64_t[:] rhs_indices = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef np.int64_t result_idx = 0
+    cdef np.uint64_t[:] lhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
+    cdef np.uint64_t[:] rhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
 
-    # Output locations as pointers
-    cdef np.uint64_t* lhs_result_ptr = &lhs_indices[0]
-    cdef np.uint64_t* rhs_result_ptr = &rhs_indices[0]
-
-    while i_lhs < lhs.shape[0] and i_rhs < rhs.shape[0]:
+    while i_lhs < len_lhs and i_rhs < len_rhs:
         # Use gallping search to find the first element in the right array
-        diff = (lhs[i_lhs] & mask) - (rhs[i_rhs] & mask)
+        value_lhs = lhs[i_lhs] & mask
+        value_rhs = rhs[i_rhs] & mask
 
         # Advance LHS to RHS
-        if diff < 0:
-            _galloping_search(lhs, rhs[i_rhs], mask, &i_lhs, lhs.shape[0])
+        if value_lhs < value_rhs:
+            if i_lhs >= lhs.shape[0] - 1:
+                break
+            _galloping_search(lhs, value_rhs, mask, &i_lhs, lhs.shape[0])
+            value_lhs = lhs[i_lhs] & mask
         # Advance RHS to LHS
-        elif diff > 0:
-            _galloping_search(rhs, lhs[i_lhs], mask, &i_rhs, rhs.shape[0])
+        elif value_rhs < value_lhs:
+            if i_rhs >= len_rhs - 1:
+                break
+            _galloping_search(rhs, value_lhs, mask, &i_rhs, len_rhs)
+            value_rhs = rhs[i_rhs] & mask
         else:
-            if value_prev != lhs[i_lhs] & mask:
+            if value_prev != value_lhs:
                 # Not a dup so store it.
-                lhs_result_ptr[0] = i_lhs; lhs_result_ptr += 1
-                rhs_result_ptr[0] = i_rhs; rhs_result_ptr += 1
-            value_prev = lhs[i_lhs] & mask
+                lhs_indices[result_idx] = i_lhs
+                rhs_indices[result_idx] = i_rhs
+                result_idx += 1
+            value_prev = value_lhs
             i_lhs += 1
             i_rhs += 1
 
     # Get view of each result and return
-    return np.asarray(lhs_indices), np.asarray(rhs_indices), rhs_result_ptr - &rhs_indices[0]   
+    return np.asarray(lhs_indices), np.asarray(rhs_indices), result_idx
 
 
 def _u64(lst) -> np.ndarray:
@@ -266,7 +273,7 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
         raise ValueError("Mask cannot be zero")
     if drop_duplicates:
         # save_input(lhs, rhs, mask)
-        indices_lhs, indices_rhs, result_idx = _intersect_drop(lhs, rhs, mask)
+        indices_lhs, indices_rhs, result_idx = _intersect_drop_old(lhs, rhs, mask)
         return indices_lhs[:result_idx], indices_rhs[:result_idx]
     else:
         indices_lhs, indices_rhs, indices_lhs_idx, indices_rhs_idx = _intersect_keep(lhs, rhs, mask)
