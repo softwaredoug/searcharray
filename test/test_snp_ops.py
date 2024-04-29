@@ -252,6 +252,7 @@ def test_profile_masked_saved(suffix, benchmark):
     lhs = np.load(f"fixtures/lhs_{suffix}.npy")
     rhs = np.load(f"fixtures/rhs_{suffix}.npy")
     mask = np.load(f"fixtures/mask_{suffix}.npy")
+    print(lhs.shape, rhs.shape)
 
     def with_snp_ops():
         intersect(lhs, rhs, mask)

@@ -6,7 +6,6 @@
 # cython: cdivision=True
 # cython: nonecheck=False
 # cython: language_level=3
-# cython: profile=True
 cimport numpy as np
 import numpy as np
 from enum import Enum
@@ -213,7 +212,6 @@ cdef _intersect_drop(DTYPE_t[:] lhs,
     cdef np.intp_t end_rhs = rhs.shape[0] - 1
     cdef np.intp_t i_lhs = 0
     cdef np.intp_t i_rhs = 0
-    cdef np.intp_t i_result = 0
     cdef DTYPE_t value_prev = -1
     cdef np.int64_t diff = 0
 
@@ -231,18 +229,10 @@ cdef _intersect_drop(DTYPE_t[:] lhs,
 
         # Advance LHS to RHS
         if diff < 0:
-            if i_lhs >= end_lhs:
-                break
-            i_result = i_lhs   # Why is this faster than just passing &i_lhs?
-            _galloping_search(lhs, rhs[i_rhs], mask, &i_result, lhs.shape[0])
-            i_lhs = i_result
+            _galloping_search(lhs, rhs[i_rhs], mask, &i_lhs, lhs.shape[0])
         # Advance RHS to LHS
         elif diff > 0:
-            if i_rhs >= end_rhs:
-                break
-            i_result = i_rhs
-            _galloping_search(rhs, lhs[i_lhs], mask, &i_result, rhs.shape[0])
-            i_rhs = i_result
+            _galloping_search(rhs, lhs[i_lhs], mask, &i_rhs, rhs.shape[0])
         else:
             if value_prev != lhs[i_lhs] & mask:
                 # Not a dup so store it.
