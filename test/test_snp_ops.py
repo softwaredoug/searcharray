@@ -196,6 +196,54 @@ def test_profile_masked_intersect(benchmark):
     profiler.run(intersect_many)
 
 
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_profile_masked_intersect_sparse_sparse(benchmark):
+    profiler = Profiler(benchmark)
+
+    rand_arr_1 = np.random.randint(0, 500000, 100, dtype=np.uint64)
+    rand_arr_2 = np.random.randint(0, 50000, 200, dtype=np.uint64)
+    mask = np.uint64(0xFFFFFFFF00000000)
+    rand_arr_1.sort()
+    rand_arr_2.sort()
+
+    def with_snp():
+        snp.intersect(rand_arr_1 << 16, rand_arr_2 << 16, indices=True, duplicates=snp.DROP)
+
+    def with_snp_ops():
+        intersect(rand_arr_1, rand_arr_2, mask)
+
+    def intersect_many():
+        for _ in range(10):
+            with_snp_ops()
+            with_snp()
+
+    profiler.run(intersect_many)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_profile_masked_intersect_sparse_dense(benchmark):
+    profiler = Profiler(benchmark)
+
+    rand_arr_1 = np.random.randint(0, 500000, 100, dtype=np.uint64)
+    rand_arr_2 = np.random.randint(0, 50000, 1000000, dtype=np.uint64)
+    mask = np.uint64(0xFFFFFFFF00000000)
+    rand_arr_1.sort()
+    rand_arr_2.sort()
+
+    def with_snp():
+        snp.intersect(rand_arr_1 << 16, rand_arr_2 << 16, indices=True, duplicates=snp.DROP)
+
+    def with_snp_ops():
+        intersect(rand_arr_1, rand_arr_2, mask)
+
+    def intersect_many():
+        for _ in range(10):
+            with_snp_ops()
+            with_snp()
+
+    profiler.run(intersect_many)
+
+
 @pytest.mark.parametrize("array", [u64([0, 0, 11, 11, 11, 36, 41, 42])])
 def test_unique(array):
     expected = np.unique(array)

@@ -6,6 +6,7 @@
 # cython: cdivision=True
 # cython: nonecheck=False
 # cython: language_level=3
+# cython: profile=True
 cimport numpy as np
 import numpy as np
 from enum import Enum
@@ -52,9 +53,11 @@ def popcount64(arr):
 cdef void _binary_search(DTYPE_t[:] array,
                          DTYPE_t target,
                          DTYPE_t mask,
-                         np.intp_t* i,
+                         np.intp_t* idx_out,
                          np.intp_t len):
-    cdef DTYPE_t value = array[i[0]]
+    """Write to idx_out the index of the first element in array that is
+       greater or equal to target (masked)."""
+    cdef DTYPE_t value = array[idx_out[0]]
     target &= mask
 
     # If already at correct location or beyond
@@ -62,23 +65,22 @@ cdef void _binary_search(DTYPE_t[:] array,
         return
 
     cdef np.intp_t i_right = len - 1  # is always GREATER OR EQUAL
-    cdef np.intp_t i_left = i[0]  # is always LESS than value
+    cdef np.intp_t i_left = idx_out[0]  # is always LESS than value
 
-    cdef DTYPE_t right = array[i_right]
-    if right & mask < target:
-        i[0] = i_right
+    if array[i_right] & mask < target:
+        idx_out[0] = i_right
         return # indicate target value too large
 
     while i_left + 1 < i_right:
-        i[0] = (i_right + i_left) // 2
-        value = array[i[0]]
+        idx_out[0] = (i_right + i_left) // 2  # midpoint
+        value = array[idx_out[0]]
 
         if target <= value & mask:
-            i_right = i[0]
+            i_right = idx_out[0]
         else:
-            i_left = i[0]
+            i_left = idx_out[0]
 
-    i[0] = i_right
+    idx_out[0] = i_right
 
 # Python wrapper for binary search
 def binary_search(np.ndarray[DTYPE_t, ndim=1] array,
@@ -93,9 +95,9 @@ def binary_search(np.ndarray[DTYPE_t, ndim=1] array,
 cdef void _galloping_search(DTYPE_t[:] array,
                             DTYPE_t target,
                             DTYPE_t mask,
-                            np.intp_t* i,
+                            np.intp_t* idx_out,
                             np.intp_t len):
-    cdef DTYPE_t value = array[i[0]] & mask 
+    cdef DTYPE_t value = array[idx_out[0]] & mask 
     target &= mask
 
     # If already at correct location or beyond
@@ -103,25 +105,41 @@ cdef void _galloping_search(DTYPE_t[:] array,
         return
 
     cdef np.intp_t delta = 1
-    cdef np.intp_t i_prev = i[0]
+    cdef DTYPE_t end = len - 1
+    cdef np.intp_t i_prev = idx_out[0]
 
     while value < target:
-        i_prev = i[0]
-        i[0] += delta
-        if len <= i[0]:
+        i_prev = idx_out[0]
+        idx_out[0] += delta
+        if len <= idx_out[0]:
             # Gallop jump reached end of array.
-            i[0] = len - 1
-            value = array[i[0]] & mask
+            idx_out[0] = end
+            value = array[idx_out[0]] & mask
             break
 
-        value = array[i[0]] & mask
+        value = array[idx_out[0]] & mask
         # Increase step size.
         delta *= 2
 
-    cdef np.intp_t higher = i[0] + 1  # Convert pointer position to length.
-    i[0] = i_prev  # This is the lower boundary and the active counter.
+    cdef np.intp_t i_right = idx_out[0] + 1  # Convert pointer position to length.
+    idx_out[0] = i_prev  # This is the lower boundary and the active counter.
 
-    _binary_search(array, target, mask, i, higher)
+    # i_prev ~ i_left to save a variable
+    #
+    # _binary_search(array, target, mask, i, higher)
+    # Inline binary search without the checks
+    # length is one past current posn
+    # left is i_prev
+    while i_prev + 1 < i_right:
+        idx_out[0] = (i_right + i_prev) // 2  # midpoint
+        value = array[idx_out[0]] & mask
+
+        if target <= value:
+            i_right = idx_out[0]
+        else:
+            i_prev = idx_out[0]
+
+    idx_out[0] = i_right
 
 
 def galloping_search(np.ndarray[DTYPE_t, ndim=1] array,
@@ -192,6 +210,7 @@ cdef _intersect_keep(DTYPE_t[:] lhs,
     return np.asarray(lhs_indices), np.asarray(rhs_indices), lhs_indices_idx, rhs_indices_idx
 
 
+from time import perf_counter
 
 cdef _intersect_drop(DTYPE_t[:] lhs,
                      DTYPE_t[:] rhs,
@@ -231,8 +250,7 @@ cdef _intersect_drop(DTYPE_t[:] lhs,
             _galloping_search(rhs, value_lhs, mask, &i_result, len_rhs)
             value_rhs = rhs[i_result] & mask
             i_rhs = i_result
-
-        if value_lhs == value_rhs:
+        else:
             if value_prev != value_lhs:
                 # Not a dup so store it.
                 lhs_indices[result_idx] = i_lhs
