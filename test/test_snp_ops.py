@@ -244,22 +244,17 @@ def test_profile_masked_intersect_diff_ranges(benchmark):
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-def test_profile_masked_saved(benchmark):
+@pytest.mark.parametrize("suffix", [128, 185, 24179, 27685, 44358, 45907, 90596])
+def test_profile_masked_saved(suffix, benchmark):
     profiler = Profiler(benchmark)
-    fixture_suffixes = [128, 185, 24179, 27685, 44358, 45907, 90596]
 
-    lhs_s = []
-    rhs_s = []
-    masks = []
-
-    for suffix in fixture_suffixes:
-        lhs_s.append(np.load(f"fixtures/lhs_{suffix}.npy"))
-        rhs_s.append(np.load(f"fixtures/rhs_{suffix}.npy"))
-        masks.append(np.load(f"fixtures/mask_{suffix}.npy"))
+    print(f"Running with {suffix}")
+    lhs = np.load(f"fixtures/lhs_{suffix}.npy")
+    rhs = np.load(f"fixtures/rhs_{suffix}.npy")
+    mask = np.load(f"fixtures/mask_{suffix}.npy")
 
     def with_snp_ops():
-        for lhs, rhs, mask in zip(lhs_s, rhs_s, masks):
-            intersect(lhs, rhs, mask)
+        intersect(lhs, rhs, mask)
 
     def intersect_many():
         for _ in range(10):
