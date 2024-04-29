@@ -220,6 +220,54 @@ def test_profile_masked_intersect_sparse_sparse(benchmark):
     profiler.run(intersect_many)
 
 
+def test_profile_masked_intersect_diff_ranges(benchmark):
+    profiler = Profiler(benchmark)
+
+    rand_arr_1 = np.random.randint(0, 50000, 1000000, dtype=np.uint64)
+    rand_arr_2 = np.random.randint(0, 500000, 100000, dtype=np.uint64)
+    mask = np.uint64(0xFFFFFFFF00000000)
+    rand_arr_1.sort()
+    rand_arr_2.sort()
+
+    def with_snp():
+        snp.intersect(rand_arr_1 << 16, rand_arr_2 << 16, indices=True, duplicates=snp.DROP)
+
+    def with_snp_ops():
+        intersect(rand_arr_1, rand_arr_2, mask)
+
+    def intersect_many():
+        for _ in range(10):
+            with_snp_ops()
+            with_snp()
+
+    profiler.run(intersect_many)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_profile_masked_saved(benchmark):
+    profiler = Profiler(benchmark)
+    fixture_suffixes = [128, 185, 24179, 27685, 44358, 45907, 90596]
+
+    lhs_s = []
+    rhs_s = []
+    masks = []
+
+    for suffix in fixture_suffixes:
+        lhs_s.append(np.load(f"fixtures/lhs_{suffix}.npy"))
+        rhs_s.append(np.load(f"fixtures/rhs_{suffix}.npy"))
+        masks.append(np.load(f"fixtures/mask_{suffix}.npy"))
+
+    def with_snp_ops():
+        for lhs, rhs, mask in zip(lhs_s, rhs_s, masks):
+            intersect(lhs, rhs, mask)
+
+    def intersect_many():
+        for _ in range(10):
+            with_snp_ops()
+
+    profiler.run(intersect_many)
+
+
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 def test_profile_masked_intersect_sparse_dense(benchmark):
     profiler = Profiler(benchmark)

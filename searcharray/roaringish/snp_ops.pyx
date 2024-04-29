@@ -260,6 +260,12 @@ def _u64(lst) -> np.ndarray:
     return np.array(lst, dtype=np.uint64)
 
 
+def save_input(lhs, rhs, mask):
+    np.save(f"lhs_{len(lhs)}.npy", lhs)
+    np.save(f"rhs_{len(lhs)}.npy", rhs)
+    np.save(f"mask_{len(lhs)}.npy", mask)
+
+
 def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
               np.ndarray[DTYPE_t, ndim=1] rhs,
               DTYPE_t mask=ALL_BITS,
@@ -269,6 +275,7 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
     if mask == 0:
         raise ValueError("Mask cannot be zero")
     if drop_duplicates:
+        # save_input(lhs, rhs, mask)
         indices_lhs, indices_rhs, result_idx = _intersect_drop(lhs, rhs, mask)
         return indices_lhs[:result_idx], indices_rhs[:result_idx]
     else:
