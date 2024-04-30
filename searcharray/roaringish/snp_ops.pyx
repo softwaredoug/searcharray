@@ -92,6 +92,7 @@ def binary_search(np.ndarray[DTYPE_t, ndim=1] array,
     return i, (array[i] & mask) == (target & mask)
 
 
+
 cdef inline void _galloping_search(DTYPE_t[:] array,
                                    DTYPE_t target,
                                    DTYPE_t mask,
@@ -130,15 +131,13 @@ cdef inline void _galloping_search(DTYPE_t[:] array,
     # Inline binary search without the checks
     # length is one past current posn
     # left is i_prev
-    while i_prev + 1 < i_right:
+    while i_prev + 1 < i_right :
         idx_out[0] = (i_right + i_prev) // 2  # midpoint
         value = array[idx_out[0]] & mask
-
         if target <= value:
             i_right = idx_out[0]
         else:
             i_prev = idx_out[0]
-
     idx_out[0] = i_right
 
 

@@ -41,6 +41,8 @@ destroy: clean
 
 
 extensions:
+	rm -rf searcharray/*.so
+	rm -rf searcharray/*.c
 	@echo "Building extensions..."
 	python setup.py build_ext --inplace
 
