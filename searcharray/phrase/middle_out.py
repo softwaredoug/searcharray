@@ -70,9 +70,9 @@ def trim_phrase_search(encoded_posns: List[np.ndarray],
     return encoded_posns
 
 
-def _compute_phrase_freqs_rhs(encoded_posns: List[np.ndarray],
-                              phrase_freqs: np.ndarray,
-                              trim: bool = True) -> np.ndarray:
+def _compute_phrase_freqs_left_to_right(encoded_posns: List[np.ndarray],
+                                        phrase_freqs: np.ndarray,
+                                        trim: bool = True) -> np.ndarray:
     """Compute phrase freqs from a set of encoded positions."""
     if len(encoded_posns) < 2:
         raise ValueError("phrase must have at least two terms")
@@ -97,9 +97,9 @@ def _compute_phrase_freqs_rhs(encoded_posns: List[np.ndarray],
     return phrase_freqs
 
 
-def _compute_phrase_freqs_lhs(encoded_posns: List[np.ndarray],
-                              phrase_freqs: np.ndarray,
-                              trim: bool = True) -> np.ndarray:
+def _compute_phrase_freqs_right_to_left(encoded_posns: List[np.ndarray],
+                                        phrase_freqs: np.ndarray,
+                                        trim: bool = True) -> np.ndarray:
     """Compute phrase freqs from a set of encoded positions."""
     if len(encoded_posns) < 2:
         raise ValueError("phrase must have at least two terms")
@@ -129,16 +129,15 @@ def compute_phrase_freqs(encoded_posns: List[np.ndarray],
                          trim: bool = False) -> np.ndarray:
     """Compute phrase freqs from a set of encoded positions."""
     shortest_len_index = min(enumerate(encoded_posns), key=lambda x: len(x[1]))[0]
-    # Slice LHS / RHS at shortest_len_index
     if shortest_len_index <= 1:
-        return _compute_phrase_freqs_lhs(encoded_posns, phrase_freqs, trim=trim)
+        return _compute_phrase_freqs_left_to_right(encoded_posns, phrase_freqs, trim=trim)
     elif shortest_len_index >= len(encoded_posns) - 2:
-        return _compute_phrase_freqs_rhs(encoded_posns, phrase_freqs, trim=trim)
+        return _compute_phrase_freqs_right_to_left(encoded_posns, phrase_freqs, trim=trim)
     else:
         # We optimize this case by going middle-out
         # We can take the min of both directions phrase freqs
-        lhs = _compute_phrase_freqs_lhs(encoded_posns[:shortest_len_index], phrase_freqs, trim=trim)
-        rhs = _compute_phrase_freqs_rhs(encoded_posns[shortest_len_index:], phrase_freqs, trim=trim)
+        lhs = _compute_phrase_freqs_left_to_right(encoded_posns[:shortest_len_index], phrase_freqs, trim=trim)
+        rhs = _compute_phrase_freqs_right_to_left(encoded_posns[shortest_len_index:], phrase_freqs, trim=trim)
         phrase_freqs = np.minimum(lhs, rhs)
         return phrase_freqs
 
