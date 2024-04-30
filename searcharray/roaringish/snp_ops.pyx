@@ -213,8 +213,7 @@ cdef _intersect_drop_old(DTYPE_t[:] lhs,
     cdef np.intp_t i_rhs = 0
     cdef np.intp_t i_result = 0
     cdef DTYPE_t value_prev = -1
-    cdef DTYPE_t value_lhs = 0
-    cdef DTYPE_t value_rhs = 0
+    cdef np.int64_t diff = 0
 
     # Outputs as numpy arrays
     cdef np.int64_t result_idx = 0
@@ -223,28 +222,25 @@ cdef _intersect_drop_old(DTYPE_t[:] lhs,
 
     while i_lhs < len_lhs and i_rhs < len_rhs:
         # Use gallping search to find the first element in the right array
-        value_lhs = lhs[i_lhs] & mask
-        value_rhs = rhs[i_rhs] & mask
+        diff = (lhs[i_lhs] & mask) - (rhs[i_rhs] & mask)
 
         # Advance LHS to RHS
-        if value_lhs < value_rhs:
-            if i_lhs >= lhs.shape[0] - 1:
+        if diff < 0:
+            if i_lhs >= len_lhs - 1:
                 break
-            _galloping_search(lhs, value_rhs, mask, &i_lhs, lhs.shape[0])
-            value_lhs = lhs[i_lhs] & mask
+            _galloping_search(lhs, rhs[i_rhs], mask, &i_lhs, len_lhs)
         # Advance RHS to LHS
-        elif value_rhs < value_lhs:
+        elif diff > 0:
             if i_rhs >= len_rhs - 1:
                 break
-            _galloping_search(rhs, value_lhs, mask, &i_rhs, len_rhs)
-            value_rhs = rhs[i_rhs] & mask
+            _galloping_search(rhs, lhs[i_lhs], mask, &i_rhs, len_rhs)
         else:
-            if value_prev != value_lhs:
+            if value_prev != (lhs[i_lhs] & mask):
                 # Not a dup so store it.
                 lhs_indices[result_idx] = i_lhs
                 rhs_indices[result_idx] = i_rhs
                 result_idx += 1
-            value_prev = value_lhs
+            value_prev = lhs[i_lhs] & mask
             i_lhs += 1
             i_rhs += 1
 
