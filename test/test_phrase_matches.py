@@ -190,7 +190,7 @@ def test_phrase_api(docs, phrase, expected):
 
 
 @w_scenarios(scenarios)
-@pytest.mark.parametrize("algorithm", ["phrase_freq", "phrase_freq_scan",
+@pytest.mark.parametrize("algorithm", ["phrase_freq_cython", "phrase_freq", "phrase_freq_scan",
                                        "phrase_freq_every_diff"])
 def test_phrase(docs, phrase, expected, algorithm):
     # if np.all(expected[:5] == [0, 1, 1, 0, 0]) and algorithm in ["phrase_freq_scan", "phrase_freq_scan_inplace"]:

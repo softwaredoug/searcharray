@@ -638,6 +638,23 @@ class SearchArray(ExtensionArray):
         except TermMissingError:
             return phrase_freqs
 
+    def phrase_freq_cython(self, tokens: List[str],
+                           slop=0,
+                           min_posn: Optional[int] = None,
+                           max_posn: Optional[int] = None) -> np.ndarray:
+        phrase_freqs = np.zeros(len(self))
+        try:
+            doc_ids = self.term_mat.rows
+            term_ids = [self.term_dict.get_term_id(token) for token in tokens]
+            return self.posns.phrase_freqs(term_ids, doc_ids=doc_ids,
+                                           phrase_freqs=phrase_freqs,
+                                           slop=slop,
+                                           min_posn=min_posn,
+                                           max_posn=max_posn,
+                                           cython_phrase=True)
+        except TermMissingError:
+            return phrase_freqs
+
     def phrase_freq_scan(self, tokens: List[str], mask=None, slop=0) -> np.ndarray:
         if mask is None:
             mask = self.and_query(tokens)

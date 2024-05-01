@@ -158,7 +158,6 @@ cdef _intersect_keep(DTYPE_t[:] lhs,
     cdef np.intp_t end_rhs = rhs.shape[0] - 1
     cdef np.intp_t i_lhs = 0
     cdef np.intp_t i_rhs = 0
-    cdef np.intp_t i_result = 0
     cdef DTYPE_t value_prev = -1
     cdef np.int64_t diff = 0
     

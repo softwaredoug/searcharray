@@ -9,6 +9,7 @@ import numpy as np
 from copy import deepcopy
 from typing import List, Tuple, Dict, Union, cast, Optional
 from searcharray.roaringish import RoaringishEncoder, convert_keys, merge
+from searcharray.roaringish import phrase_search
 from searcharray.phrase.bigram_freqs import bigram_freqs, Continuation
 from searcharray.phrase.spans import span_search
 import numbers
@@ -339,7 +340,8 @@ class PosnBitArray:
                      doc_ids: np.ndarray,
                      slop: int = 0,
                      min_posn: Optional[int] = None,
-                     max_posn: Optional[int] = None) -> np.ndarray:
+                     max_posn: Optional[int] = None,
+                     cython_phrase=False) -> np.ndarray:
         if len(term_ids) < 2:
             raise ValueError("Must have at least two terms")
         if phrase_freqs.shape[0] == self.max_doc_id + 1 and min_posn is None and max_posn is None:
@@ -353,6 +355,12 @@ class PosnBitArray:
                                             keys=keys,
                                             min_payload=min_posn,
                                             max_payload=max_posn) for term_id in term_ids]
+
+        if cython_phrase and slop == 0:
+            phrase_search(enc_term_posns, encoder.header_mask, encoder.key_mask,
+                          encoder.key_bits + encoder.payload_msb_bits, encoder.key_bits,
+                          phrase_freqs)
+            return phrase_freqs
 
         if slop == 0:
             return compute_phrase_freqs(enc_term_posns, phrase_freqs)
