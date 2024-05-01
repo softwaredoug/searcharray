@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 def all_benchmark_dirs(subdir='Darwin-CPython-3.12-64bit/'):
     return [os.path.join(f, subdir)
-            for f in os.listdir('.') if f.startswith('.benchmarks')]
+            for f in os.listdir('.') if f.startswith('.benchmarks') and os.path.isdir(os.path.join(f, subdir))]
 
 
 def git_shas():
@@ -133,10 +133,19 @@ def graph_benchmark(benchmark_name,
                         benchmarks[benchmark.name].append(benchmark)
 
     benchmarks[benchmark_name].sort(key=lambda x: (x.commit_time, x.commit_sha))
+
+    benchmarks_found = set()
+    deduped_benchmarks = []
+    for benchmark in benchmarks[benchmark_name]:
+        key = (benchmark.commit_sha, benchmark.prefix)
+        if key not in benchmarks_found:
+            benchmarks_found.add(key)
+            deduped_benchmarks.append(benchmark)
+
     show_plot(benchmark_name,
-              [b.prefix + "_" + b.commit_sha[:8] for b in benchmarks[benchmark_name]],
-              [b.mean_time for b in benchmarks[benchmark_name]],
-              [b.std_dev for b in benchmarks[benchmark_name]])
+              [b.prefix + "_" + b.commit_sha[:8] for b in deduped_benchmarks],
+              [b.mean_time for b in deduped_benchmarks],
+              [b.std_dev for b in deduped_benchmarks])
 
 
 if __name__ == '__main__':
