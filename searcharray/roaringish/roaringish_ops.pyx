@@ -142,6 +142,7 @@ cdef _phrase_search(list encoded_posns,
 
     cdef DTYPE_t curr_arr_idx = 0
     cdef DTYPE_t payload_mask = ALL_BITS & ~header_mask
+    cdef DTYPE_t payload_num_bits = 64 - header_bits
     # for arr in encoded_posns:
     #     if shortest_arr is None or arr.shape[0] < shortest_arr.shape[0]:
     #         shortest_arr = arr
@@ -153,8 +154,10 @@ cdef _phrase_search(list encoded_posns,
     cdef DTYPE_t i_arr = 0
     cdef DTYPE_t value_shortest = 0 
     cdef DTYPE_t target = 0
+    cdef DTYPE_t target_adj = 0
     cdef DTYPE_t write_key = 0
     cdef DTYPE_t inner_bigrams = 0
+    cdef DTYPE_t payload_msb = 1 << (payload_num_bits - 1)
 
     # For each item in the shortest array,
     # Find any bigram match before / after
@@ -181,15 +184,21 @@ cdef _phrase_search(list encoded_posns,
                               header_mask,
                               &i_other,
                               encoded_posns[curr_arr_idx].shape[0])
-            # if LSB set, also search for adjacent
-            if target & 1:
+            # if target might connect to something on rhs, also search for adjacent 
+            adj_bit_set = 0
+            if (target & payload_msb) > 0:
                 print("Search adjacent", flush=True)
-                print(f"Target {target:0x} {target & header_mask:0x}", flush=True)
+                print(f"Target {target:0x} {header_mask & (target + (header_mask & -header_mask)):0x}", flush=True)
                 _galloping_search(curr_arr,
-                                  target + (header_mask & ~header_mask),  # +1 on header
+                                  target + (header_mask & -header_mask),  # +1 on header
                                   header_mask,
                                   &i_other_adj,
                                   curr_arr.shape[0])
+                print(f"Check for   adj bigrams {i_shortest}|{shortest_arr.shape[0]} {i_other}|{curr_arr.shape[0]}", flush=True)
+                print(f"                 target {target:0x}")
+                print(f"                  other {curr_arr[i_other_adj]:0x} | {(curr_arr[i_other_adj] & 1):0x} ")
+                adj_bit_set = (curr_arr[i_other_adj]) & 1
+                print(f"Result {adj_bit_set:0x}")
                 print("Search adjacent...DONE")
             # Either the intersect has adjacent bits, or the adjacent bits are in the other array
             print(f"Check for inner bigrams {i_shortest}|{shortest_arr.shape[0]} {i_other}|{curr_arr.shape[0]}", flush=True)
@@ -199,9 +208,13 @@ cdef _phrase_search(list encoded_posns,
                              ((curr_arr[i_other] & payload_mask) >> 1))
             print(f"Result {inner_bigrams:0x}")
             write_key = target >> (64 - key_bits)
+            if adj_bit_set > 0:
+                print(f"FOUND ADJACENT BIGRAM at {i_shortest} {i_other_adj} -- write to {write_key}", flush=True)
+                print(f"TARGET NOW {target:0x}", flush=True)
+                phrase_freqs_out[write_key] = 1
             if inner_bigrams > 0:
                 target = inner_bigrams << 1 | (shortest_arr[i_shortest] & header_mask)
-                print(f"FOUND BIGRAM{inner_bigrams} at {i_shortest} {i_other} -- write to {write_key}", flush=True)
+                print(f"FOUND BIGRAM {inner_bigrams} at {i_shortest} {i_other} -- write to {write_key}", flush=True)
                 print(f"TARGET NOW {target:0x}", flush=True)
                 phrase_freqs_out[write_key] = __builtin_popcountll(inner_bigrams)
             else:
