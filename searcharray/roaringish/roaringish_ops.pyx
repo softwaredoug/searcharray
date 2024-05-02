@@ -108,6 +108,24 @@ cdef ceiling_div(DTYPE_t dividend, DTYPE_t divisor):
     return (dividend + divisor - 1) // divisor
 
 
+cdef _count_same_term(DTYPE_t target, DTYPE_t other,
+                      DTYPE_t payload_mask, DTYPE_t header_mask):
+    cdef DTYPE_t overlap = (target & (other >> 1)) & payload_mask
+    cdef DTYPE_t num_overlaps = __builtin_popcountll(overlap)
+    cdef DTYPE_t consecs = __builtin_popcountll(overlap & overlap << 1)
+    cdef DTYPE_t num_consecs = ceiling_div(consecs, 2)
+    cdef DTYPE_t phrase_freq = num_overlaps - num_consecs
+    target = ((other << 1) &  other) | (target & header_mask)
+    print(f"SAME TERM AND ADJ {phrase_freq}", flush=True)
+    print(f"    Target {target:0x}", flush=True)
+    print(f"     Other {other:0x}", flush=True)
+    print(f"   Overlap {overlap:0x}", flush=True)
+    print(f"   Consecs {consecs:0x}", flush=True)
+    print(f"   Num Ovr {num_overlaps}", flush=True)
+    print(f"   Num Con {num_consecs}", flush=True)
+    return phrase_freq, target
+
+
 cdef _phrase_search(list encoded_posns,
                     DTYPE_t header_mask, DTYPE_t key_mask, 
                     DTYPE_t header_bits, DTYPE_t key_bits,
@@ -237,25 +255,10 @@ cdef _phrase_search(list encoded_posns,
                 phrase_freq = __builtin_popcountll(inner_bigrams)
                 print(f"INNER BIGRAMS {phrase_freq}", flush=True)
             elif same_term and adj_bit_set > 0:
-                overlap = (target & (curr_arr[i_other] << 1)) & payload_mask
-                consecs = __builtin_popcountll(overlap & overlap << 1)
-                inner_adjacents = ceiling_div(consecs, 2)
-                phrase_freq = inner_adjacents + 1
-                target = (curr_arr[i_other] << 1 &  curr_arr[i_other]) | (target & header_mask)
-                print(f"SAME TERM AND ADJ {phrase_freq}", flush=True)
-                print(f"   Overlap {overlap:0x}", flush=True)
-                print(f"   Consecs {consecs:0x}", flush=True)
-                print(f"   Inn Adj {inner_adjacents}", flush=True)
+                phrase_freq, target = _count_same_term(target, curr_arr[i_other], payload_mask, header_mask)
+                phrase_freq += 1
             elif same_term:
-                overlap = (target & (curr_arr[i_other] << 1)) & payload_mask
-                consecs = __builtin_popcountll(overlap & overlap << 1)
-                inner_adjacents = ceiling_div(consecs, 2)
-                phrase_freq = inner_adjacents 
-                target = (curr_arr[i_other] << 1 &  curr_arr[i_other]) | (target & header_mask)
-                print(f"SAME TERM {phrase_freq}", flush=True)
-                print(f"   Overlap {overlap:0x}", flush=True)
-                print(f"   Consecs {consecs:0x}", flush=True)
-                print(f"   Inn Adj {inner_adjacents}", flush=True)
+                phrase_freq, target = _count_same_term(target, curr_arr[i_other], payload_mask, header_mask)
             elif adj_bit_set > 0:
                 target_adj = 1 | (curr_arr[i_other_adj] & header_mask)
                 phrase_freq = 1
