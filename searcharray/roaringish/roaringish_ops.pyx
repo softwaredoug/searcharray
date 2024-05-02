@@ -104,6 +104,10 @@ def as_dense(indices, values, size):
     return np.array(_as_dense_array(indices_view, values_view, size))
 
 
+cdef ceiling_div(DTYPE_t dividend, DTYPE_t divisor):
+    return (dividend + divisor - 1) // divisor
+
+
 cdef _phrase_search(list encoded_posns,
                     DTYPE_t header_mask, DTYPE_t key_mask, 
                     DTYPE_t header_bits, DTYPE_t key_bits,
@@ -160,6 +164,7 @@ cdef _phrase_search(list encoded_posns,
     cdef DTYPE_t cont_mask = 0
     cdef DTYPE_t payload_msb = 1 << (payload_num_bits - 1)
     cdef double phrase_freq = 0.0
+    cdef bint same_term = False
 
     # For each item in the shortest array,
     # Find any bigram match before / after
@@ -184,10 +189,12 @@ cdef _phrase_search(list encoded_posns,
             curr_arr = encoded_posns[curr_arr_idx]
 
             # Really each array should have its own index for these
+            same_term = (encoded_posns[curr_arr_idx] is encoded_posns[curr_arr_idx - 1])
             i_other = 0
             i_other_adj = 0
             # Direct intersected
             print("Search intersect")
+            print(f"Same term? {same_term}", flush=True)
             print(f"Target {target:0x} {target & header_mask:0x}", flush=True)
             _galloping_search(curr_arr,
                               target,
@@ -220,15 +227,35 @@ cdef _phrase_search(list encoded_posns,
             inner_bigrams = ((target & payload_mask) & 
                              ((curr_arr[i_other] & payload_mask) >> 1))
             print(f"Result {inner_bigrams:0x}")
-            if inner_bigrams > 0 and adj_bit_set > 0:
+            if inner_bigrams > 0 and adj_bit_set > 0 and not same_term:
                 target = inner_bigrams << 1 | (shortest_arr[i_shortest] & header_mask)
                 target_adj = 1 | (curr_arr[i_other_adj] & header_mask)
                 phrase_freq = __builtin_popcountll(inner_bigrams) + 1
                 print(f"BIGRAMS AND ADJACENT {phrase_freq}", flush=True)
-            elif inner_bigrams > 0:
+            elif inner_bigrams > 0 and not same_term:
                 target = inner_bigrams << 1 | (shortest_arr[i_shortest] & header_mask)
                 phrase_freq = __builtin_popcountll(inner_bigrams)
                 print(f"INNER BIGRAMS {phrase_freq}", flush=True)
+            elif same_term and adj_bit_set > 0:
+                overlap = (target & (curr_arr[i_other] << 1)) & payload_mask
+                consecs = __builtin_popcountll(overlap & overlap << 1)
+                inner_adjacents = ceiling_div(consecs, 2)
+                phrase_freq = inner_adjacents + 1
+                target = (curr_arr[i_other] << 1 &  curr_arr[i_other]) | (target & header_mask)
+                print(f"SAME TERM AND ADJ {phrase_freq}", flush=True)
+                print(f"   Overlap {overlap:0x}", flush=True)
+                print(f"   Consecs {consecs:0x}", flush=True)
+                print(f"   Inn Adj {inner_adjacents}", flush=True)
+            elif same_term:
+                overlap = (target & (curr_arr[i_other] << 1)) & payload_mask
+                consecs = __builtin_popcountll(overlap & overlap << 1)
+                inner_adjacents = ceiling_div(consecs, 2)
+                phrase_freq = inner_adjacents 
+                target = (curr_arr[i_other] << 1 &  curr_arr[i_other]) | (target & header_mask)
+                print(f"SAME TERM {phrase_freq}", flush=True)
+                print(f"   Overlap {overlap:0x}", flush=True)
+                print(f"   Consecs {consecs:0x}", flush=True)
+                print(f"   Inn Adj {inner_adjacents}", flush=True)
             elif adj_bit_set > 0:
                 target_adj = 1 | (curr_arr[i_other_adj] & header_mask)
                 phrase_freq = 1
