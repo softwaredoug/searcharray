@@ -104,7 +104,7 @@ def as_dense(indices, values, size):
     return np.array(_as_dense_array(indices_view, values_view, size))
 
 
-cdef ceiling_div(DTYPE_t dividend, DTYPE_t divisor):
+cdef DTYPE_t ceiling_div(DTYPE_t dividend, DTYPE_t divisor):
     return (dividend + divisor - 1) // divisor
 
 
@@ -115,8 +115,49 @@ cdef _count_same_term(DTYPE_t target, DTYPE_t other,
     cdef DTYPE_t consecs = __builtin_popcountll(overlap & overlap << 1)
     cdef DTYPE_t num_consecs = ceiling_div(consecs, 2)
     cdef DTYPE_t phrase_freq = num_overlaps - num_consecs
+    print( " >") 
+    print( " > CHECK SAME TERM")
+    print(f" >     target: {(target & payload_mask):0x}")
+    print(f" >      other: {(other & payload_mask):0x}")
     target = ((other << 1) &  other) | (target & header_mask)
+    print(f" > new target: {(target & payload_mask):0x}")
+    print(f" > num_overlaps: {num_overlaps}")
+    print(f" > phrase_fre: {phrase_freq}")
+    print( " >") 
     return phrase_freq, target
+
+
+cdef _count_diff_term(DTYPE_t[:] curr_arr,
+                      DTYPE_t target, DTYPE_t other, DTYPE_t other_adj,
+                      DTYPE_t cont_mask,
+                      DTYPE_t payload_mask, DTYPE_t header_mask):
+    same_adj_header = ((target + (header_mask & -header_mask)) & header_mask) == (other_adj & header_mask)
+    if same_adj_header:
+        if cont_mask == 0:
+            cont_mask = 1
+        adj_bit_set = other & cont_mask
+        if adj_bit_set == 0:
+            cont_mask = 0
+    # Either the intersect has adjacent bits, or the adjacent bits are in the other array
+    same_header = (target & header_mask) == (other & header_mask)
+    inner_bigrams = ((target & payload_mask) & 
+                     ((other & payload_mask) >> 1))
+    if same_header and inner_bigrams > 0 and adj_bit_set > 0:
+        print("!HDR W/ INNER BIGRAMS AND ADJ")
+        target = inner_bigrams << 1 | (target & header_mask)
+        phrase_freq = __builtin_popcountll(inner_bigrams) + 1
+    elif same_header and inner_bigrams > 0:
+        print("!HDR W/ INNER BIGRAMS")
+        target = inner_bigrams << 1 | (target & header_mask)
+        phrase_freq = __builtin_popcountll(inner_bigrams)
+    elif same_adj_header and adj_bit_set > 0:
+        print("!ADJ BIT SET")
+        phrase_freq = 1
+    else:
+        print("!NO MATCH - canceling")
+        phrase_freq = 0
+        target = 0
+    return phrase_freq, target, cont_mask
 
 
 cdef _phrase_search(list encoded_posns,
@@ -173,9 +214,14 @@ cdef _phrase_search(list encoded_posns,
     cdef DTYPE_t write_key = 0
     cdef DTYPE_t inner_bigrams = 0
     cdef DTYPE_t cont_mask = 0
+    cdef DTYPE_t adj_bit_set = 0
+    cdef DTYPE_t dir_adj_bit_set = 0
     cdef DTYPE_t payload_msb = 1 << (payload_num_bits - 1)
     cdef double phrase_freq = 0.0
     cdef bint same_term = False
+    cdef bint same_header = False
+    cdef bint same_adj = False
+    cdef bint same_adj_header = False
 
     # For each item in the shortest array,
     # Find any bigram match before / after
@@ -194,7 +240,7 @@ cdef _phrase_search(list encoded_posns,
             curr_arr = encoded_posns[curr_arr_idx]
 
             # Really each array should have its own index for these
-            same_term = (encoded_posns[curr_arr_idx] is encoded_posns[curr_arr_idx - 1])
+            # same_term = (encoded_posns[curr_arr_idx] is encoded_posns[curr_arr_idx - 1])
             i_other = 0
             i_other_adj = 0
             # Direct intersected
@@ -203,43 +249,30 @@ cdef _phrase_search(list encoded_posns,
                               header_mask,
                               &i_other,
                               encoded_posns[curr_arr_idx].shape[0])
-            # if target might connect to something on rhs, also search for adjacent 
-            adj_bit_set = 0
-            if (target & payload_msb) > 0 or cont_mask > 0:
+            same_header = (i_other < encoded_posns[curr_arr_idx].shape[0]) and (target & header_mask) == (curr_arr[i_other] & header_mask)
+            same_term = same_header and (
+                __builtin_popcountll(target & payload_mask) > 0
+            ) and (
+                target == encoded_posns[curr_arr_idx][i_other]
+            )
+            if not same_term:
                 _galloping_search(curr_arr,
                                   target + (header_mask & -header_mask),  # +1 on header
                                   header_mask,
                                   &i_other_adj,
                                   curr_arr.shape[0])
-                if cont_mask == 0:
-                    cont_mask = 1
-                adj_bit_set = (curr_arr[i_other_adj]) & cont_mask
-                if adj_bit_set == 0:
-                    cont_mask = 0
-            # Either the intersect has adjacent bits, or the adjacent bits are in the other array
-            inner_bigrams = ((target & payload_mask) & 
-                             ((curr_arr[i_other] & payload_mask) >> 1))
-            if inner_bigrams > 0 and adj_bit_set > 0 and not same_term:
-                target = inner_bigrams << 1 | (shortest_arr[i_shortest] & header_mask)
-                target_adj = 1 | (curr_arr[i_other_adj] & header_mask)
-                phrase_freq = __builtin_popcountll(inner_bigrams) + 1
-            elif inner_bigrams > 0 and not same_term:
-                target = inner_bigrams << 1 | (shortest_arr[i_shortest] & header_mask)
-                phrase_freq = __builtin_popcountll(inner_bigrams)
-            elif same_term and adj_bit_set > 0:
-                phrase_freq, target = _count_same_term(target, curr_arr[i_other], payload_mask, header_mask)
-                phrase_freq += 1
-            elif same_term:
-                phrase_freq, target = _count_same_term(target, curr_arr[i_other], payload_mask, header_mask)
-            elif adj_bit_set > 0:
-                target_adj = 1 | (curr_arr[i_other_adj] & header_mask)
-                phrase_freq = 1
-            else:
-                phrase_freq = 0
+
+                phrase_freq, target, cont_mask = _count_diff_term(curr_arr, target, 
+                                                                  curr_arr[i_other], curr_arr[i_other_adj],
+                                                                  cont_mask,
+                                                                  payload_mask, header_mask)
+            if target == 0 and cont_mask == 0:
                 break
             curr_arr_idx += 1
             cont_mask <<= 1
 
+        print(f"Collect phrase freq: {write_key}:{phrase_freq}")
+        print(f"*****")
         write_key = target >> (64 - key_bits)
         phrase_freqs_out[write_key] += phrase_freq
         i_shortest += 1

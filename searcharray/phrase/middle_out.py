@@ -341,7 +341,7 @@ class PosnBitArray:
                      slop: int = 0,
                      min_posn: Optional[int] = None,
                      max_posn: Optional[int] = None,
-                     cython_phrase=False) -> np.ndarray:
+                     cython_phrase=True) -> np.ndarray:
         if len(term_ids) < 2:
             raise ValueError("Must have at least two terms")
         if phrase_freqs.shape[0] == self.max_doc_id + 1 and min_posn is None and max_posn is None:
@@ -355,8 +355,8 @@ class PosnBitArray:
                                             keys=keys,
                                             min_payload=min_posn,
                                             max_payload=max_posn) for term_id in term_ids]
-
-        if cython_phrase and slop == 0:
+        has_dup_terms = len(set(term_ids)) != len(term_ids)
+        if cython_phrase and slop == 0 and not has_dup_terms:
             phrase_search(enc_term_posns, encoder.header_mask, encoder.key_mask,
                           encoder.key_bits + encoder.payload_msb_bits, encoder.key_bits,
                           phrase_freqs)
