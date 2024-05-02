@@ -116,13 +116,6 @@ cdef _count_same_term(DTYPE_t target, DTYPE_t other,
     cdef DTYPE_t num_consecs = ceiling_div(consecs, 2)
     cdef DTYPE_t phrase_freq = num_overlaps - num_consecs
     target = ((other << 1) &  other) | (target & header_mask)
-    print(f"SAME TERM AND ADJ {phrase_freq}", flush=True)
-    print(f"    Target {target:0x}", flush=True)
-    print(f"     Other {other:0x}", flush=True)
-    print(f"   Overlap {overlap:0x}", flush=True)
-    print(f"   Consecs {consecs:0x}", flush=True)
-    print(f"   Num Ovr {num_overlaps}", flush=True)
-    print(f"   Num Con {num_consecs}", flush=True)
     return phrase_freq, target
 
 
@@ -192,18 +185,12 @@ cdef _phrase_search(list encoded_posns,
         target = shortest_arr[i_shortest]
         cont_mask = 0
         phrase_freq = 0.0
-        print("************************************", flush=True)
-        print(f"Searching next at i_shortest: {i_shortest}", flush=True)
-        print(f"                      target  {target:0x}", flush=True)
-        print(f"                      header  {target & header_mask:0x}", flush=True)
-        print(f"                         key  {target & key_mask:0x}", flush=True)
         while curr_arr_idx < len(encoded_posns):
             # The target is the current term's intersecting bigram
             # Each new term can produce up to two new targets, one for the starting
             # 64 bit word, where we look for bit intersections. 
             # The other is for the adjacent bit, where we continue to scan down for adjacent 
             # bits, and that will either produce one phrase or be terminated
-            print("---")
             curr_arr = encoded_posns[curr_arr_idx]
 
             # Really each array should have its own index for these
@@ -211,9 +198,6 @@ cdef _phrase_search(list encoded_posns,
             i_other = 0
             i_other_adj = 0
             # Direct intersected
-            print("Search intersect")
-            print(f"Same term? {same_term}", flush=True)
-            print(f"Target {target:0x} {target & header_mask:0x}", flush=True)
             _galloping_search(curr_arr,
                               target,
                               header_mask,
@@ -222,38 +206,26 @@ cdef _phrase_search(list encoded_posns,
             # if target might connect to something on rhs, also search for adjacent 
             adj_bit_set = 0
             if (target & payload_msb) > 0 or cont_mask > 0:
-                print("Search adjacent", flush=True)
-                print(f"Target {target:0x} {header_mask & (target + (header_mask & -header_mask)):0x}", flush=True)
                 _galloping_search(curr_arr,
                                   target + (header_mask & -header_mask),  # +1 on header
                                   header_mask,
                                   &i_other_adj,
                                   curr_arr.shape[0])
-                print(f"Check for   adj bigrams {i_shortest}|{shortest_arr.shape[0]} {i_other}|{curr_arr.shape[0]}", flush=True)
-                print(f"                 target {target:0x}")
-                print(f"                  other {curr_arr[i_other_adj]:0x} | {(curr_arr[i_other_adj] & 1):0x} ")
                 if cont_mask == 0:
                     cont_mask = 1
                 adj_bit_set = (curr_arr[i_other_adj]) & cont_mask
-                print(f"Result {adj_bit_set:0x}")
                 if adj_bit_set == 0:
                     cont_mask = 0
             # Either the intersect has adjacent bits, or the adjacent bits are in the other array
-            print(f"Check for inner bigrams {i_shortest}|{shortest_arr.shape[0]} {i_other}|{curr_arr.shape[0]}", flush=True)
-            print(f"                 target {target:0x}")
-            print(f"                  other {curr_arr[i_other]:0x} | {(curr_arr[i_other] & payload_mask) >> 1:0x} ")
             inner_bigrams = ((target & payload_mask) & 
                              ((curr_arr[i_other] & payload_mask) >> 1))
-            print(f"Result {inner_bigrams:0x}")
             if inner_bigrams > 0 and adj_bit_set > 0 and not same_term:
                 target = inner_bigrams << 1 | (shortest_arr[i_shortest] & header_mask)
                 target_adj = 1 | (curr_arr[i_other_adj] & header_mask)
                 phrase_freq = __builtin_popcountll(inner_bigrams) + 1
-                print(f"BIGRAMS AND ADJACENT {phrase_freq}", flush=True)
             elif inner_bigrams > 0 and not same_term:
                 target = inner_bigrams << 1 | (shortest_arr[i_shortest] & header_mask)
                 phrase_freq = __builtin_popcountll(inner_bigrams)
-                print(f"INNER BIGRAMS {phrase_freq}", flush=True)
             elif same_term and adj_bit_set > 0:
                 phrase_freq, target = _count_same_term(target, curr_arr[i_other], payload_mask, header_mask)
                 phrase_freq += 1
@@ -262,17 +234,14 @@ cdef _phrase_search(list encoded_posns,
             elif adj_bit_set > 0:
                 target_adj = 1 | (curr_arr[i_other_adj] & header_mask)
                 phrase_freq = 1
-                print(f"JUST ADJACENT {phrase_freq}", flush=True)
             else:
                 phrase_freq = 0
-                print(f"PHRASE CANCELED", flush=True)
                 break
             curr_arr_idx += 1
             cont_mask <<= 1
 
         write_key = target >> (64 - key_bits)
         phrase_freqs_out[write_key] += phrase_freq
-        print(f"COLLECTED PHRASE - {write_key}:{phrase_freqs_out[write_key]}", flush=True)
         i_shortest += 1
 
         # Go right -> left
