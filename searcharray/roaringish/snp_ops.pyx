@@ -22,6 +22,13 @@ cdef extern from "stddef.h":
     # and portability, though it's not directly used here.
     int __builtin_popcountll(unsigned long long x)
 
+cdef extern from "search.h":
+    void exp_search(uint64_t *array,
+                    uint64_t target,
+                    const uint64_t mask,
+                    uint64_t* idx_out,
+                    const uint64_t size)
+
 
 cdef popcount64_arr(DTYPE_t[:] arr):
     cdef np.uint64_t[:] result = np.empty(arr.shape[0], dtype=np.uint64)
@@ -207,11 +214,11 @@ cdef _intersect_keep(DTYPE_t[:] lhs,
 cdef _intersect_drop_old(DTYPE_t[:] lhs,
                          DTYPE_t[:] rhs,
                          DTYPE_t mask=ALL_BITS):
-    cdef np.intp_t len_lhs = lhs.shape[0]
-    cdef np.intp_t len_rhs = rhs.shape[0]
-    cdef np.intp_t i_lhs = 0
-    cdef np.intp_t i_rhs = 0
-    cdef np.intp_t i_result = 0
+    cdef np.uint64_t len_lhs = lhs.shape[0]
+    cdef np.uint64_t len_rhs = rhs.shape[0]
+    cdef np.uint64_t i_lhs = 0
+    cdef np.uint64_t i_rhs = 0
+    cdef np.uint64_t i_result = 0
     cdef DTYPE_t value_prev = -1
     cdef np.int64_t diff = 0
 
@@ -228,12 +235,12 @@ cdef _intersect_drop_old(DTYPE_t[:] lhs,
         if diff < 0:
             if i_lhs >= len_lhs - 1:
                 break
-            _galloping_search(lhs, rhs[i_rhs], mask, &i_lhs, len_lhs)
+            exp_search(&lhs[0], rhs[i_rhs], mask, &i_lhs, len_lhs)
         # Advance RHS to LHS
         elif diff > 0:
             if i_rhs >= len_rhs - 1:
                 break
-            _galloping_search(rhs, lhs[i_lhs], mask, &i_rhs, len_rhs)
+            exp_search(&rhs[0], lhs[i_lhs], mask, &i_rhs, len_rhs)
         else:
             if value_prev != (lhs[i_lhs] & mask):
                 # Not a dup so store it.

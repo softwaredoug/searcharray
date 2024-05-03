@@ -42,7 +42,7 @@ destroy: clean
 
 extensions:
 	rm -rf searcharray/*.so
-	rm -rf searcharray/*.c
+	gcc -shared -fPIC -o searcharray/roaringish/search.so searcharray/roaringish/search.c
 	@echo "Building extensions..."
 	python setup.py build_ext --inplace
 
