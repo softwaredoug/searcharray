@@ -2,49 +2,60 @@
 #define SEARCH_H
 
 #include <stdint.h>
+#include <stdio.h>
+#include <mach/mach_time.h>
+
+// TEMP!
+uint64_t bin_time = 0;
+uint64_t exp_time = 0;
+uint64_t total_time = 0;
+
 
 void exp_search(uint64_t *array,
 	  					  uint64_t target,
 								const uint64_t mask,
 								uint64_t* idx_out,
 								const uint64_t size) {
-		uint64_t value = array[idx_out[0]] & mask;
+		uint64_t start_time = mach_absolute_time();
+		uint64_t *curr = &array[idx_out[0]];
+		uint64_t *prev;   //= &array[idx_out[0]];
+		uint64_t *right;  // = &array[idx_out[0]];
 		target &= mask;
 
-		if (target <= value) {
+		/*if (target <= (*curr & mask)) {
 			return;
+		}*/
+
+		// unrolled exp search
+		prev = curr;
+		while ((curr + 64 < array + size) &&
+				((*curr & mask) <= target) && (curr += 1) &&
+		    ((*curr & mask) <= target) && (curr += 2) &&
+		    ((*curr & mask) <= target) && (curr += 4) &&
+		    ((*curr & mask) <= target) && (curr += 8) &&
+		    ((*curr & mask) <= target) && (curr += 16) &&
+		    ((*curr & mask) <= target) && (curr += 32)) {
+				prev = curr;
 		}
+		exp_time += mach_absolute_time() - start_time;
+		start_time = mach_absolute_time();
 
-		int delta = 1;
-		uint64_t end = size - 1;
-		int i_prev = *idx_out;
-
-		// Exponential search
-		while (value < target) {
-			i_prev = *idx_out;
-			*idx_out += delta;
-			if (size <= *idx_out) {
-				*idx_out = end;
-				value = array[*idx_out] & mask;
-				break;
-			}
-			value = array[*idx_out] & mask;
-			delta *= 2;
-		}
-
-		int i_right = *idx_out + 1;
+		right = curr + 1;
 		// binary search
-		while (i_prev + 1 < i_right) {
-			*idx_out = (i_right + i_prev) / 2;
-			value = array[*idx_out] & mask;
-			if (target <= value) {
-				i_right = *idx_out;
+		while (prev + 1 < right) {
+			curr = (right - prev) / 2 + prev;
+			if (target <= (*curr & mask)) {
+				right = curr;
 			} else {
-				i_prev = *idx_out;
+				prev = curr;
 			}
 		}
-
-		*idx_out = i_right;
+		bin_time += mach_absolute_time() - start_time;
+		*idx_out = right - array;
+		printf("***************\n");
+		printf("  BIN Time taken: %llu (%lf)\n", bin_time, (double)bin_time / (double)(bin_time + exp_time));
+		printf("  EXP Time taken: %llu (%lf)\n", exp_time, (double)exp_time / (double)(bin_time + exp_time));
+		total_time += mach_absolute_time() - start_time;
 }
 
 #endif

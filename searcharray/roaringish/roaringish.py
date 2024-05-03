@@ -206,9 +206,11 @@ class RoaringishEncoder:
         lhs : np.ndarray of uint64 (encoded) values
         rhs : np.ndarray of uint64 (encoded) values
         """
+        def from_idx(lhs_idx, rhs_idx):
+            return lhs[lhs_idx], rhs[rhs_idx]
         # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
         lhs_idx, rhs_idx = intersect(lhs, rhs, mask=self.header_mask)
-        return lhs[lhs_idx], rhs[rhs_idx]
+        return from_idx(lhs_idx, rhs_idx)
 
     def slice(self,
               encoded: np.ndarray,

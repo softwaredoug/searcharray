@@ -14,6 +14,7 @@ from enum import Enum
 # from snp_ops cimport _galloping_search, DTYPE_t, ALL_BITS
 cimport searcharray.roaringish.snp_ops
 from searcharray.roaringish.snp_ops cimport _galloping_search, DTYPE_t, int64_t
+from posix.time cimport timespec, clock_gettime, CLOCK_MONOTONIC
 
 cdef DTYPE_t ALL_BITS = 0xFFFFFFFFFFFFFFFF
 
@@ -50,6 +51,11 @@ cdef popcount64_arr_naive(DTYPE_t[:] arr):
     for i in range(arr.shape[0]):
         result[i] = __builtin_popcountll(arr[i])
     return result
+
+cdef double get_time():
+    cdef timespec ts
+    clock_gettime(CLOCK_MONOTONIC, &ts)
+    return ts.tv_sec + ts.tv_nsec * 1e-9
 
 
 def popcount64(arr):
@@ -211,9 +217,12 @@ cdef _intersect_keep(DTYPE_t[:] lhs,
             lhs_result_ptr - &lhs_indices[0], rhs_result_ptr - &rhs_indices[0]
 
 
-cdef _intersect_drop_old(DTYPE_t[:] lhs,
-                         DTYPE_t[:] rhs,
-                         DTYPE_t mask=ALL_BITS):
+cdef _intersect_drop(DTYPE_t[:] lhs,
+                     DTYPE_t[:] rhs,
+                     DTYPE_t mask=ALL_BITS):
+    cdef double start = get_time()
+    cdef double start_search = get_time()
+    cdef double search_time = 0
     cdef np.uint64_t len_lhs = lhs.shape[0]
     cdef np.uint64_t len_rhs = rhs.shape[0]
     cdef np.uint64_t i_lhs = 0
@@ -226,6 +235,7 @@ cdef _intersect_drop_old(DTYPE_t[:] lhs,
     cdef np.int64_t result_idx = 0
     cdef np.uint64_t[:] lhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
     cdef np.uint64_t[:] rhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
+    
 
     while i_lhs < len_lhs and i_rhs < len_rhs:
         # Use gallping search to find the first element in the right array
@@ -235,12 +245,16 @@ cdef _intersect_drop_old(DTYPE_t[:] lhs,
         if diff < 0:
             if i_lhs >= len_lhs - 1:
                 break
+            start_search = get_time()
             exp_search(&lhs[0], rhs[i_rhs], mask, &i_lhs, len_lhs)
+            search_time += get_time() - start_search
         # Advance RHS to LHS
         elif diff > 0:
             if i_rhs >= len_rhs - 1:
                 break
+            start_search = get_time()
             exp_search(&rhs[0], lhs[i_lhs], mask, &i_rhs, len_rhs)
+            search_time += get_time() - start_search
         else:
             if value_prev != (lhs[i_lhs] & mask):
                 # Not a dup so store it.
@@ -251,8 +265,12 @@ cdef _intersect_drop_old(DTYPE_t[:] lhs,
             i_lhs += 1
             i_rhs += 1
 
+
     # Get view of each result and return
-    return np.asarray(lhs_indices), np.asarray(rhs_indices), result_idx
+    if (get_time() - start) > 0.001:
+        print(f"Intersect Drop Time: {get_time() - start}")
+        print(f"Search Time: {search_time} -- {search_time / (get_time() - start)}")
+    return np.asarray(lhs_indices)[:result_idx], np.asarray(rhs_indices)[:result_idx]
 
 
 def _u64(lst) -> np.ndarray:
@@ -269,14 +287,14 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
               np.ndarray[DTYPE_t, ndim=1] rhs,
               DTYPE_t mask=ALL_BITS,
               bint drop_duplicates=True):
+    # cdef double start = get_time()
     if mask is None:
         mask = ALL_BITS
     if mask == 0:
         raise ValueError("Mask cannot be zero")
     if drop_duplicates:
         # save_input(lhs, rhs, mask)
-        indices_lhs, indices_rhs, result_idx = _intersect_drop_old(lhs, rhs, mask)
-        return indices_lhs[:result_idx], indices_rhs[:result_idx]
+        return _intersect_drop(lhs, rhs, mask)
     else:
         indices_lhs, indices_rhs, indices_lhs_idx, indices_rhs_idx = _intersect_keep(lhs, rhs, mask)
         return indices_lhs[:indices_lhs_idx], indices_rhs[:indices_rhs_idx]
@@ -285,16 +303,15 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
 cdef _adjacent(DTYPE_t[:] lhs,
                DTYPE_t[:] rhs,
                DTYPE_t mask=ALL_BITS,
-               DTYPE_t delta=1):
+               np.int64_t delta=1):
     # Find all LHS / RHS indices where LHS is 1 before RHS
-    cdef np.intp_t len_lhs = lhs.shape[0]
-    cdef np.intp_t len_rhs = rhs.shape[0]
-    cdef np.intp_t i_lhs = 0
-    cdef np.intp_t i_rhs = 0
-    cdef np.intp_t i_result = 0
+    cdef DTYPE_t len_lhs = lhs.shape[0]
+    cdef DTYPE_t len_rhs = rhs.shape[0]
+    cdef DTYPE_t i_lhs = 0
+    cdef DTYPE_t i_rhs = 0
+    cdef DTYPE_t i_result = 0
     cdef DTYPE_t value_prev = -1
-    cdef DTYPE_t value_lhs = 0
-    cdef DTYPE_t value_rhs = 0
+    # cdef np.int64_t diff = 0
 
     # Outputs as numpy arrays
     cdef np.int64_t result_idx = 0
@@ -307,39 +324,26 @@ cdef _adjacent(DTYPE_t[:] lhs,
 
     while i_lhs < len_lhs and i_rhs < len_rhs:
         # Use gallping search to find the first element in the right array
-        value_lhs = lhs[i_lhs] & mask
-        value_rhs = rhs[i_rhs] & mask
+        # diff = (lhs[i_lhs] & mask) - (rhs[i_rhs] & mask - delta)
         
         # Advance LHS to RHS
-        if value_lhs < value_rhs - delta:
+        if (lhs[i_lhs] & mask) < (rhs[i_rhs] & mask) - delta:
             if i_lhs >= len_lhs - 1:
                 break
-            i_result = i_lhs
-            # lhs   0_  2*  2   lhs / rhs are at _, now advance to *
-            # rhs   0   3_  3
-            # Advance lhs to the 
-            _galloping_search(lhs, value_rhs - delta, mask, &i_result, len_lhs)
-            value_lhs = lhs[i_result] & mask
-            i_lhs = i_result
+            exp_search(&lhs[0], rhs[i_rhs] - delta, mask, &i_lhs, len_lhs)
         # Advance RHS to LHS
-        elif value_rhs - delta < value_lhs:
+        elif (rhs[i_rhs] & mask) - delta < (lhs[i_lhs] & mask):
             if i_rhs >= len_rhs - 1:
                 break
-            i_result = i_rhs
-            # lhs   0    2_   2   lhs / rhs are at _, now advance to *
-            # rhs   0_   3*   3    so that rhs is one past lhs
-            _galloping_search(rhs, value_lhs + delta,
-                              mask, &i_result, len_rhs)
-            value_rhs = rhs[i_result] & mask
-            i_rhs = i_result
+            exp_search(&rhs[0], lhs[i_lhs] + delta, mask, &i_rhs, len_rhs)
 
-        if value_lhs == value_rhs - delta:
-            if value_prev != value_lhs:
+        if (lhs[i_lhs] & mask) == (rhs[i_rhs] & mask) - delta:
+            if value_prev != (lhs[i_lhs] & mask):
                 # Not a dup so store it.
                 lhs_indices[result_idx] = i_lhs
                 rhs_indices[result_idx] = i_rhs
                 result_idx += 1
-            value_prev = value_lhs
+            value_prev = lhs[i_lhs] & mask
             i_lhs += 1
             i_rhs += 1
 
