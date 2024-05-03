@@ -129,6 +129,8 @@ def compute_phrase_freqs(encoded_posns: List[np.ndarray],
                          phrase_freqs: np.ndarray,
                          trim: bool = False) -> np.ndarray:
     """Compute phrase freqs from a set of encoded positions."""
+    return _compute_phrase_freqs_left_to_right(encoded_posns, phrase_freqs, trim=trim)
+
     shortest_len_index = min(enumerate(encoded_posns), key=lambda x: len(x[1]))[0]
     if shortest_len_index <= 1:
         return _compute_phrase_freqs_left_to_right(encoded_posns, phrase_freqs, trim=trim)
