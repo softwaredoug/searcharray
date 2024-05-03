@@ -214,8 +214,8 @@ cdef _phrase_search(list encoded_posns,
     #         shortest_arr = arr
     #         shortest_arr_idx = curr_arr_idx
     #    curr_arr_idx += 1
-    cdef np.intp_t i_other = 0
-    cdef np.intp_t i_other_adj = 0
+    # cdef np.intp_t i_other = 0
+    # cdef np.intp_t i_other_adj = 0
     cdef np.intp_t i_shortest = 0
     cdef DTYPE_t i_arr = 0
     cdef DTYPE_t value_shortest = 0 
@@ -229,10 +229,12 @@ cdef _phrase_search(list encoded_posns,
     cdef bint same_term = False
     cdef bint same_header = False
     cdef DTYPE_t enc_posns_len = len(encoded_posns)
-    cdef DTYPE_t idxs[32]
+    cdef np.intp_t idxs[32]
+    cdef np.intp_t idxs_other[32]
 
     for i in range(0,32):
         idxs[i] = 0
+        idxs_other[i] = 0
 
     # For each item in the shortest array,
     # Find any bigram match before / after
@@ -252,29 +254,26 @@ cdef _phrase_search(list encoded_posns,
 
             # Really each array should have its own index for these
             # same_term = (encoded_posns[curr_arr_idx] is encoded_posns[curr_arr_idx - 1])
-            i_other = idxs[curr_arr_idx]
-            i_other_adj = idxs[curr_arr_idx]
             # Direct intersected
             _galloping_search(curr_arr,
                               target,
                               header_mask,
-                              &i_other,
+                              &idxs[curr_arr_idx],
                               curr_arr.shape[0])
-            idxs[curr_arr_idx] = i_other
-            same_header = (i_other < curr_arr.shape[0]) and (target & header_mask) == (curr_arr[i_other] & header_mask)
+            same_header = (idxs[curr_arr_idx] < curr_arr.shape[0]) and (target & header_mask) == (curr_arr[idxs[curr_arr_idx]] & header_mask)
             same_term = same_header and (
                 __builtin_popcountll(target & payload_mask) > 0
             ) and (
-                target == curr_arr[i_other]
+                target == curr_arr[idxs[curr_arr_idx]]
             )
             if not same_term:
                 _galloping_search(curr_arr,
                                   target + (header_mask & -header_mask),  # +1 on header
                                   header_mask,
-                                  &i_other_adj,
+                                  &idxs_other[curr_arr_idx],
                                   curr_arr.shape[0])
                 res = _count_diff_term(target,
-                                       curr_arr[i_other], curr_arr[i_other_adj],
+                                       curr_arr[idxs[curr_arr_idx]], curr_arr[idxs_other[curr_arr_idx]],
                                        cont_mask, payload_msb,
                                        payload_mask, header_mask)
                 target = res.target
