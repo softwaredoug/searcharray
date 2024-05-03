@@ -20,6 +20,8 @@ void exp_search(uint64_t *array,
 		uint64_t *curr = &array[idx_out[0]];
 		uint64_t *prev;   //= &array[idx_out[0]];
 		uint64_t *right;  // = &array[idx_out[0]];
+		int delta = 1;
+
 		target &= mask;
 
 		/*if (target <= (*curr & mask)) {
@@ -28,7 +30,7 @@ void exp_search(uint64_t *array,
 
 		// unrolled exp search
 		prev = curr;
-		while ((curr + 64 < array + size) &&
+		/*while ((curr + 64 < array + size) &&
 				((*curr & mask) <= target) && (curr += 1) &&
 		    ((*curr & mask) <= target) && (curr += 2) &&
 		    ((*curr & mask) <= target) && (curr += 4) &&
@@ -36,6 +38,15 @@ void exp_search(uint64_t *array,
 		    ((*curr & mask) <= target) && (curr += 16) &&
 		    ((*curr & mask) <= target) && (curr += 32)) {
 				prev = curr;
+		}*/
+		while ((*curr & mask) < target) {
+				prev = curr;
+				curr += delta;
+				// if exceeded size, break
+				if ( curr >= array + size) {
+					break;
+				}
+				delta *= 2;
 		}
 		exp_time += mach_absolute_time() - start_time;
 		start_time = mach_absolute_time();
@@ -53,8 +64,8 @@ void exp_search(uint64_t *array,
 		bin_time += mach_absolute_time() - start_time;
 		*idx_out = right - array;
 		printf("***************\n");
-		printf("  BIN Time taken: %llu (%lf)\n", bin_time, (double)bin_time / (double)(bin_time + exp_time));
 		printf("  EXP Time taken: %llu (%lf)\n", exp_time, (double)exp_time / (double)(bin_time + exp_time));
+		printf("  BIN Time taken: %llu (%lf)\n", bin_time, (double)bin_time / (double)(bin_time + exp_time));
 		total_time += mach_absolute_time() - start_time;
 }
 
