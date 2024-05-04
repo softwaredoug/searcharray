@@ -204,9 +204,9 @@ cdef _intersect_keep(DTYPE_t[:] lhs,
             lhs_result_ptr - &lhs_indices[0], rhs_result_ptr - &rhs_indices[0]
 
 
-cdef _intersect_drop_old(DTYPE_t[:] lhs,
-                         DTYPE_t[:] rhs,
-                         DTYPE_t mask=ALL_BITS):
+cdef _intersect_drop(DTYPE_t[:] lhs,
+                     DTYPE_t[:] rhs,
+                     DTYPE_t mask=ALL_BITS):
     cdef np.intp_t len_lhs = lhs.shape[0]
     cdef np.intp_t len_rhs = rhs.shape[0]
     cdef np.intp_t i_lhs = 0
@@ -268,7 +268,7 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
         raise ValueError("Mask cannot be zero")
     if drop_duplicates:
         # save_input(lhs, rhs, mask)
-        indices_lhs, indices_rhs, result_idx = _intersect_drop_old(lhs, rhs, mask)
+        indices_lhs, indices_rhs, result_idx = _intersect_drop(lhs, rhs, mask)
         return indices_lhs[:result_idx], indices_rhs[:result_idx]
     else:
         indices_lhs, indices_rhs, indices_lhs_idx, indices_rhs_idx = _intersect_keep(lhs, rhs, mask)
