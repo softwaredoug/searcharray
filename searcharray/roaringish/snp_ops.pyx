@@ -251,54 +251,33 @@ cdef _gallop_intersect_drop(DTYPE_t[:] lhs,
     cdef np.uint64_t* rhs_result_ptr = &rhs_indices[0]
 
     while lhs_ptr < &lhs[lhs.shape[0]] and rhs_ptr < &rhs[rhs.shape[0]]:
-        print("LOOP BEGINS")
-        if lhs_ptr[0] < rhs_ptr[0]:
-            lhs_ptr_last = lhs_ptr
+        lhs_delta = 1
+        rhs_delta = 1
+
+        while lhs_ptr < &lhs[lhs.shape[0]] and lhs_ptr[0] < rhs_ptr[0]:
             lhs_ptr += lhs_delta
-            print(rhs_delta)
-            if rhs_delta > 2:
-                print(f"RHS Backtrack -- {rhs_delta}|{rhs_ptr[0]}")
-                rhs_ptr = rhs_ptr_last + 1
-                rhs_delta = 1
-                print(f"RHS Now at {rhs_ptr[0]}")
             lhs_delta *= 2
-        elif rhs_ptr[0] < lhs_ptr[0]:
-            rhs_ptr_last = rhs_ptr
+        lhs_ptr = lhs_ptr - (lhs_delta // 2)
+        while rhs_ptr < &rhs[rhs.shape[0]] and rhs_ptr[0] < lhs_ptr[0]:
             rhs_ptr += rhs_delta
-            print(lhs_delta)
-            if lhs_delta > 2:
-                print(f"LHS Backtrack -- {lhs_delta}|{lhs_ptr[0]}")
-                lhs_ptr = lhs_ptr_last + 1
-                lhs_delta = 1
-                print(f"LHS Now at {lhs_ptr[0]}")
-            lhs_delta = 1
             rhs_delta *= 2
-        else:
-            if last != lhs_ptr[0]:
-                print(f"Gathered {lhs_ptr[0]}, {rhs_ptr[0]}")
-                lhs_result_ptr[0] = lhs_ptr - &lhs[0]
-                rhs_result_ptr[0] = rhs_ptr - &rhs[0]
-                last = lhs_ptr[0]
-                lhs_result_ptr += 1
-                rhs_result_ptr += 1
-            lhs_ptr += 1
-            rhs_ptr += 1
-            lhs_ptr_last = lhs_ptr
-            rhs_ptr_last = rhs_ptr
-            lhs_delta = 1
-            rhs_delta = 1
+        rhs_ptr = rhs_ptr - (rhs_delta // 2)
 
-        if lhs_ptr >= &lhs[lhs.shape[0]] and lhs_delta > 2:
-            print(f"LHS Backtrack(past end) -- {lhs_delta}")
-            lhs_ptr = lhs_ptr_last + 1
-            lhs_delta = 1
-            print(f"LHS Now at {lhs_ptr[0]}")
-        if rhs_ptr >= &rhs[rhs.shape[0]] and rhs_delta > 2:
-            print(f"RHS Backtrack(past end) -- {rhs_delta}")
-            rhs_ptr = rhs_ptr_last + 1
-            rhs_delta = 1
-            print(f"RHS Now at {rhs_ptr[0]}")
-
+        # Now naive 2 ptr
+        while lhs_ptr < &lhs[lhs.shape[0]] and rhs_ptr < &rhs[rhs.shape[0]]:
+            if lhs_ptr[0] < rhs_ptr[0]:
+                lhs_ptr += 1
+            elif rhs_ptr[0] < lhs_ptr[0]:
+                rhs_ptr += 1
+            else:
+                if last != lhs_ptr[0]:
+                    lhs_result_ptr[0] = lhs_ptr - &lhs[0]
+                    rhs_result_ptr[0] = rhs_ptr - &rhs[0]
+                    last = lhs_ptr[0]
+                    lhs_result_ptr += 1
+                    rhs_result_ptr += 1
+                lhs_ptr += 1
+                rhs_ptr += 1
 
         # If delta 
         # Either we read past the array, or 
