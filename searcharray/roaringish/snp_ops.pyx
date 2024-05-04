@@ -218,12 +218,12 @@ cdef _naive_intersect_drop(DTYPE_t[:] lhs,
     cdef np.uint64_t* rhs_result_ptr = &rhs_indices[0]
 
     while lhs_ptr < &lhs[lhs.shape[0]] and rhs_ptr < &rhs[rhs.shape[0]]:
-        if lhs_ptr[0] < rhs_ptr[0]:
+        if (lhs_ptr[0] & mask) < (rhs_ptr[0] & mask):
             lhs_ptr += 1
-        elif rhs_ptr[0] < lhs_ptr[0]:
+        elif (rhs_ptr[0] & mask) < (lhs_ptr[0] & mask):
             rhs_ptr += 1
         else:
-            if last != lhs_ptr[0]:
+            if (last & mask) != (lhs_ptr[0] & mask):
                 lhs_result_ptr[0] = lhs_ptr - &lhs[0]
                 rhs_result_ptr[0] = rhs_ptr - &rhs[0]
                 last = lhs_ptr[0]
@@ -240,8 +240,8 @@ cdef _gallop_intersect_drop(DTYPE_t[:] lhs,
     """Two pointer approach to find the intersection of two sorted arrays."""
     cdef DTYPE_t* lhs_ptr = &lhs[0]
     cdef DTYPE_t* rhs_ptr = &rhs[0]
-    cdef DTYPE_t* lhs_ptr_last = &lhs[0]
-    cdef DTYPE_t* rhs_ptr_last = &rhs[0]
+    cdef DTYPE_t* end_lhs_ptr = &lhs[lhs.shape[0]]
+    cdef DTYPE_t* end_rhs_ptr = &rhs[rhs.shape[0]]
     cdef DTYPE_t lhs_delta = 1
     cdef DTYPE_t rhs_delta = 1
     cdef DTYPE_t last = -1
@@ -250,34 +250,35 @@ cdef _gallop_intersect_drop(DTYPE_t[:] lhs,
     cdef np.uint64_t* lhs_result_ptr = &lhs_indices[0]
     cdef np.uint64_t* rhs_result_ptr = &rhs_indices[0]
 
-    while lhs_ptr < &lhs[lhs.shape[0]] and rhs_ptr < &rhs[rhs.shape[0]]:
+    while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
         lhs_delta = 1
         rhs_delta = 1
 
-        while lhs_ptr < &lhs[lhs.shape[0]] and lhs_ptr[0] < rhs_ptr[0]:
+        # Gallop past the current element
+        while lhs_ptr < end_lhs_ptr and (lhs_ptr[0] & mask) < (rhs_ptr[0] & mask):
             lhs_ptr += lhs_delta
             lhs_delta *= 2
         lhs_ptr = lhs_ptr - (lhs_delta // 2)
-        while rhs_ptr < &rhs[rhs.shape[0]] and rhs_ptr[0] < lhs_ptr[0]:
+        while rhs_ptr < end_rhs_ptr and (rhs_ptr[0] & mask) < (lhs_ptr[0] & mask):
             rhs_ptr += rhs_delta
             rhs_delta *= 2
         rhs_ptr = rhs_ptr - (rhs_delta // 2)
 
-        # Now naive 2 ptr
-        while lhs_ptr < &lhs[lhs.shape[0]] and rhs_ptr < &rhs[rhs.shape[0]]:
-            if lhs_ptr[0] < rhs_ptr[0]:
-                lhs_ptr += 1
-            elif rhs_ptr[0] < lhs_ptr[0]:
-                rhs_ptr += 1
-            else:
-                if last != lhs_ptr[0]:
-                    lhs_result_ptr[0] = lhs_ptr - &lhs[0]
-                    rhs_result_ptr[0] = rhs_ptr - &rhs[0]
-                    last = lhs_ptr[0]
-                    lhs_result_ptr += 1
-                    rhs_result_ptr += 1
-                lhs_ptr += 1
-                rhs_ptr += 1
+        # Now that we've reset, we just do the naive 2-ptr check
+        # Then next loop we pickup on exponential search
+        if (lhs_ptr[0] & mask) < (rhs_ptr[0] & mask):
+            lhs_ptr += 1
+        elif (rhs_ptr[0] & mask) < (lhs_ptr[0] & mask):
+            rhs_ptr += 1
+        else:
+            if (last & mask) != (lhs_ptr[0] & mask):
+                lhs_result_ptr[0] = lhs_ptr - &lhs[0]
+                rhs_result_ptr[0] = rhs_ptr - &rhs[0]
+                last = lhs_ptr[0]
+                lhs_result_ptr += 1
+                rhs_result_ptr += 1
+            lhs_ptr += 1
+            rhs_ptr += 1
 
         # If delta 
         # Either we read past the array, or 
@@ -285,49 +286,64 @@ cdef _gallop_intersect_drop(DTYPE_t[:] lhs,
     return np.asarray(lhs_indices), np.asarray(rhs_indices), lhs_result_ptr - &lhs_indices[0]
 
 
+cdef _gallop_adjacent(DTYPE_t[:] lhs,
+                      DTYPE_t[:] rhs,
+                      DTYPE_t mask=ALL_BITS,
+                      DTYPE_t delta=1):
+    # Find all LHS / RHS indices where LHS is 1 before RHS
+    cdef DTYPE_t* lhs_ptr = &lhs[0]
+    cdef DTYPE_t* rhs_ptr = &rhs[0]
+    cdef DTYPE_t* end_lhs_ptr = &lhs[lhs.shape[0]]
+    cdef DTYPE_t* end_rhs_ptr = &rhs[rhs.shape[0]]
+    cdef DTYPE_t lhs_delta = 1
+    cdef DTYPE_t rhs_delta = 1
+    cdef DTYPE_t last = -1
+    cdef np.uint64_t[:] lhs_indices = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef np.uint64_t[:] rhs_indices = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef np.uint64_t* lhs_result_ptr = &lhs_indices[0]
+    cdef np.uint64_t* rhs_result_ptr = &rhs_indices[0]
+    
+    # Read rhs until > delta
+    while rhs_ptr < end_rhs_ptr and rhs_ptr[0] & mask == 0:
+        rhs_ptr += 1
 
-cdef _intersect_drop(DTYPE_t[:] lhs,
-                     DTYPE_t[:] rhs,
-                     DTYPE_t mask=ALL_BITS):
-    cdef np.intp_t len_lhs = lhs.shape[0]
-    cdef np.intp_t len_rhs = rhs.shape[0]
-    cdef np.intp_t i_lhs = 0
-    cdef np.intp_t i_rhs = 0
-    cdef np.intp_t i_result = 0
-    cdef DTYPE_t value_prev = -1
-    cdef np.int64_t diff = 0
+    while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
+        lhs_delta = 1
+        rhs_delta = 1
 
-    # Outputs as numpy arrays
-    cdef np.int64_t result_idx = 0
-    cdef np.uint64_t[:] lhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
-    cdef np.uint64_t[:] rhs_indices = np.empty(min(len_lhs, len_rhs), dtype=np.uint64)
+        # Gallop, but instead check is:
+        # if value_lhs < value_rhs - delta:
+        # Gallop past the current element
+        while lhs_ptr < end_lhs_ptr and (lhs_ptr[0] & mask) < ((rhs_ptr[0] & mask) - delta):
+            lhs_ptr += lhs_delta
+            lhs_delta *= 2
+        lhs_ptr = lhs_ptr - (lhs_delta // 2)
+        while rhs_ptr < end_rhs_ptr and ((rhs_ptr[0] & mask) - delta) < (lhs_ptr[0] & mask):
+            rhs_ptr += rhs_delta
+            rhs_delta *= 2
+        rhs_ptr = rhs_ptr - (rhs_delta // 2)
 
-    while i_lhs < len_lhs and i_rhs < len_rhs:
-        # Use gallping search to find the first element in the right array
-        diff = (lhs[i_lhs] & mask) - (rhs[i_rhs] & mask)
+        # Now that we've reset, we just do the naive 2-ptr check
+        # Then next loop we pickup on exponential search
+        if (lhs_ptr[0] & mask) < ((rhs_ptr[0] & mask) - delta):
+            lhs_ptr += 1
+        elif ((rhs_ptr[0] & mask) - delta) < (lhs_ptr[0] & mask):
+            rhs_ptr += 1
+        if (lhs_ptr[0] & mask) == ((rhs_ptr[0] & mask) - delta):
+            if (last & mask) != (lhs_ptr[0] & mask):
+                lhs_result_ptr[0] = lhs_ptr - &lhs[0]
+                rhs_result_ptr[0] = rhs_ptr - &rhs[0]
+                last = lhs_ptr[0]
+                lhs_result_ptr += 1
+                rhs_result_ptr += 1
+            lhs_ptr += 1
+            rhs_ptr += 1
 
-        # Advance LHS to RHS
-        if diff < 0:
-            if i_lhs >= len_lhs - 1:
-                break
-            _galloping_search(lhs, rhs[i_rhs], mask, &i_lhs, len_lhs)
-        # Advance RHS to LHS
-        elif diff > 0:
-            if i_rhs >= len_rhs - 1:
-                break
-            _galloping_search(rhs, lhs[i_lhs], mask, &i_rhs, len_rhs)
-        else:
-            if value_prev != (lhs[i_lhs] & mask):
-                # Not a dup so store it.
-                lhs_indices[result_idx] = i_lhs
-                rhs_indices[result_idx] = i_rhs
-                result_idx += 1
-            value_prev = lhs[i_lhs] & mask
-            i_lhs += 1
-            i_rhs += 1
+        # If delta 
+        # Either we read past the array, or 
 
-    # Get view of each result and return
-    return np.asarray(lhs_indices), np.asarray(rhs_indices), result_idx
+    return np.asarray(lhs_indices), np.asarray(rhs_indices), lhs_result_ptr - &lhs_indices[0]
+
 
 
 def _u64(lst) -> np.ndarray:
@@ -433,7 +449,7 @@ def adjacent(np.ndarray[DTYPE_t, ndim=1] lhs,
     else:
         delta = (mask & -mask)  # lest significant set bit on mask
 
-    indices_lhs, indices_rhs, result_idx = _adjacent(lhs, rhs, mask, delta)
+    indices_lhs, indices_rhs, result_idx = _gallop_adjacent(lhs, rhs, mask, delta)
     return indices_lhs[:result_idx], indices_rhs[:result_idx]
 
 
