@@ -329,15 +329,16 @@ cdef _gallop_adjacent(DTYPE_t[:] lhs,
             lhs_ptr += 1
         elif ((rhs_ptr[0] & mask) - delta) < (lhs_ptr[0] & mask):
             rhs_ptr += 1
-        if (lhs_ptr[0] & mask) == ((rhs_ptr[0] & mask) - delta):
-            if (last & mask) != (lhs_ptr[0] & mask):
-                lhs_result_ptr[0] = lhs_ptr - &lhs[0]
-                rhs_result_ptr[0] = rhs_ptr - &rhs[0]
-                last = lhs_ptr[0]
-                lhs_result_ptr += 1
-                rhs_result_ptr += 1
-            lhs_ptr += 1
-            rhs_ptr += 1
+        else:
+            if (lhs_ptr[0] & mask) == ((rhs_ptr[0] & mask) - delta):
+                if (last & mask) != (lhs_ptr[0] & mask):
+                    lhs_result_ptr[0] = lhs_ptr - &lhs[0]
+                    rhs_result_ptr[0] = rhs_ptr - &rhs[0]
+                    last = lhs_ptr[0]
+                    lhs_result_ptr += 1
+                    rhs_result_ptr += 1
+                lhs_ptr += 1
+                rhs_ptr += 1
 
         # If delta 
         # Either we read past the array, or 
