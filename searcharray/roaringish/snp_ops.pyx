@@ -204,6 +204,37 @@ cdef _intersect_keep(DTYPE_t[:] lhs,
             lhs_result_ptr - &lhs_indices[0], rhs_result_ptr - &rhs_indices[0]
 
 
+
+cdef _naive_intersect_drop(DTYPE_t[:] lhs,
+                           DTYPE_t[:] rhs,
+                           DTYPE_t mask=ALL_BITS):
+    """Two pointer approach to find the intersection of two sorted arrays."""
+    cdef DTYPE_t* lhs_ptr = &lhs[0]
+    cdef DTYPE_t* rhs_ptr = &rhs[0]
+    cdef DTYPE_t last = -1
+    cdef np.uint64_t[:] lhs_indices = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef np.uint64_t[:] rhs_indices = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef np.uint64_t* lhs_result_ptr = &lhs_indices[0]
+    cdef np.uint64_t* rhs_result_ptr = &rhs_indices[0]
+
+    while lhs_ptr < &lhs[lhs.shape[0]] and rhs_ptr < &rhs[rhs.shape[0]]:
+        if lhs_ptr[0] < rhs_ptr[0]:
+            lhs_ptr += 1
+        elif rhs_ptr[0] < lhs_ptr[0]:
+            rhs_ptr += 1
+        else:
+            if last != lhs_ptr[0]:
+                lhs_result_ptr[0] = lhs_ptr - &lhs[0]
+                rhs_result_ptr[0] = rhs_ptr - &rhs[0]
+                last = lhs_ptr[0]
+                lhs_result_ptr += 1
+                rhs_result_ptr += 1
+            lhs_ptr += 1
+            rhs_ptr += 1
+    return np.asarray(lhs_indices), np.asarray(rhs_indices), lhs_result_ptr - &lhs_indices[0]
+
+
+
 cdef _intersect_drop(DTYPE_t[:] lhs,
                      DTYPE_t[:] rhs,
                      DTYPE_t mask=ALL_BITS):
