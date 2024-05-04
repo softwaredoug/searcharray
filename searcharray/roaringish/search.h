@@ -18,7 +18,7 @@ void exp_search(uint64_t *array,
 
 		int delta = 1;
 		uint64_t end = size - 1;
-		int i_prev = *idx_out;
+		int i_prev = 0;
 
 		// Exponential search
 		/*while (value < target) {
@@ -35,13 +35,13 @@ void exp_search(uint64_t *array,
 
 		// An alternative, as do until loop
 		do {
-		  i_prev = *idx_out;
 			*idx_out += delta;
 			delta *= 2;
 		} while (size > *idx_out && (array[*idx_out] & mask) < target);
 	  if (size <= *idx_out) {
 		  *idx_out = end;
 		}
+		i_prev = *idx_out - (delta / 2);
 
 		// int i_right = *idx_out + 1;
 		posns[0] = i_prev;
