@@ -286,6 +286,59 @@ cdef _gallop_intersect_drop(DTYPE_t[:] lhs,
     return np.asarray(lhs_indices), np.asarray(rhs_indices), lhs_result_ptr - &lhs_indices[0]
 
 
+cdef _gallop_intersect_keep(DTYPE_t[:] lhs,
+                            DTYPE_t[:] rhs,
+                            DTYPE_t mask=ALL_BITS):
+    """Two pointer approach to find the intersection of two sorted arrays."""
+    cdef DTYPE_t* lhs_ptr = &lhs[0]
+    cdef DTYPE_t* rhs_ptr = &rhs[0]
+    cdef DTYPE_t* end_lhs_ptr = &lhs[lhs.shape[0]]
+    cdef DTYPE_t* end_rhs_ptr = &rhs[rhs.shape[0]]
+    cdef DTYPE_t lhs_delta = 1
+    cdef DTYPE_t rhs_delta = 1
+    cdef DTYPE_t target = -1
+    cdef np.uint64_t[:] lhs_indices = np.empty(max(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef np.uint64_t[:] rhs_indices = np.empty(max(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef np.uint64_t* lhs_result_ptr = &lhs_indices[0]
+    cdef np.uint64_t* rhs_result_ptr = &rhs_indices[0]
+
+    while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
+        lhs_delta = 1
+        rhs_delta = 1
+
+        # Gallop past the current element
+        while lhs_ptr < end_lhs_ptr and (lhs_ptr[0] & mask) < (rhs_ptr[0] & mask):
+            lhs_ptr += lhs_delta
+            lhs_delta *= 2
+        lhs_ptr = lhs_ptr - (lhs_delta // 2)
+        while rhs_ptr < end_rhs_ptr and (rhs_ptr[0] & mask) < (lhs_ptr[0] & mask):
+            rhs_ptr += rhs_delta
+            rhs_delta *= 2
+        rhs_ptr = rhs_ptr - (rhs_delta // 2)
+
+        # Now that we've reset, we just do the naive 2-ptr check
+        # Then next loop we pickup on exponential search
+        if (lhs_ptr[0] & mask) < (rhs_ptr[0] & mask):
+            lhs_ptr += 1
+        elif (rhs_ptr[0] & mask) < (lhs_ptr[0] & mask):
+            rhs_ptr += 1
+        else:
+            target = lhs_ptr[0] & mask
+            # Store all LHS indices equal to RHS
+            while (lhs_ptr[0] & mask) == target and lhs_ptr < end_lhs_ptr:
+                lhs_result_ptr[0] = lhs_ptr - &lhs[0]; lhs_result_ptr += 1
+                lhs_ptr += 1
+            # Store all RHS equal to LHS
+            while (rhs_ptr[0] & mask) == target and rhs_ptr < end_rhs_ptr:
+                rhs_result_ptr[0] = rhs_ptr - &rhs[0]; rhs_result_ptr += 1
+                rhs_ptr += 1
+
+        # If delta 
+        # Either we read past the array, or 
+
+    return np.asarray(lhs_indices), np.asarray(rhs_indices), lhs_result_ptr - &lhs_indices[0], rhs_result_ptr - &rhs_indices[0]
+
+
 cdef _gallop_adjacent(DTYPE_t[:] lhs,
                       DTYPE_t[:] rhs,
                       DTYPE_t mask=ALL_BITS,
@@ -370,7 +423,7 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
         indices_lhs, indices_rhs, result_idx = _gallop_intersect_drop(lhs, rhs, mask)
         return indices_lhs[:result_idx], indices_rhs[:result_idx]
     else:
-        indices_lhs, indices_rhs, indices_lhs_idx, indices_rhs_idx = _intersect_keep(lhs, rhs, mask)
+        indices_lhs, indices_rhs, indices_lhs_idx, indices_rhs_idx = _gallop_intersect_keep(lhs, rhs, mask)
         return indices_lhs[:indices_lhs_idx], indices_rhs[:indices_rhs_idx]
 
 
