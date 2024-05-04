@@ -2,13 +2,15 @@
 #define SEARCH_H
 
 #include <stdint.h>
+#include <stdio.h>
 
 void exp_search(uint64_t *array,
 	  					  uint64_t target,
 								const uint64_t mask,
 								uint64_t* idx_out,
 								const uint64_t size) {
-		uint64_t value = array[idx_out[0]] & mask;
+		uint64_t value = array[*idx_out] & mask;
+		uint64_t posns[2] = {*idx_out, *idx_out};
 		target &= mask;
 
 		if (target <= value) {
@@ -16,35 +18,29 @@ void exp_search(uint64_t *array,
 		}
 
 		int delta = 1;
-		uint64_t end = size - 1;
-		int i_prev = *idx_out;
 
 		// Exponential search
 		while (value < target) {
-			i_prev = *idx_out;
-			*idx_out += delta;
-			if (size <= *idx_out) {
-				*idx_out = end;
-				value = array[*idx_out] & mask;
+			posns[0] = posns[1];
+			posns[1] += delta;
+			if (size <= posns[1]) {
+				posns[1] = size - 1;
+				value = array[posns[1]] & mask;
 				break;
 			}
-			value = array[*idx_out] & mask;
+			value = array[posns[1]] & mask;
 			delta *= 2;
 		}
 
-		int i_right = *idx_out + 1;
-		// binary search
-		while (i_prev + 1 < i_right) {
-			*idx_out = (i_right + i_prev) / 2;
+		posns[1] = *idx_out + 1;
+		// branchless binary search
+		while (posns[0] + 1 < posns[1]) {
+			*idx_out = (posns[0] + posns[1]) / 2;
 			value = array[*idx_out] & mask;
-			if (target <= value) {
-				i_right = *idx_out;
-			} else {
-				i_prev = *idx_out;
-			}
+			posns[value < target] = *idx_out;
 		}
 
-		*idx_out = i_right;
+		*idx_out = posns[1];
 }
 
 #endif
