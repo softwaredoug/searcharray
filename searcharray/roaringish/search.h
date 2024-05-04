@@ -8,16 +8,14 @@ void exp_search(uint64_t *array,
 								const uint64_t mask,
 								uint64_t* idx_out,
 								const uint64_t size) {
-		uint64_t value = array[idx_out[0]] & mask;
 		uint64_t posns[2] = {0, 0};
 		target &= mask;
 
-		if (target <= value) {
+		/*if (target <= value) {
 			return;
-		}
+		}*/
 
 		int delta = 1;
-		uint64_t end = size - 1;
 		int i_prev = 0;
 
 		// Exponential search
@@ -39,7 +37,7 @@ void exp_search(uint64_t *array,
 			delta *= 2;
 		} while (size > *idx_out && (array[*idx_out] & mask) < target);
 	  if (size <= *idx_out) {
-		  *idx_out = end;
+		  *idx_out = size - 1;
 		}
 		i_prev = *idx_out - (delta / 2);
 
@@ -48,8 +46,7 @@ void exp_search(uint64_t *array,
 		posns[1] = *idx_out + 1;
 		while (posns[0] + 1 < posns[1]) {
 			*idx_out = (posns[0] + posns[1]) / 2;
-			value = array[*idx_out] & mask;
-			posns[target <= value] = *idx_out;
+			posns[target <= (array[*idx_out] & mask) ] = *idx_out;
 		}
 
 		*idx_out = posns[1];
