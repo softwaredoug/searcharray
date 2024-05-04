@@ -234,6 +234,78 @@ cdef _naive_intersect_drop(DTYPE_t[:] lhs,
     return np.asarray(lhs_indices), np.asarray(rhs_indices), lhs_result_ptr - &lhs_indices[0]
 
 
+cdef _gallop_intersect_drop(DTYPE_t[:] lhs,
+                            DTYPE_t[:] rhs,
+                            DTYPE_t mask=ALL_BITS):
+    """Two pointer approach to find the intersection of two sorted arrays."""
+    cdef DTYPE_t* lhs_ptr = &lhs[0]
+    cdef DTYPE_t* rhs_ptr = &rhs[0]
+    cdef DTYPE_t* lhs_ptr_last = &lhs[0]
+    cdef DTYPE_t* rhs_ptr_last = &rhs[0]
+    cdef DTYPE_t lhs_delta = 1
+    cdef DTYPE_t rhs_delta = 1
+    cdef DTYPE_t last = -1
+    cdef np.uint64_t[:] lhs_indices = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef np.uint64_t[:] rhs_indices = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef np.uint64_t* lhs_result_ptr = &lhs_indices[0]
+    cdef np.uint64_t* rhs_result_ptr = &rhs_indices[0]
+
+    while lhs_ptr < &lhs[lhs.shape[0]] and rhs_ptr < &rhs[rhs.shape[0]]:
+        print("LOOP BEGINS")
+        if lhs_ptr[0] < rhs_ptr[0]:
+            lhs_ptr_last = lhs_ptr
+            lhs_ptr += lhs_delta
+            print(rhs_delta)
+            if rhs_delta > 2:
+                print(f"RHS Backtrack -- {rhs_delta}|{rhs_ptr[0]}")
+                rhs_ptr = rhs_ptr_last + 1
+                rhs_delta = 1
+                print(f"RHS Now at {rhs_ptr[0]}")
+            lhs_delta *= 2
+        elif rhs_ptr[0] < lhs_ptr[0]:
+            rhs_ptr_last = rhs_ptr
+            rhs_ptr += rhs_delta
+            print(lhs_delta)
+            if lhs_delta > 2:
+                print(f"LHS Backtrack -- {lhs_delta}|{lhs_ptr[0]}")
+                lhs_ptr = lhs_ptr_last + 1
+                lhs_delta = 1
+                print(f"LHS Now at {lhs_ptr[0]}")
+            lhs_delta = 1
+            rhs_delta *= 2
+        else:
+            if last != lhs_ptr[0]:
+                print(f"Gathered {lhs_ptr[0]}, {rhs_ptr[0]}")
+                lhs_result_ptr[0] = lhs_ptr - &lhs[0]
+                rhs_result_ptr[0] = rhs_ptr - &rhs[0]
+                last = lhs_ptr[0]
+                lhs_result_ptr += 1
+                rhs_result_ptr += 1
+            lhs_ptr += 1
+            rhs_ptr += 1
+            lhs_ptr_last = lhs_ptr
+            rhs_ptr_last = rhs_ptr
+            lhs_delta = 1
+            rhs_delta = 1
+
+        if lhs_ptr >= &lhs[lhs.shape[0]] and lhs_delta > 2:
+            print(f"LHS Backtrack(past end) -- {lhs_delta}")
+            lhs_ptr = lhs_ptr_last + 1
+            lhs_delta = 1
+            print(f"LHS Now at {lhs_ptr[0]}")
+        if rhs_ptr >= &rhs[rhs.shape[0]] and rhs_delta > 2:
+            print(f"RHS Backtrack(past end) -- {rhs_delta}")
+            rhs_ptr = rhs_ptr_last + 1
+            rhs_delta = 1
+            print(f"RHS Now at {rhs_ptr[0]}")
+
+
+        # If delta 
+        # Either we read past the array, or 
+
+    return np.asarray(lhs_indices), np.asarray(rhs_indices), lhs_result_ptr - &lhs_indices[0]
+
+
 
 cdef _intersect_drop(DTYPE_t[:] lhs,
                      DTYPE_t[:] rhs,
@@ -299,7 +371,7 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
         raise ValueError("Mask cannot be zero")
     if drop_duplicates:
         # save_input(lhs, rhs, mask)
-        indices_lhs, indices_rhs, result_idx = _intersect_drop(lhs, rhs, mask)
+        indices_lhs, indices_rhs, result_idx = _gallop_intersect_drop(lhs, rhs, mask)
         return indices_lhs[:result_idx], indices_rhs[:result_idx]
     else:
         indices_lhs, indices_rhs, indices_lhs_idx, indices_rhs_idx = _intersect_keep(lhs, rhs, mask)
