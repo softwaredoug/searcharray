@@ -9,6 +9,7 @@ void exp_search(uint64_t *array,
 								uint64_t* idx_out,
 								const uint64_t size) {
 		uint64_t value = array[idx_out[0]] & mask;
+		uint64_t posns[2] = {0, 0};
 		target &= mask;
 
 		if (target <= value) {
@@ -32,19 +33,16 @@ void exp_search(uint64_t *array,
 			delta *= 2;
 		}
 
-		int i_right = *idx_out + 1;
-		// binary search
-		while (i_prev + 1 < i_right) {
-			*idx_out = (i_right + i_prev) / 2;
+		// int i_right = *idx_out + 1;
+		posns[0] = i_prev;
+		posns[1] = *idx_out + 1;
+		while (posns[0] + 1 < posns[1]) {
+			*idx_out = (posns[0] + posns[1]) / 2;
 			value = array[*idx_out] & mask;
-			if (target <= value) {
-				i_right = *idx_out;
-			} else {
-				i_prev = *idx_out;
-			}
+			posns[target <= value] = *idx_out;
 		}
 
-		*idx_out = i_right;
+		*idx_out = posns[1];
 }
 
 #endif
