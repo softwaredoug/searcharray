@@ -55,7 +55,6 @@ def popcount64(arr):
 
 
 cdef _popcount_reduce_at(DTYPE_t[:] ids, DTYPE_t[:] payload, double[:] output):
-    """Get every index where a new value appears."""
     cdef DTYPE_t idx = 1
     cdef DTYPE_t popcount_sum = __builtin_popcountll(payload[0])
     cdef DTYPE_t result_idx = 1
@@ -72,6 +71,7 @@ cdef _popcount_reduce_at(DTYPE_t[:] ids, DTYPE_t[:] payload, double[:] output):
 
 
 def popcount_reduce_at(ids, payload, output):
+    """Write the sum of popcount of the payload at the indices in ids to the output array."""
     if len(ids) != len(payload):
         raise ValueError("ids and payload must have the same length")
     return np.array(_popcount_reduce_at(ids, payload, output))

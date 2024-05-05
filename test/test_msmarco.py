@@ -427,7 +427,7 @@ def test_msmarco1m_edismax(query, msmarco1m, benchmark, caplog):
                        tie=0.3)
 
     scores, explain = profiler.run(run_edismax, query)
-    assert len(scores) == len(msmarco100k['body_ws'].array)
+    assert len(scores) == len(msmarco1m['body_ws'].array)
     assert np.any(scores > 0)
 
 
