@@ -67,6 +67,8 @@ cdef _popcount_reduce_at(DTYPE_t[:] ids, DTYPE_t[:] payload, double[:] output):
             popcount_sum = 0
         popcount_sum += __builtin_popcountll(payload[idx])
         idx += 1
+    # Save final value
+    output[ids[idx - 1]] = popcount_sum
 
 
 def popcount_reduce_at(ids, payload, output):
