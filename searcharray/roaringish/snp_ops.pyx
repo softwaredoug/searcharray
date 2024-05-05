@@ -174,11 +174,11 @@ cdef _gallop_intersect_drop(DTYPE_t[:] lhs,
         # Gallop past the current element
         while lhs_ptr < end_lhs_ptr and (lhs_ptr[0] & mask) < (rhs_ptr[0] & mask):
             lhs_ptr += lhs_delta
-            lhs_delta *= 2
+            lhs_delta <<= 1
         lhs_ptr = lhs_ptr - (lhs_delta // 2)
         while rhs_ptr < end_rhs_ptr and (rhs_ptr[0] & mask) < (lhs_ptr[0] & mask):
             rhs_ptr += rhs_delta
-            rhs_delta *= 2
+            rhs_delta <<= 1
         rhs_ptr = rhs_ptr - (rhs_delta // 2)
 
         # Now that we've reset, we just do the naive 2-ptr check
