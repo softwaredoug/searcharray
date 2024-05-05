@@ -54,6 +54,28 @@ def popcount64(arr):
     return np.array(popcount64_arr(arr))
 
 
+cdef _popcount_reduce_at(DTYPE_t[:] ids, DTYPE_t[:] payload, double[:] output):
+    """Get every index where a new value appears."""
+    cdef DTYPE_t idx = 1
+    cdef DTYPE_t popcount_sum = __builtin_popcountll(payload[0])
+    cdef DTYPE_t result_idx = 1
+
+    # We already have 0, now add new values
+    while idx < ids.shape[0]:
+        if ids[idx] != ids[idx - 1]:
+            output[ids[idx - 1]] = popcount_sum
+            popcount_sum = 0
+        popcount_sum += __builtin_popcountll(payload[idx])
+        idx += 1
+
+
+def popcount_reduce_at(ids, payload, output):
+    if len(ids) != len(payload):
+        raise ValueError("ids and payload must have the same length")
+    return np.array(_popcount_reduce_at(ids, payload, output))
+
+
+
 cdef void _binary_search(DTYPE_t[:] array,
                          DTYPE_t target,
                          DTYPE_t mask,
@@ -177,29 +199,30 @@ cdef _gallop_intersect_drop(DTYPE_t[:] lhs,
         while lhs_ptr < end_lhs_ptr and (lhs_ptr[0] & mask) < (rhs_ptr[0] & mask):
             lhs_ptr+=delta
             delta <<= 1
-        lhs_ptr-= (delta >> 1)
+        lhs_ptr -= (delta >> 1)
         delta = 1
         while rhs_ptr < end_rhs_ptr and (rhs_ptr[0] & mask) < (lhs_ptr[0] & mask):
             rhs_ptr+=delta
             delta <<= 1
-        rhs_ptr-= (delta >> 1)
+        rhs_ptr -= (delta >> 1)
         delta = 1
 
         # Now that we've reset, we just do the naive 2-ptr check
         # Then next loop we pickup on exponential search
-        if (((lhs_ptr[0] & mask) < (rhs_ptr[0] & mask)) and (lhs_ptr := lhs_ptr + 1)) or \
-              (((rhs_ptr[0] & mask) < (lhs_ptr[0] & mask)) and (rhs_ptr := rhs_ptr + 1)):
-            continue
-       
-        # If here values equal, collect
-        if (last & mask) != (lhs_ptr[0] & mask):
-            lhs_result_ptr[0] = lhs_ptr - &lhs[0]
-            rhs_result_ptr[0] = rhs_ptr - &rhs[0]
-            last = lhs_ptr[0]
-            lhs_result_ptr += 1
-            rhs_result_ptr += 1
-        lhs_ptr += 1
-        rhs_ptr += 1
+        if (lhs_ptr[0] & mask) < (rhs_ptr[0] & mask):
+            lhs_ptr = lhs_ptr + 1
+        elif (rhs_ptr[0] & mask) < (lhs_ptr[0] & mask):
+            rhs_ptr = rhs_ptr + 1
+        else:
+            # If here values equal, collect
+            if (last & mask) != (lhs_ptr[0] & mask):
+                lhs_result_ptr[0] = lhs_ptr - &lhs[0]
+                rhs_result_ptr[0] = rhs_ptr - &rhs[0]
+                last = lhs_ptr[0]
+                lhs_result_ptr += 1
+                rhs_result_ptr += 1
+            lhs_ptr += 1
+            rhs_ptr += 1
 
     return np.asarray(lhs_indices), np.asarray(rhs_indices), lhs_result_ptr - &lhs_indices[0]
 

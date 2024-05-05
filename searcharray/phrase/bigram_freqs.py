@@ -5,7 +5,7 @@ from searcharray.roaringish import RoaringishEncoder
 import logging
 from enum import Enum
 
-from searcharray.roaringish import intersect, popcount64, merge
+from searcharray.roaringish import intersect, popcount64, merge, popcount_reduce_at
 
 
 logger = logging.getLogger(__name__)
@@ -144,14 +144,7 @@ def _inner_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
         lhs_next = overlap_bits.copy()
         lhs_next |= (lhs_int & (encoder.key_mask | encoder.payload_msb_mask))
 
-    matches2 = overlap_bits > 0
-    if np.any(matches2):
-        transitions = np.argwhere(np.diff(lhs_doc_ids[matches2]) != 0).flatten() + 1
-        transitions = np.insert(transitions, 0, 0)
-        counted_bits = popcount64(overlap_bits[matches2])
-        reduced = np.add.reduceat(counted_bits,
-                                  transitions)
-        phrase_freqs[np.unique(lhs_doc_ids[matches2])] += reduced
+    popcount_reduce_at(lhs_doc_ids, overlap_bits, phrase_freqs)
     return phrase_freqs, (lhs_next, rhs_next)
 
 
