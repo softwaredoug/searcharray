@@ -67,15 +67,20 @@ benchmark_dry_run: deps
 	python -m pytest -x --benchmark-only
 
 
+benchmark_one: deps extensions
+	python -m pytest -x -s --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_last "$(TEST)"
+	open ./.benchmarks/histogram_last.svg
+
+
 benchmark: deps extensions
 	# There is some interaction between doing MSMarco and TMDB benchmarks together 
 	# (maybe due to memory usage) that causes TMDB to show as slower. So we run them separately.
-	python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_snp_ops test/test_snp_ops.py
-	open ./.benchmarks/histogram_snp_ops.svg
-	python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_tmdb test/test_tmdb.py
-	open ./.benchmarks/histogram_tmdb.svg
-	python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_msmarco test/test_msmarco.py
-	open ./.benchmarks/histogram_msmarco.svg
+		python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_snp_ops test/test_snp_ops.py
+	  open ./.benchmarks/histogram_snp_ops.svg
+		python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_tmdb test/test_tmdb.py
+		open ./.benchmarks/histogram_tmdb.svg
+		python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_msmarco test/test_msmarco.py
+		open ./.benchmarks/histogram_msmarco.svg
 
 benchmark_graph: deps
 	python scripts/graph_benchmarks.py "$(TEST)"

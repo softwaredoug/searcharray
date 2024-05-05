@@ -23,6 +23,11 @@ cdef extern from "stddef.h":
     int __builtin_popcountll(unsigned long long x)
 
 
+# Include mach performance timer
+cdef extern from "mach/mach_time.h":
+    uint64_t mach_absolute_time()
+
+
 cdef popcount64_arr(DTYPE_t[:] arr):
     cdef np.uint64_t[:] result = np.empty(arr.shape[0], dtype=np.uint64)
     # cdef int i = 0
@@ -159,8 +164,7 @@ cdef _gallop_intersect_drop(DTYPE_t[:] lhs,
     cdef DTYPE_t* rhs_ptr = &rhs[0]
     cdef DTYPE_t* end_lhs_ptr = &lhs[lhs.shape[0]]
     cdef DTYPE_t* end_rhs_ptr = &rhs[rhs.shape[0]]
-    cdef np.uint32_t lhs_delta = 1
-    cdef np.uint32_t rhs_delta = 1
+    cdef DTYPE_t delta = 1
     cdef DTYPE_t last = -1
     cdef np.uint64_t[:] lhs_indices = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
     cdef np.uint64_t[:] rhs_indices = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
@@ -168,37 +172,34 @@ cdef _gallop_intersect_drop(DTYPE_t[:] lhs,
     cdef np.uint64_t* rhs_result_ptr = &rhs_indices[0]
 
     while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
-        lhs_delta = 1
-        rhs_delta = 1
 
         # Gallop past the current element
         while lhs_ptr < end_lhs_ptr and (lhs_ptr[0] & mask) < (rhs_ptr[0] & mask):
-            lhs_ptr += lhs_delta
-            lhs_delta <<= 1
-        lhs_ptr = lhs_ptr - (lhs_delta >> 1)
+            lhs_ptr+=delta
+            delta <<= 1
+        lhs_ptr-= (delta >> 1)
+        delta = 1
         while rhs_ptr < end_rhs_ptr and (rhs_ptr[0] & mask) < (lhs_ptr[0] & mask):
-            rhs_ptr += rhs_delta
-            rhs_delta <<= 1
-        rhs_ptr = rhs_ptr - (rhs_delta >> 1)
+            rhs_ptr+=delta
+            delta <<= 1
+        rhs_ptr-= (delta >> 1)
+        delta = 1
 
         # Now that we've reset, we just do the naive 2-ptr check
         # Then next loop we pickup on exponential search
-        if (lhs_ptr[0] & mask) < (rhs_ptr[0] & mask):
-            lhs_ptr += 1
-        elif (rhs_ptr[0] & mask) < (lhs_ptr[0] & mask):
-            rhs_ptr += 1
-        else:
-            if (last & mask) != (lhs_ptr[0] & mask):
-                lhs_result_ptr[0] = lhs_ptr - &lhs[0]
-                rhs_result_ptr[0] = rhs_ptr - &rhs[0]
-                last = lhs_ptr[0]
-                lhs_result_ptr += 1
-                rhs_result_ptr += 1
-            lhs_ptr += 1
-            rhs_ptr += 1
-
-        # If delta 
-        # Either we read past the array, or 
+        if (((lhs_ptr[0] & mask) < (rhs_ptr[0] & mask)) and (lhs_ptr := lhs_ptr + 1)) or \
+              (((rhs_ptr[0] & mask) < (lhs_ptr[0] & mask)) and (rhs_ptr := rhs_ptr + 1)):
+            continue
+       
+        # If here values equal, collect
+        if (last & mask) != (lhs_ptr[0] & mask):
+            lhs_result_ptr[0] = lhs_ptr - &lhs[0]
+            rhs_result_ptr[0] = rhs_ptr - &rhs[0]
+            last = lhs_ptr[0]
+            lhs_result_ptr += 1
+            rhs_result_ptr += 1
+        lhs_ptr += 1
+        rhs_ptr += 1
 
     return np.asarray(lhs_indices), np.asarray(rhs_indices), lhs_result_ptr - &lhs_indices[0]
 
@@ -211,8 +212,7 @@ cdef _gallop_intersect_keep(DTYPE_t[:] lhs,
     cdef DTYPE_t* rhs_ptr = &rhs[0]
     cdef DTYPE_t* end_lhs_ptr = &lhs[lhs.shape[0]]
     cdef DTYPE_t* end_rhs_ptr = &rhs[rhs.shape[0]]
-    cdef DTYPE_t lhs_delta = 1
-    cdef DTYPE_t rhs_delta = 1
+    cdef DTYPE_t delta = 1
     cdef DTYPE_t target = -1
     cdef np.uint64_t[:] lhs_indices = np.empty(max(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
     cdef np.uint64_t[:] rhs_indices = np.empty(max(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
@@ -220,18 +220,17 @@ cdef _gallop_intersect_keep(DTYPE_t[:] lhs,
     cdef np.uint64_t* rhs_result_ptr = &rhs_indices[0]
 
     while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
-        lhs_delta = 1
-        rhs_delta = 1
-
         # Gallop past the current element
         while lhs_ptr < end_lhs_ptr and (lhs_ptr[0] & mask) < (rhs_ptr[0] & mask):
-            lhs_ptr += lhs_delta
-            lhs_delta *= 2
-        lhs_ptr = lhs_ptr - (lhs_delta // 2)
+            lhs_ptr += delta
+            delta <<= 1
+        lhs_ptr -= (delta >> 1)
+        delta = 1
         while rhs_ptr < end_rhs_ptr and (rhs_ptr[0] & mask) < (lhs_ptr[0] & mask):
-            rhs_ptr += rhs_delta
-            rhs_delta *= 2
-        rhs_ptr = rhs_ptr - (rhs_delta // 2)
+            rhs_ptr += delta
+            delta <<= 1
+        rhs_ptr -= (delta >> 1)
+        delta = 1
 
         # Now that we've reset, we just do the naive 2-ptr check
         # Then next loop we pickup on exponential search

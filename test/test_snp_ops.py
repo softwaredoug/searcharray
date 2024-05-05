@@ -190,7 +190,7 @@ def test_profile_masked_intersect(benchmark):
 
     def intersect_many():
         for _ in range(10):
-            with_snp_ops()
+            # with_snp_ops()
             with_snp()
 
     profiler.run(intersect_many)
@@ -274,8 +274,8 @@ def test_profile_masked_intersect_sparse_dense(benchmark):
     rand_arr_1.sort()
     rand_arr_2.sort()
 
-    def with_np():
-        np.intersect1d(rand_arr_1 >> 16, rand_arr_2 >> 16)  # Not quite same
+    # def with_np():
+    #     np.intersect1d(rand_arr_1 >> 16, rand_arr_2 >> 16)  # Not quite same
 
     def with_snp():
         snp.intersect(rand_arr_1 >> 16, rand_arr_2 >> 16, indices=True, duplicates=snp.DROP)
@@ -286,8 +286,8 @@ def test_profile_masked_intersect_sparse_dense(benchmark):
     def intersect_many():
         for _ in range(10):
             with_snp_ops()
-            with_snp()
-            with_np()
+            # with_snp()
+            # with_np()
 
     profiler.run(intersect_many)
 
