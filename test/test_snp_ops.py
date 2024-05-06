@@ -2,7 +2,7 @@ from typing import Tuple
 import numpy as np
 import sortednp as snp
 import pytest
-from searcharray.roaringish.snp_ops import binary_search, galloping_search, intersect, adjacent, unique, merge
+from searcharray.roaringish.snp_ops import binary_search, galloping_search, intersect, adjacent, unique, merge, count_odds
 from test_utils import w_scenarios
 from test_utils import Profiler, profile_enabled
 
@@ -188,11 +188,16 @@ def test_profile_masked_intersect(benchmark):
     def with_snp_ops():
         intersect(rand_arr_1, rand_arr_2, mask)
 
+    def baseline():
+        count_odds(rand_arr_1, rand_arr_2)
+
     def intersect_many():
         for _ in range(10):
-            # with_snp_ops()
+            with_snp_ops()
             with_snp()
+            baseline()
 
+    baseline()
     profiler.run(intersect_many)
 
 
@@ -212,11 +217,16 @@ def test_profile_masked_intersect_sparse_sparse(benchmark):
     def with_snp_ops():
         intersect(rand_arr_1, rand_arr_2, mask)
 
+    def baseline():
+        count_odds(rand_arr_1, rand_arr_2)
+
     def intersect_many():
         for _ in range(10):
             with_snp_ops()
             with_snp()
+            baseline()
 
+    baseline()
     profiler.run(intersect_many)
 
 
@@ -235,11 +245,16 @@ def test_profile_masked_intersect_diff_ranges(benchmark):
     def with_snp_ops():
         intersect(rand_arr_1, rand_arr_2, mask)
 
+    def baseline():
+        count_odds(rand_arr_1, rand_arr_2)
+
     def intersect_many():
         for _ in range(10):
+            baseline()
             with_snp_ops()
             with_snp()
 
+    baseline()
     profiler.run(intersect_many)
 
 
@@ -283,12 +298,16 @@ def test_profile_masked_intersect_sparse_dense(benchmark):
     def with_snp_ops():
         intersect(rand_arr_1, rand_arr_2, mask)
 
+    def baseline():
+        count_odds(rand_arr_1, rand_arr_2)
+
     def intersect_many():
         for _ in range(10):
             with_snp_ops()
-            # with_snp()
-            # with_np()
+            with_snp()
+            baseline()
 
+    baseline()
     profiler.run(intersect_many)
 
 

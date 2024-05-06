@@ -170,6 +170,22 @@ cdef inline void _galloping_search(DTYPE_t[:] array,
     idx_out[0] = i_right
 
 
+cdef _count_odds(np.ndarray[DTYPE_t, ndim=1] lhs, np.ndarray[DTYPE_t, ndim=1] rhs):
+    cdef int i = 0
+    cdef int count = 0
+    for i in range(rhs.shape[0]):
+        if (rhs[i] & 1) or (i < lhs.shape[0] and (lhs[i] & 1)):
+            count += 1
+    return count
+
+
+def count_odds(np.ndarray[DTYPE_t, ndim=1] lhs, np.ndarray[DTYPE_t, ndim=1] rhs):
+    # Make sure lhs is smallest
+    if lhs.shape[0] > rhs.shape[0]:
+        lhs, rhs = rhs, lhs
+    return _count_odds(lhs, rhs)
+
+
 def galloping_search(np.ndarray[DTYPE_t, ndim=1] array,
                      DTYPE_t target,
                      DTYPE_t mask=ALL_BITS,
