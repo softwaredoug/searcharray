@@ -272,9 +272,17 @@ def test_profile_masked_saved(suffix, benchmark):
     def with_snp_ops():
         intersect(lhs, rhs, mask)
 
+    def with_snp():
+        snp.intersect(lhs >> 18, rhs >> 18, indices=True, duplicates=snp.DROP)
+
+    def baseline():
+        count_odds(lhs, rhs)
+
     def intersect_many():
         for _ in range(10):
             with_snp_ops()
+            with_snp()
+            baseline()
 
     profiler.run(intersect_many)
 
