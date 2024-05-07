@@ -132,7 +132,7 @@ def msmarco1m_raw(msmarco_download):
         msmarco.to_pickle(msmarco_raw_path)
         return msmarco
     else:
-        print("Loading pkl docs...")
+        print("Loading raw pkl docs...")
         return pd.read_pickle(msmarco_raw_path)
 
 
@@ -160,7 +160,7 @@ def msmarco100k(msmarco100k_raw):
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
-def msmarco1m(msmarco1m_raw):
+def msmarco1m(msmarco_download):
     msmarco_path = 'data/msmarco1m.pkl'
     msmarco1m_path = pathlib.Path(msmarco_path)
 
@@ -170,19 +170,22 @@ def msmarco1m(msmarco1m_raw):
             return [token.translate(str.maketrans('', '', string.punctuation))
                     for token in split]
 
-        msmarco = msmarco1m_raw
+        msmarco = msmarco1m_raw(msmarco_download)
         msmarco["title_ws"] = SearchArray.index(msmarco["title"])
         msmarco["body_ws"] = SearchArray.index(msmarco["body"])
 
         msmarco.to_pickle(msmarco_path)
         return msmarco
     else:
-        return pd.read_pickle(msmarco_path)
+        print("Loading idxed pkl docs...")
+        msmarco = pd.read_pickle(msmarco_path)
+        print(f"Loaded msmarco1m -- {len(msmarco)} -- {msmarco['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB | {msmarco['title_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+        return msmarco
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
-def msmarco_all(msmarco_all_raw):
+def msmarco_all(msmarco_download):
     msmarco_path_str = 'data/msmarco_all.pkl'
     msmarco_path = pathlib.Path(msmarco_path_str)
 
@@ -192,13 +195,16 @@ def msmarco_all(msmarco_all_raw):
             return [token.translate(str.maketrans('', '', string.punctuation))
                     for token in split]
 
-        msmarco = msmarco_all_raw
+        msmarco = msmarco_all_raw(msmarco_download)
         msmarco["title_ws"] = SearchArray.index(msmarco["title"])
         msmarco["body_ws"] = SearchArray.index(msmarco["body"])
         msmarco.to_pickle(msmarco_path_str)
         return msmarco
     else:
-        return pd.read_pickle(msmarco_path_str)
+        print("Loading idxed pkl docs...")
+        msmarco = pd.read_pickle(msmarco_path_str)
+        print(f"Loaded msmarco -- {len(msmarco)} -- {msmarco['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB | {msmarco['title_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+        return msmarco
 
 
 # Memory usage
