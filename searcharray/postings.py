@@ -525,6 +525,40 @@ class SearchArray(ExtensionArray):
         else:
             raise TypeError("Expected a string or list of strings for phrases")
 
+    def memory_report(self):
+        """Return a string with memory usage information."""
+        term_mat_bytes = self.term_mat.nbytes
+        posns_bytes = self.posns.nbytes
+        term_dict_bytes = self.term_dict.nbytes
+        num_terms = len(self.term_dict)
+        top_10_terms_size = []
+
+        for i in range(10):
+            term_len = len(self.posns.encoded_term_posns[i])
+            term = self.term_dict.get_term(i)
+            top_10_terms_size.append((term, term_len))
+
+        return f"""
+        SearchArray Memory Report
+        -------------------------
+        Number of Terms: {num_terms}
+        -------------------------
+        Term Matrix:     {term_mat_bytes}
+        Positions:       {posns_bytes}
+        Term Dictionary: {term_dict_bytes}
+        --------------------------
+        Term 0: {top_10_terms_size[0]}
+        Term 1: {top_10_terms_size[1]}
+        Term 2: {top_10_terms_size[2]}
+        Term 3: {top_10_terms_size[3]}
+        Term 4: {top_10_terms_size[4]}
+        Term 5: {top_10_terms_size[5]}
+        Term 6: {top_10_terms_size[6]}
+        Term 7: {top_10_terms_size[7]}
+        Term 8: {top_10_terms_size[8]}
+        Term 9: {top_10_terms_size[9]}
+        """
+
     # ***********************************************************
     # Search functionality
     # ***********************************************************

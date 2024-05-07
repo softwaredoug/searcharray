@@ -1,156 +1,55 @@
 import pytest
 import pandas as pd
 import numpy as np
-import csv
-import gzip
 import pathlib
-import requests
 import string
 import logging
-import sys
 from typing import Dict, List, Any, Optional
 from searcharray import SearchArray
 from searcharray.solr import edismax
 from searcharray.utils.sort import SetOfResults
 from test_utils import Profiler, profile_enabled
+from msmarco_utils import msmarco1m_raw_path, msmarco100k_raw_path, msmarco_all_raw_path, csv_col_iter
 
 
-csv.field_size_limit(sys.maxsize)
-
-
-# Use csv iterator for memory efficiency
-def csv_col_iter(msmarco_unzipped_path, col_no, num_docs=None):
-    with open(msmarco_unzipped_path, "rt") as f:
-        csv_reader = csv.reader(f, delimiter="\t")
-        for idx, row in enumerate(csv_reader):
-            col = row[col_no]
-            yield col
-            if num_docs is not None and idx >= num_docs:
-                break
-
-
-def download_file(url):
-    local_filename = url.split('/')[-1]
-    # NOTE the stream=True parameter below
-    with requests.get(url, stream=True) as r:
-        print(f"Downloading {url}")
-        r.raise_for_status()
-        with open(local_filename, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
-    print(f"Downloaded to {local_filename}")
-    return local_filename
-
-
-def msmarco_path():
-    return "data/msmarco-docs.tsv.gz"
-
-
-def msmarco_exists():
-    path = pathlib.Path(msmarco_path())
-    return path.exists()
-
-
-def download_msmarco():
-    # Download to fixtures
-    print("Downloading MSMARCO")
-
-    url = "https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-docs.tsv.gz"
-    download_file(url)
-    # Ensure data directory
-    pathlib.Path("data").mkdir(exist_ok=True)
-    # Move to data directory
-    path = "msmarco-docs.tsv.gz"
-    pathlib.Path(path).rename(f"data/{path}")
+def ws_punc_tokenizer(text):
+    split = text.lower().split()
+    return [token.translate(str.maketrans('', '', string.punctuation))
+            for token in split]
 
 
 @pytest.fixture(scope="session")
-def msmarco_download():
-    if not msmarco_exists():
-        download_msmarco()
-    return msmarco_path()
-
-
-@pytest.fixture(scope="session")
-def msmarco_unzipped(msmarco_download):
-    print("Unzipping...")
-    msmarco_unzipped_path = 'data/msmarco-docs.tsv'
-    msmarco_unzipped_path = pathlib.Path(msmarco_unzipped_path)
-
-    if not msmarco_unzipped_path.exists():
-        with gzip.open(msmarco_download, 'rb') as f_in:
-            with open(msmarco_unzipped_path, 'wb') as f_out:
-                f_out.write(f_in.read())
-    return msmarco_unzipped_path
-
-
-@pytest.fixture(scope="session")
-def msmarco_all_raw(msmarco_download):
-    print("Loading docs...")
-    msmarco_raw_path = 'data/msmarco_all_raw.pkl'
-    msmarco_all_raw_path = pathlib.Path(msmarco_raw_path)
-
-    if not msmarco_all_raw_path.exists():
-        print("Loading docs...")
-        msmarco = pd.read_csv(msmarco_download, sep="\t",
-                              header=None, names=["id", "url", "title", "body"])
-
-        msmarco.to_pickle(msmarco_raw_path)
-        return msmarco
-    else:
-        return pd.read_pickle(msmarco_raw_path)
+def msmarco_all_raw():
+    return pd.read_pickle(msmarco_all_raw_path())
 
 
 @pytest.fixture(scope="session")
 def msmarco100k_raw(msmarco_download):
-    msmarco_raw_path = 'data/msmarco100k_raw.pkl'
-    msmarco100k_raw_path = pathlib.Path(msmarco_raw_path)
-
-    if not msmarco100k_raw_path.exists():
-        print("Loading docs...")
-        msmarco = pd.read_csv(msmarco_download, sep="\t",
-                              nrows=100000,
-                              header=None, names=["id", "url", "title", "body"])
-
-        msmarco.to_pickle(msmarco_raw_path)
-        return msmarco
-    else:
-        return pd.read_pickle(msmarco_raw_path)
+    return pd.read_pickle(msmarco100k_raw_path())
 
 
 @pytest.fixture(scope="session")
 def msmarco1m_raw(msmarco_download):
-    msmarco_raw_path = 'data/msmarco1m_raw.pkl'
-    msmarco1m_raw_path = pathlib.Path(msmarco_raw_path)
-
-    if not msmarco1m_raw_path.exists():
-        print("Loading docs...")
-        msmarco = pd.read_csv(msmarco_download, sep="\t",
-                              nrows=1000000,
-                              header=None, names=["id", "url", "title", "body"])
-
-        msmarco.to_pickle(msmarco_raw_path)
-        return msmarco
-    else:
-        print("Loading raw pkl docs...")
-        return pd.read_pickle(msmarco_raw_path)
+    return pd.read_pickle(msmarco1m_raw_path())
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
-def msmarco100k(msmarco100k_raw):
+def msmarco100k():
+    msmarco100k_raw = pd.read_pickle(msmarco100k_raw_path())
     msmarco_path = 'data/msmarco100k.pkl'
     msmarco100k_path = pathlib.Path(msmarco_path)
 
     if not msmarco100k_path.exists():
-        def ws_punc_tokenizer(text):
-            split = text.lower().split()
-            return [token.translate(str.maketrans('', '', string.punctuation))
-                    for token in split]
-
         msmarco = msmarco100k_raw
-        msmarco["title_ws"] = SearchArray.index(msmarco["title"])
-        msmarco["body_ws"] = SearchArray.index(msmarco["body"])
+        print("Indexing 100k docs...")
+        msmarco['title'].fillna('', inplace=True)
+        msmarco['body'].fillna('', inplace=True)
+        print(" Index Title")
+        msmarco["title_ws"] = SearchArray.index(msmarco["title"], tokenizer=ws_punc_tokenizer)
+        print(" Index Body")
+        msmarco["body_ws"] = SearchArray.index(msmarco["body"], tokenizer=ws_punc_tokenizer)
+        print(" Done!... Saving")
 
         msmarco.to_pickle(msmarco_path)
         return msmarco
@@ -160,44 +59,45 @@ def msmarco100k(msmarco100k_raw):
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
-def msmarco1m(msmarco_download):
+def msmarco1m():
+    msmarco1m_raw = pd.read_pickle(msmarco1m_raw_path())
     msmarco_path = 'data/msmarco1m.pkl'
     msmarco1m_path = pathlib.Path(msmarco_path)
 
     if not msmarco1m_path.exists():
-        def ws_punc_tokenizer(text):
-            split = text.lower().split()
-            return [token.translate(str.maketrans('', '', string.punctuation))
-                    for token in split]
+        print("Indexing 1m docs...")
+        msmarco = msmarco1m_raw
+        msmarco['title'].fillna('', inplace=True)
+        msmarco['body'].fillna('', inplace=True)
+        print(" Index Title")
+        msmarco["title_ws"] = SearchArray.index(msmarco["title"], tokenizer=ws_punc_tokenizer)
+        print(" Index Body")
+        msmarco["body_ws"] = SearchArray.index(msmarco["body"], tokenizer=ws_punc_tokenizer)
 
-        msmarco = msmarco1m_raw(msmarco_download)
-        msmarco["title_ws"] = SearchArray.index(msmarco["title"])
-        msmarco["body_ws"] = SearchArray.index(msmarco["body"])
-
+        print(" DONE!... Saving")
         msmarco.to_pickle(msmarco_path)
         return msmarco
     else:
         print("Loading idxed pkl docs...")
         msmarco = pd.read_pickle(msmarco_path)
-        print(f"Loaded msmarco1m -- {len(msmarco)} -- {msmarco['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB | {msmarco['title_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
         return msmarco
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
 def msmarco_all(msmarco_download):
+    msmarco_all_raw = pd.read_pickle(msmarco_all_raw_path())
     msmarco_path_str = 'data/msmarco_all.pkl'
     msmarco_path = pathlib.Path(msmarco_path_str)
 
     if not msmarco_path.exists():
-        def ws_punc_tokenizer(text):
-            split = text.lower().split()
-            return [token.translate(str.maketrans('', '', string.punctuation))
-                    for token in split]
+        print("Indexing all docs...")
 
         msmarco = msmarco_all_raw(msmarco_download)
-        msmarco["title_ws"] = SearchArray.index(msmarco["title"])
-        msmarco["body_ws"] = SearchArray.index(msmarco["body"])
+        msmarco['title'].fillna('', inplace=True)
+        msmarco['body'].fillna('', inplace=True)
+        msmarco["title_ws"] = SearchArray.index(msmarco["title"], tokenizer=ws_punc_tokenizer)
+        msmarco["body_ws"] = SearchArray.index(msmarco["body"], tokenizer=ws_punc_tokenizer)
         msmarco.to_pickle(msmarco_path_str)
         return msmarco
     else:
@@ -278,6 +178,15 @@ def test_msmarco100k_phrase(phrase_search, msmarco100k, benchmark):
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "the purpose"])
 def test_msmarco1m_phrase(phrase_search, msmarco1m, benchmark):
+    profiler = Profiler(benchmark)
+    phrase_search = phrase_search.split()
+    print(f"STARTING {phrase_search}")
+    print(f"Memory Usage (BODY): {msmarco1m['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+    profiler.run(msmarco1m['body_ws'].array.score, phrase_search)
+
+
+@pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "the purpose"])
+def test_msmarco1m_phrase_memray(phrase_search, msmarco1m, benchmark):
     profiler = Profiler(benchmark)
     phrase_search = phrase_search.split()
     print(f"STARTING {phrase_search}")
