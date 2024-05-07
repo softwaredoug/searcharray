@@ -15,7 +15,7 @@ def w_scenarios(scenarios: Dict[str, Dict[str, Any]]):
 
 
 class JustBenchmarkProfiler:
-    def __init__(self, benchmark):
+    def __init__(self, benchmark, warmup=True):
         self.benchmark = benchmark
 
     def run(self, func, *args, **kwargs):
@@ -24,8 +24,9 @@ class JustBenchmarkProfiler:
 
 
 class CProfileProfiler:
-    def __init__(self, benchmark):
+    def __init__(self, benchmark, warmup=True):
         self.benchmark = benchmark
+        self.warmup = warmup
 
         def replace_all(text, replace_with='_'):
             for char in ['/', ':', '.', '::', '[', ']', ' ']:
@@ -37,7 +38,7 @@ class CProfileProfiler:
         self.cprofiler = cProfile.Profile()
 
     def run(self, func, *args, **kwargs):
-        if (('warmup' in kwargs and kwargs['warmup']) or 'warmup' not in kwargs):
+        if self.warmup:
             func(*args, *kwargs)
         rval = self.cprofiler.runcall(func, *args, **kwargs)
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')

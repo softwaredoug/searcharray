@@ -24,12 +24,12 @@ def msmarco_all_raw():
 
 
 @pytest.fixture(scope="session")
-def msmarco100k_raw(msmarco_download):
+def msmarco100k_raw():
     return pd.read_pickle(msmarco100k_raw_path())
 
 
 @pytest.fixture(scope="session")
-def msmarco1m_raw(msmarco_download):
+def msmarco1m_raw():
     return pd.read_pickle(msmarco1m_raw_path())
 
 
@@ -85,7 +85,7 @@ def msmarco1m():
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
-def msmarco_all(msmarco_download):
+def msmarco_all():
     msmarco_all_raw = pd.read_pickle(msmarco_all_raw_path())
     msmarco_path_str = 'data/msmarco_all.pkl'
     msmarco_path = pathlib.Path(msmarco_path_str)
@@ -93,7 +93,7 @@ def msmarco_all(msmarco_download):
     if not msmarco_path.exists():
         print("Indexing all docs...")
 
-        msmarco = msmarco_all_raw(msmarco_download)
+        msmarco = msmarco_all_raw(msmarco_all_raw)
         msmarco['title'].fillna('', inplace=True)
         msmarco['body'].fillna('', inplace=True)
         msmarco["title_ws"] = SearchArray.index(msmarco["title"], tokenizer=ws_punc_tokenizer)
@@ -245,13 +245,13 @@ def test_msmarco_indexall(msmarco_unzipped, benchmark, caplog):
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.mark.parametrize("query", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
 def test_msmarco1m_or_search_unwarmed(query, msmarco1m, benchmark, caplog):
-    profiler = Profiler(benchmark)
+    profiler = Profiler(benchmark, warmup=False)
 
     caplog.set_level(logging.DEBUG)
 
     def sum_scores(query):
         return np.sum([msmarco1m['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
-    scores = profiler.run(sum_scores, query, warmup=False)
+    scores = profiler.run(sum_scores, query)
     assert len(scores) == len(msmarco1m['body_ws'].array), f"Expected {len(msmarco1m['body_ws'].array)}, got {len(scores)}"
     assert np.any(scores > 0), "No scores > 0"
 
@@ -349,13 +349,13 @@ def test_msmarco1m_edismax(query, msmarco1m, benchmark, caplog):
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.mark.parametrize("query", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
 def test_msmarco100k_or_search_unwarmed(query, msmarco100k, benchmark, caplog):
-    profiler = Profiler(benchmark)
+    profiler = Profiler(benchmark, warmup=False)
 
     caplog.set_level(logging.DEBUG)
 
     def sum_scores(query):
         return np.sum([msmarco100k['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
-    scores = profiler.run(sum_scores, query, warmup=False)
+    scores = profiler.run(sum_scores, query)
     assert len(scores) == len(msmarco100k['body_ws'].array)
     assert np.any(scores > 0)
 
