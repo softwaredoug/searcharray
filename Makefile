@@ -22,15 +22,23 @@ clean: deps
 	@echo "Cleaning..."
 	rm -rf build dist
 	@echo "Clean any .so files..."
+	# Force dlclose
 	find . -name "searcharray/*.so" -type f -delete
+	find . -name "searcharray/*.c" -type f -delete
 	@echo "Cleaning extensions..."
 	rm -rf searcharray/*.so
 	rm -rf searcharray/*.c
+	rm -rf searcharray/phrase/*.o
 	rm -rf searcharray/phrase/*.so
 	rm -rf searcharray/phrase/*.c
 	rm -rf searcharray/utils/*.so
+	rm -rf searcharray/utils/*.o
 	rm -rf searcharray/utils/*.c
-	rm -rf build
+	rm -rf searcharray/roaringish/*.o
+	rm -rf searcharray/roaringish/*.so
+	rm -rf searcharray/roaringish/*.c
+	rm -rf .benchmarks/*.prof
+	python setup.py clean --all
 
 
 
@@ -40,9 +48,7 @@ destroy: clean
 	rm -rf venv
 
 
-extensions:
-	rm -rf searcharray/*.so
-	rm -rf searcharray/*.c
+extensions: clean
 	@echo "Building extensions..."
 	python setup.py build_ext --inplace
 
@@ -67,20 +73,15 @@ benchmark_dry_run: deps
 	python -m pytest -x --benchmark-only
 
 
-benchmark_one: deps extensions
-	python -m pytest -x -s --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_last "$(TEST)"
-	open ./.benchmarks/histogram_last.svg
-
-
 benchmark: deps extensions
 	# There is some interaction between doing MSMarco and TMDB benchmarks together 
 	# (maybe due to memory usage) that causes TMDB to show as slower. So we run them separately.
-		python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_snp_ops test/test_snp_ops.py
-	  open ./.benchmarks/histogram_snp_ops.svg
-		python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_tmdb test/test_tmdb.py
-		open ./.benchmarks/histogram_tmdb.svg
-		python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_msmarco test/test_msmarco.py
-		open ./.benchmarks/histogram_msmarco.svg
+	python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_snp_ops test/test_snp_ops.py
+	open ./.benchmarks/histogram_snp_ops.svg
+	python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_tmdb test/test_tmdb.py
+	open ./.benchmarks/histogram_tmdb.svg
+	python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_msmarco test/test_msmarco.py
+	open ./.benchmarks/histogram_msmarco.svg
 
 benchmark_graph: deps
 	python scripts/graph_benchmarks.py "$(TEST)"
@@ -101,8 +102,7 @@ favorite_graphs: deps
 
 
 profile: extensions
-	python -m pytest -s -x --benchmark-disable "$(TEST)"
-	snakeviz ./.benchmarks/last.prof
+	./scripts/run_profile.sh $(TEST)
 
 memory_profile:
 	rm .benchmarks/memray.bin

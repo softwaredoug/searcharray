@@ -270,7 +270,7 @@ def test_msmarco100k_phrase(phrase_search, msmarco100k, benchmark):
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-@pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
+@pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "the purpose"])
 def test_msmarco1m_phrase(phrase_search, msmarco1m, benchmark):
     profiler = Profiler(benchmark)
     phrase_search = phrase_search.split()
@@ -411,7 +411,7 @@ def test_msmarco1m_or_search_max_posn(query, msmarco1m, benchmark, caplog):
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-@pytest.mark.parametrize("query", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
+@pytest.mark.parametrize("query", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "the purpose"])
 def test_msmarco1m_edismax(query, msmarco1m, benchmark, caplog):
     profiler = Profiler(benchmark)
 

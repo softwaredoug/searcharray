@@ -1,4 +1,5 @@
 import pytest
+import datetime
 from typing import Dict, Any, cast, Sequence, Type, Union
 import cProfile
 import sys
@@ -37,8 +38,8 @@ class CProfileProfiler:
 
     def run(self, func, *args, **kwargs):
         rval = self.cprofiler.runcall(func, *args, **kwargs)
-        self.cprofiler.dump_stats(f".benchmarks/{self.name}.prof")
-        self.cprofiler.dump_stats(".benchmarks/last.prof")
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        self.cprofiler.dump_stats(f".benchmarks/{self.name}_{timestamp}.prof")
         return rval
 
 
