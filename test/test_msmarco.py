@@ -251,7 +251,7 @@ def test_msmarco1m_or_search_unwarmed(query, msmarco1m, benchmark, caplog):
 
     def sum_scores(query):
         return np.sum([msmarco1m['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
-    scores = profiler.run(sum_scores, query)
+    scores = profiler.run(sum_scores, query, warmup=False)
     assert len(scores) == len(msmarco1m['body_ws'].array), f"Expected {len(msmarco1m['body_ws'].array)}, got {len(scores)}"
     assert np.any(scores > 0), "No scores > 0"
 
@@ -355,7 +355,7 @@ def test_msmarco100k_or_search_unwarmed(query, msmarco100k, benchmark, caplog):
 
     def sum_scores(query):
         return np.sum([msmarco100k['body_ws'].array.score(query_term) for query_term in query.split()], axis=0)
-    scores = profiler.run(sum_scores, query)
+    scores = profiler.run(sum_scores, query, warmup=False)
     assert len(scores) == len(msmarco100k['body_ws'].array)
     assert np.any(scores > 0)
 
