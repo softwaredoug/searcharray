@@ -97,5 +97,5 @@ def msmarco_all_raw_path():
     return msmarco_raw_path
 
 
-if not msmarco_exists():
+if not msmarco_exists() and "--benchmark" in sys.argv:
     download_msmarco()
