@@ -24,8 +24,8 @@ cdef extern from "stddef.h":
 
 
 # Include mach performance timer
-cdef extern from "mach/mach_time.h":
-    uint64_t mach_absolute_time()
+# cdef extern from "mach/mach_time.h":
+#     uint64_t mach_absolute_time()
 
 
 cdef popcount64_arr(DTYPE_t[:] arr):
@@ -216,13 +216,13 @@ cdef _gallop_intersect_drop(DTYPE_t[:] lhs,
         # Gallop past the current element
         while lhs_ptr < end_lhs_ptr and (lhs_ptr[0] & mask) < (rhs_ptr[0] & mask):
             lhs_ptr+=delta
-            delta <<= 1
-        lhs_ptr -= (delta >> 1)
+            delta *= 4
+        lhs_ptr -= (delta // 4)
         delta = 1
         while rhs_ptr < end_rhs_ptr and (rhs_ptr[0] & mask) < (lhs_ptr[0] & mask):
             rhs_ptr+=delta
-            delta <<= 1
-        rhs_ptr -= (delta >> 1)
+            delta *= 4
+        rhs_ptr -= (delta // 4)
         delta = 1
 
         # Now that we've reset, we just do the naive 2-ptr check
