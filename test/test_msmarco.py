@@ -185,15 +185,6 @@ def test_msmarco1m_phrase(phrase_search, msmarco1m, benchmark):
     profiler.run(msmarco1m['body_ws'].array.score, phrase_search)
 
 
-@pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "the purpose"])
-def test_msmarco1m_phrase_memray(phrase_search, msmarco1m, benchmark):
-    profiler = Profiler(benchmark)
-    phrase_search = phrase_search.split()
-    print(f"STARTING {phrase_search}")
-    print(f"Memory Usage (BODY): {msmarco1m['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
-    profiler.run(msmarco1m['body_ws'].array.score, phrase_search)
-
-
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 def test_msmarco10k_indexing(msmarco100k_raw, benchmark):
     profiler = Profiler(benchmark)
