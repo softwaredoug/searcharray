@@ -141,7 +141,7 @@ intersect_scenarios = {
 def test_intersect(lhs, rhs, mask, expected):
     if mask is None:
         mask = np.uint64(0xFFFFFFFFFFFFFFFF)
-    lhs_idx, rhs_idx = intersect(lhs, rhs, mask)
+    lhs_idx, rhs_idx = intersect(lhs, rhs, mask=mask)
     result = lhs[lhs_idx] & mask
     assert np.all(result == expected)
 
@@ -150,7 +150,7 @@ def test_intersect(lhs, rhs, mask, expected):
 def test_intersect_keep_both(lhs, rhs, mask, expected):
     if mask is None:
         mask = np.uint64(0xFFFFFFFFFFFFFFFF)
-    lhs_idx, rhs_idx = intersect(lhs, rhs, mask, drop_duplicates=False)
+    lhs_idx, rhs_idx = intersect(lhs, rhs, mask=mask, drop_duplicates=False)
     expected_lhs = np.argwhere(np.in1d(lhs, rhs)).flatten()
     expected_rhs = np.argwhere(np.in1d(rhs, lhs)).flatten()
     assert np.all(lhs_idx == expected_lhs)

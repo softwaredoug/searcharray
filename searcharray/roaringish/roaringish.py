@@ -7,7 +7,7 @@ import logging
 import numbers
 from typing import Optional, Tuple, List, Union
 
-from searcharray.roaringish.snp_ops import intersect, unique, adjacent, merge
+from searcharray.roaringish.snp_ops import intersect, unique, adjacent, merge, galloping_search
 from searcharray.roaringish.roaringish_ops import popcount64_reduce, payload_slice
 
 logger = logging.getLogger(__name__)
@@ -198,7 +198,9 @@ class RoaringishEncoder:
         lhs_idx, rhs_idx = adjacent(lhs, rhs, mask=self.header_mask)
         return lhs[lhs_idx], rhs[rhs_idx]
 
-    def intersect(self, lhs: np.ndarray, rhs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def intersect(self, lhs: np.ndarray, rhs: np.ndarray,
+                  lhs_splits: Optional[np.ndarray] = None,
+                  rhs_splits: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
         """Return the MSBs that are common to both lhs and rhs (same keys, same MSBs) as well as post processed values
 
         Parameters
@@ -207,8 +209,27 @@ class RoaringishEncoder:
         rhs : np.ndarray of uint64 (encoded) values
         """
         # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
-        lhs_idx, rhs_idx = intersect(lhs, rhs, mask=self.header_mask)
+        lhs_idx, rhs_idx = intersect(lhs, rhs, mask=self.header_mask,
+                                     lhs_splits=lhs_splits, rhs_splits=rhs_splits)
         return lhs[lhs_idx], rhs[rhs_idx]
+
+    def key_partition(self,
+                      encoded: np.ndarray,
+                      max_key: np.uint64,
+                      num_partitions=8) -> np.ndarray:
+        """Find indices into encoded that split it into num_partitions."""
+        # Get every 1/8, 2/8, 3/8, etc of max_key
+        last_partition: np.uint64 = _0
+        partitions = [0]
+        for i in range(num_partitions - 1):
+            max_key_partition = np.uint64(max_key * (i + 1) // num_partitions)
+            partition_shifted = max_key_partition << (_64 - self.key_bits)
+            idx, is_match = galloping_search(encoded, partition_shifted, self.key_mask, start=last_partition)
+            last_partition = idx
+            partitions.append(idx)
+        # Append last index
+        partitions.append(len(encoded))
+        return np.asarray(partitions, dtype=np.uint64)
 
     def slice(self,
               encoded: np.ndarray,

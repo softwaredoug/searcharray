@@ -19,5 +19,5 @@ cimport numpy as np
 cdef void _galloping_search(DTYPE_t[:] array,
                             DTYPE_t target,
                             DTYPE_t mask,
-                            np.intp_t* i,
-                            np.intp_t len)
+                            np.uint64_t* i,
+                            np.uint64_t len)

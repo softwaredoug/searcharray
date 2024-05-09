@@ -72,6 +72,7 @@ def trim_phrase_search(encoded_posns: List[np.ndarray],
 
 def _compute_phrase_freqs_left_to_right(encoded_posns: List[np.ndarray],
                                         phrase_freqs: np.ndarray,
+                                        max_doc_id: np.uint64 = _0,
                                         trim: bool = True) -> np.ndarray:
     """Compute phrase freqs from a set of encoded positions."""
     if len(encoded_posns) < 2:
@@ -82,11 +83,19 @@ def _compute_phrase_freqs_left_to_right(encoded_posns: List[np.ndarray],
         encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
     mask = np.ones(len(phrase_freqs), dtype=bool)
 
+    lhs_splits, rhs_splits = None, None
+
     lhs = encoded_posns[0]
     for rhs in encoded_posns[1:]:
         # Only count the count of the last bigram (ignoring the ones where priors did not match)
         phrase_freqs[mask] = 0
-        phrase_freqs, conts = bigram_freqs(lhs, rhs, phrase_freqs, cont=Continuation.RHS)
+        if max_doc_id > 8 and (len(lhs) > 10000 or len(rhs) > 10000):
+            lhs_splits = encoder.key_partition(lhs, max_doc_id)
+            rhs_splits = encoder.key_partition(rhs, max_doc_id)
+        phrase_freqs, conts = bigram_freqs(lhs, rhs, phrase_freqs,
+                                           lhs_splits=lhs_splits,
+                                           rhs_splits=rhs_splits,
+                                           cont=Continuation.RHS)
         assert conts[1] is not None
         lhs = conts[1]
         mask &= (phrase_freqs > 0)
@@ -99,6 +108,7 @@ def _compute_phrase_freqs_left_to_right(encoded_posns: List[np.ndarray],
 
 def _compute_phrase_freqs_right_to_left(encoded_posns: List[np.ndarray],
                                         phrase_freqs: np.ndarray,
+                                        max_doc_id: np.uint64 = _0,
                                         trim: bool = True) -> np.ndarray:
     """Compute phrase freqs from a set of encoded positions."""
     if len(encoded_posns) < 2:
@@ -109,11 +119,19 @@ def _compute_phrase_freqs_right_to_left(encoded_posns: List[np.ndarray],
         encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
     mask = np.ones(len(phrase_freqs), dtype=bool)
 
+    lhs_splits, rhs_splits = None, None
+
     rhs = encoded_posns[-1]
     for lhs in encoded_posns[-2::-1]:
         # Only count the count of the last bigram (ignoring the ones where priors did not match)
         phrase_freqs[mask] = 0
-        phrase_freqs, conts = bigram_freqs(lhs, rhs, phrase_freqs, cont=Continuation.LHS)
+        if max_doc_id > 8 and (len(lhs) > 10000 or len(rhs) > 10000):
+            lhs_splits = encoder.key_partition(lhs, max_doc_id)
+            rhs_splits = encoder.key_partition(rhs, max_doc_id)
+        phrase_freqs, conts = bigram_freqs(lhs, rhs, phrase_freqs,
+                                           lhs_splits=lhs_splits,
+                                           rhs_splits=rhs_splits,
+                                           cont=Continuation.LHS)
         assert conts[0] is not None
         rhs = conts[0]
         mask &= (phrase_freqs > 0)
@@ -126,18 +144,19 @@ def _compute_phrase_freqs_right_to_left(encoded_posns: List[np.ndarray],
 
 def compute_phrase_freqs(encoded_posns: List[np.ndarray],
                          phrase_freqs: np.ndarray,
+                         max_doc_id: np.uint64 = _0,
                          trim: bool = False) -> np.ndarray:
     """Compute phrase freqs from a set of encoded positions."""
     shortest_len_index = min(enumerate(encoded_posns), key=lambda x: len(x[1]))[0]
     if shortest_len_index <= 1:
-        return _compute_phrase_freqs_left_to_right(encoded_posns, phrase_freqs, trim=trim)
+        return _compute_phrase_freqs_left_to_right(encoded_posns, phrase_freqs, trim=trim, max_doc_id=max_doc_id)
     elif shortest_len_index >= len(encoded_posns) - 2:
-        return _compute_phrase_freqs_right_to_left(encoded_posns, phrase_freqs, trim=trim)
+        return _compute_phrase_freqs_right_to_left(encoded_posns, phrase_freqs, trim=trim, max_doc_id=max_doc_id)
     else:
         # We optimize this case by going middle-out
         # We can take the min of both directions phrase freqs
-        lhs = _compute_phrase_freqs_left_to_right(encoded_posns[:shortest_len_index], phrase_freqs, trim=trim)
-        rhs = _compute_phrase_freqs_right_to_left(encoded_posns[shortest_len_index:], phrase_freqs, trim=trim)
+        lhs = _compute_phrase_freqs_left_to_right(encoded_posns[:shortest_len_index], phrase_freqs, trim=trim, max_doc_id=max_doc_id)
+        rhs = _compute_phrase_freqs_right_to_left(encoded_posns[shortest_len_index:], phrase_freqs, trim=trim, max_doc_id=max_doc_id)
         phrase_freqs = np.minimum(lhs, rhs)
         return phrase_freqs
 
@@ -355,7 +374,7 @@ class PosnBitArray:
                                             max_payload=max_posn) for term_id in term_ids]
 
         if slop == 0:
-            return compute_phrase_freqs(enc_term_posns, phrase_freqs)
+            return compute_phrase_freqs(enc_term_posns, phrase_freqs, max_doc_id=np.uint64(self.max_doc_id))
         else:
             return span_search(enc_term_posns, phrase_freqs, slop)
 
