@@ -10,12 +10,14 @@ cimport numpy as np
 import numpy as np
 from enum import Enum
 
-from cython.parallel import prange
+from cython.parallel import prange, threadid
 
 # cimport snp_ops
 # from snp_ops cimport _galloping_search, DTYPE_t, ALL_BITS
 cimport searcharray.roaringish.snp_ops
 from searcharray.roaringish.snp_ops cimport _galloping_search, DTYPE_t, int64_t
+
+from libc.stdlib cimport malloc, free
 
 cdef DTYPE_t ALL_BITS = 0xFFFFFFFFFFFFFFFF
 
@@ -198,23 +200,26 @@ def galloping_search(np.ndarray[DTYPE_t, ndim=1] array,
     return i, (array[i] & mask) == (target & mask)
 
 
-cdef _gallop_intersect_drop(DTYPE_t[:] lhs,
-                            DTYPE_t[:] rhs,
-                            DTYPE_t mask=ALL_BITS,
-                            DTYPE_t lhs_base=0,
-                            DTYPE_t rhs_base=0):
+cdef DTYPE_t _gallop_intersect_drop(DTYPE_t* lhs,
+                                    DTYPE_t* rhs,
+                                    DTYPE_t lhs_len,
+                                    DTYPE_t rhs_len,
+                                    DTYPE_t* lhs_out,
+                                    DTYPE_t* rhs_out,
+                                    DTYPE_t mask=ALL_BITS,
+                                    DTYPE_t lhs_base=0,
+                                    DTYPE_t rhs_base=0) nogil:
     """Two pointer approach to find the intersection of two sorted arrays."""
     cdef DTYPE_t* lhs_ptr = &lhs[0]
     cdef DTYPE_t* rhs_ptr = &rhs[0]
-    cdef DTYPE_t* end_lhs_ptr = &lhs[lhs.shape[0]]
-    cdef DTYPE_t* end_rhs_ptr = &rhs[rhs.shape[0]]
+    cdef DTYPE_t* end_lhs_ptr = &lhs[lhs_len]
+    cdef DTYPE_t* end_rhs_ptr = &rhs[rhs_len]
     cdef DTYPE_t delta = 1
     cdef DTYPE_t last = -1
-    cdef np.uint64_t out_len = 0
-    cdef np.uint64_t[:] lhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
-    cdef np.uint64_t[:] rhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
-    cdef np.uint64_t* lhs_result_ptr = &lhs_out[0]
-    cdef np.uint64_t* rhs_result_ptr = &rhs_out[0]
+    # cdef np.uint64_t[:] lhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    # cdef np.uint64_t[:] rhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef DTYPE_t* lhs_result_ptr = &lhs_out[0]
+    cdef DTYPE_t* rhs_result_ptr = &rhs_out[0]
 
     while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
 
@@ -247,8 +252,7 @@ cdef _gallop_intersect_drop(DTYPE_t[:] lhs,
             lhs_ptr += 1
             rhs_ptr += 1
 
-    out_len = lhs_result_ptr - &lhs_out[0]
-    return np.asarray(lhs_out)[:out_len], np.asarray(rhs_out)[:out_len]
+    return lhs_result_ptr - &lhs_out[0]
 
 
 cdef _gallop_intersect_drop_parallel(DTYPE_t[:] lhs,
@@ -261,21 +265,50 @@ cdef _gallop_intersect_drop_parallel(DTYPE_t[:] lhs,
     cdef DTYPE_t* rhs_ptr = &rhs[0]
     cdef DTYPE_t i
     cdef DTYPE_t amt_written = 0
+    cdef DTYPE_t num_partitions = len(lhs_splits) - 1
+    cdef DTYPE_t[:, :] lhs_out = np.empty((num_partitions, min(lhs.shape[0], rhs.shape[0])), dtype=np.uint64)
+    cdef DTYPE_t[:, :] rhs_out = np.empty((num_partitions, min(lhs.shape[0], rhs.shape[0])), dtype=np.uint64)
+    cdef np.uint32_t[:] output_len = np.zeros(num_partitions, dtype=np.uint32)
+    # Array of ptrs to lhs_in segments
+    cdef DTYPE_t** lhs_ins
+    cdef DTYPE_t** rhs_ins
+    cdef DTYPE_t* lhs_lens
+    cdef DTYPE_t* rhs_lens
 
-    all_lhs_out = []
-    all_rhs_out = []
+    #Allocate lhs_ins, rhs_ins, lhs_lens, rhs_lens
+    lhs_ins = <DTYPE_t**> malloc(num_partitions * sizeof(DTYPE_t*))
+    rhs_ins = <DTYPE_t**> malloc(num_partitions * sizeof(DTYPE_t*))
+    lhs_lens = <DTYPE_t*> malloc(num_partitions * sizeof(DTYPE_t))
+    rhs_lens = <DTYPE_t*> malloc(num_partitions * sizeof(DTYPE_t))
+
+    if len(lhs_splits) != len(rhs_splits):
+        raise ValueError("lhs_splits and rhs_splits must have the same length")
+
+    # Copy ptrs to beginning of each split with split len
+    for i in range(num_partitions):
+        lhs_ins[i] = &lhs[lhs_splits[i]]
+        rhs_ins[i] = &rhs[rhs_splits[i]]
+        lhs_lens[i] = lhs_splits[i + 1] - lhs_splits[i]
+        rhs_lens[i] = rhs_splits[i + 1] - rhs_splits[i]
 
     # Use idx_lhs / idx_rhs to split the array
-    for i in range(8):
-        lhs_in = lhs[lhs_splits[i]:lhs_splits[i+1]]
-        rhs_in = rhs[rhs_splits[i]:rhs_splits[i+1]]
-        lhs_out, rhs_out = _gallop_intersect_drop(lhs_in, rhs_in, mask,
-                                                  lhs_base=lhs_splits[i],
-                                                  rhs_base=rhs_splits[i])
-        all_lhs_out.append(lhs_out)
-        all_rhs_out.append(rhs_out)
+    for i in prange(num_partitions, nogil=True, schedule='static', num_threads=8):
+        output_len[i] = _gallop_intersect_drop(lhs=lhs_ins[i],
+                                               rhs=rhs_ins[i],
+                                               lhs_len=lhs_lens[i],
+                                               rhs_len=rhs_lens[i],
+                                               lhs_out=&lhs_out[i][0],
+                                               rhs_out=&rhs_out[i][0],
+                                               mask=mask,
+                                               lhs_base=lhs_splits[i],
+                                               rhs_base=rhs_splits[i])
+    all_lsh_out = np.concatenate([lhs_out[i][:output_len[i]] for i in range(num_partitions)])
+    all_rhs_out = np.concatenate([rhs_out[i][:output_len[i]] for i in range(num_partitions)])
 
-    all_lsh_out, all_rhs_out = np.concatenate(all_lhs_out), np.concatenate(all_rhs_out)
+    free(lhs_ins)
+    free(rhs_ins)
+    free(lhs_lens)
+    free(rhs_lens)
     return all_lsh_out, all_rhs_out
 
 
@@ -412,8 +445,8 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
               np.ndarray[DTYPE_t, ndim=1] rhs_splits = None,
               DTYPE_t mask=ALL_BITS,
               bint drop_duplicates=True):
-    cdef np.uint64_t[:] lhs_out 
-    cdef np.uint64_t[:] rhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef np.uint64_t[:] lhs_out
+    cdef np.uint64_t[:] rhs_out
     if mask is None:
         mask = ALL_BITS
     if mask == 0:
@@ -421,7 +454,13 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
     if drop_duplicates:
         # save_input(lhs, rhs, mask)
         if lhs_splits is None or rhs_splits is None:
-            return _gallop_intersect_drop(lhs, rhs, mask)
+            lhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+            rhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+            amt_written = _gallop_intersect_drop(&lhs[0], &rhs[0],
+                                                 lhs.shape[0], rhs.shape[0],
+                                                 &lhs_out[0], &rhs_out[0],
+                                                 mask)
+            return np.asarray(lhs_out)[:amt_written], np.asarray(rhs_out)[:amt_written]
         else:
             return _gallop_intersect_drop_parallel(lhs, rhs,
                                                    lhs_splits, rhs_splits,
