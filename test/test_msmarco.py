@@ -325,7 +325,7 @@ def test_msmarco1m_edismax(query, msmarco1m, benchmark, caplog):
 
     def run_edismax(query):
         return edismax(msmarco1m, q=query,
-                       mm=2,
+                       mm="100%",
                        qf=['title_ws^1.0', 'body_ws^0.5'],
                        pf=['title_ws^1.0', 'body_ws^0.5'],
                        pf2=['title_ws^1.0', 'body_ws^0.5'],

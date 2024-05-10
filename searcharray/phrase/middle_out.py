@@ -341,17 +341,17 @@ class PosnBitArray:
         return term_posns
 
     def phrase_freqs(self, term_ids: List[int], phrase_freqs: np.ndarray,
-                     doc_ids: np.ndarray,
                      slop: int = 0,
+                     doc_ids: Optional[np.ndarray] = None,
                      min_posn: Optional[int] = None,
                      max_posn: Optional[int] = None) -> np.ndarray:
         if len(term_ids) < 2:
             raise ValueError("Must have at least two terms")
-        if phrase_freqs.shape[0] == self.max_doc_id + 1 and min_posn is None and max_posn is None:
+        if phrase_freqs.shape[0] == self.max_doc_id + 1 and min_posn is None and max_posn is None and doc_ids is None:
             enc_term_posns = [self.encoded_term_posns[term_id] for term_id in term_ids]
         else:
             keys = None
-            if phrase_freqs.shape[0] != self.max_doc_id + 1:
+            if doc_ids is not None:
                 keys = doc_ids.view(np.uint64)
 
             enc_term_posns = [encoder.slice(self.encoded_term_posns[term_id],

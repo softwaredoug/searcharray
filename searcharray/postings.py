@@ -564,27 +564,42 @@ class SearchArray(ExtensionArray):
     # ***********************************************************
     def termfreqs(self, token: Union[List[str], str],
                   slop: int = 0,
+                  active_docs: Optional[np.ndarray] = None,
                   min_posn: Optional[int] = None,
                   max_posn: Optional[int] = None) -> np.ndarray:
         token = self._check_token_arg(token)
         if isinstance(token, list):
-            return self.phrase_freq(token, slop=slop, min_posn=min_posn, max_posn=max_posn)
+            return self.phrase_freq(token, slop=slop, min_posn=min_posn, max_posn=max_posn,
+                                    active_docs=active_docs)
 
         try:
             term_id = self.term_dict.get_term_id(token)
-            slice_of_rows = None
+            slice_of_rows = self.term_mat.rows
             if self.term_mat.subset:
                 matches = np.zeros(len(self), dtype=np.float32)
-                slice_of_rows = self.term_mat.rows
+                if active_docs is not None:
+                    slice_of_rows = self.term_mat.rows[active_docs > 0]
                 doc_ids, termfreqs = self.posns.termfreqs(term_id,
-                                                          doc_ids=slice_of_rows, min_posn=min_posn, max_posn=max_posn)
+                                                          doc_ids=slice_of_rows,
+                                                          min_posn=min_posn,
+                                                          max_posn=max_posn)
                 mask = np.isin(self.term_mat.rows, doc_ids)
                 matches[mask] = termfreqs
                 return matches
+            elif active_docs is not None:
+                matches = np.zeros(len(self), dtype=np.float32)
+                slice_of_rows = self.term_mat.rows[active_docs > 0]
+                doc_ids, termfreqs = self.posns.termfreqs(term_id,
+                                                          doc_ids=slice_of_rows,
+                                                          min_posn=min_posn,
+                                                          max_posn=max_posn)
+                matches[doc_ids] = termfreqs
+                return matches
             else:
                 doc_ids, termfreqs = self.posns.termfreqs(term_id,
-                                                          doc_ids=slice_of_rows, min_posn=min_posn, max_posn=max_posn)
-                # matches[doc_ids] = termfreqs
+                                                          doc_ids=None,
+                                                          min_posn=min_posn,
+                                                          max_posn=max_posn)
                 return as_dense(doc_ids, termfreqs, len(self))
         except TermMissingError:
             return np.zeros(len(self), dtype=np.float32)
@@ -612,13 +627,17 @@ class SearchArray(ExtensionArray):
 
     def score(self, token: Union[str, List[str]], similarity: Similarity = default_bm25,
               min_posn: Optional[int] = None,
-              max_posn: Optional[int] = None) -> np.ndarray:
+              max_posn: Optional[int] = None,
+              active_docs: Optional[np.ndarray] = None) -> np.ndarray:
         """Score each doc using a similarity function.
 
         Parameters
         ----------
         token : str or list of str of what to search (already tokenized)
         similarity : How to score the documents. Default is BM25.
+        min_posn : int - minimum position of the term in the document, in multiples of 18
+        max_posn : int - maximum position of the term in the document, in multiples of 18
+        active_docs : np.ndarray - a boolean mask of which documents to score, the rest will receive 0
         """
         # Get term freqs per token
         token = self._check_token_arg(token)
@@ -628,7 +647,8 @@ class SearchArray(ExtensionArray):
         tokens_l = [token] if isinstance(token, str) else token
         all_dfs = np.asarray([self.docfreq(token) for token in tokens_l])
 
-        tfs = self.termfreqs(token, min_posn=min_posn, max_posn=max_posn)
+        tfs = self.termfreqs(token, min_posn=min_posn, max_posn=max_posn,
+                             active_docs=active_docs)
         token = self._check_token_arg(token)
         doc_lens = self.doclengths()
 
@@ -658,13 +678,21 @@ class SearchArray(ExtensionArray):
 
     def phrase_freq(self, tokens: List[str],
                     slop=0,
+                    active_docs: Optional[np.ndarray] = None,
                     min_posn: Optional[int] = None,
                     max_posn: Optional[int] = None) -> np.ndarray:
         phrase_freqs = np.zeros(len(self))
         try:
-            doc_ids = self.term_mat.rows
+            # Decide how/if we need to filter doc ids
+            doc_ids = None
+            if active_docs is not None:
+                doc_ids = self.term_mat.rows[active_docs > 0]
+            elif self.term_mat.subset:
+                doc_ids = self.term_mat.rows
+
             term_ids = [self.term_dict.get_term_id(token) for token in tokens]
-            return self.posns.phrase_freqs(term_ids, doc_ids=doc_ids,
+            return self.posns.phrase_freqs(term_ids,
+                                           doc_ids=doc_ids,
                                            phrase_freqs=phrase_freqs,
                                            slop=slop,
                                            min_posn=min_posn,

@@ -246,7 +246,7 @@ def edismax(frame: pd.DataFrame,
                                                     tie=tie,
                                                     similarity=similarity)
 
-    def pf_phase():
+    def pf_phase(curr_scores):
         phrase_scores = []
         explain = ""
         for field, boost in phrase_fields.items():
@@ -254,15 +254,18 @@ def edismax(frame: pd.DataFrame,
             terms = search_terms[field]
             if len(terms) < 2:
                 continue
-            field_phrase_score = arr.score(terms, similarity=similarity[field]) * (1 if boost is None else boost)
+
+            field_phrase_score = arr.score(terms, similarity=similarity[field],
+                                           active_docs=curr_scores,
+                                           ) * (1 if boost is None else boost)
             boost_exp = f"{boost}" if boost is not None else "1"
             explain += f" ({field}:\"{' '.join(terms)}\")^{boost_exp}"
             phrase_scores.append(field_phrase_score)
         return phrase_scores, explain
-    phrase_scores, pf_explain = pf_phase()
+    phrase_scores, pf_explain = pf_phase(qf_scores)
     explain += pf_explain
 
-    def pf2_phase():
+    def pf2_phase(curr_scores):
         bigram_scores = []
         explain = ""
         for field, boost in bigram_fields.items():
@@ -272,17 +275,19 @@ def edismax(frame: pd.DataFrame,
                 continue
             # For each bigram
             for term, next_term in zip(terms, terms[1:]):
-                field_bigram_score = arr.score([term, next_term], similarity=similarity[field]) * (1 if boost is None else boost)
+                field_bigram_score = arr.score([term, next_term], similarity=similarity[field],
+                                               active_docs=curr_scores,
+                                               ) * (1 if boost is None else boost)
                 boost_exp = f"{boost}" if boost is not None else "1"
                 explain += f" ({field}:\"{term} {next_term}\")^{boost_exp}"
                 bigram_scores.append(field_bigram_score)
             bigram_scores.append(field_bigram_score)
         return bigram_scores, explain
 
-    bigram_scores, pf2_explain = pf2_phase()
+    bigram_scores, pf2_explain = pf2_phase(qf_scores)
     explain += pf2_explain
 
-    def pf3_phase():
+    def pf3_phase(curr_scores):
         trigram_scores = []
         explain = ""
         for field, boost in trigram_fields.items():
@@ -292,13 +297,15 @@ def edismax(frame: pd.DataFrame,
                 continue
             # For each trigram
             for term, next_term, next_next_term in zip(terms, terms[1:], terms[2:]):
-                field_trigram_score = arr.score([term, next_term, next_next_term], similarity=similarity[field]) * (1 if boost is None else boost)
+                field_trigram_score = arr.score([term, next_term, next_next_term],
+                                                active_docs=curr_scores,
+                                                similarity=similarity[field]) * (1 if boost is None else boost)
                 boost_exp = f"{boost}" if boost is not None else "1"
                 explain += f" ({field}:\"{term} {next_term} {next_next_term}\")^{boost_exp}"
                 trigram_scores.append(field_trigram_score)
         return trigram_scores, explain
 
-    trigram_scores, pf3_explain = pf3_phase()
+    trigram_scores, pf3_explain = pf3_phase(qf_scores)
     explain += pf3_explain
 
     if len(phrase_scores) > 0:
