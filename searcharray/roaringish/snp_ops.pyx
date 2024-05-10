@@ -296,8 +296,6 @@ cdef _gallop_intersect_drop_parallel(DTYPE_t[:] lhs,
         lhs_lens[i] = lhs_splits[i + 1] - lhs_splits[i]
         rhs_lens[i] = rhs_splits[i + 1] - rhs_splits[i]
 
-    print(f"output shape: {lhs_out.shape} | {rhs_out.shape}")
-    print(f"Time to setup: {mach_absolute_time() - start}")
     with nogil:
 
         # Use idx_lhs / idx_rhs to split the array
@@ -311,7 +309,6 @@ cdef _gallop_intersect_drop_parallel(DTYPE_t[:] lhs,
                                                    mask=mask,
                                                    lhs_base=lhs_splits[i],
                                                    rhs_base=rhs_splits[i])
-    print(f"Time after processing: {mach_absolute_time() - start}")
     all_lsh_out = np.concatenate([lhs_out[i][:output_len[i]] for i in range(num_partitions)])
     all_rhs_out = np.concatenate([rhs_out[i][:output_len[i]] for i in range(num_partitions)])
 
@@ -319,7 +316,6 @@ cdef _gallop_intersect_drop_parallel(DTYPE_t[:] lhs,
     free(rhs_ins)
     free(lhs_lens)
     free(rhs_lens)
-    print(f"Time complete: {mach_absolute_time() - start}")
     return all_lsh_out, all_rhs_out
 
 
