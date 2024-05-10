@@ -252,89 +252,26 @@ cdef DTYPE_t _gallop_intersect_drop(DTYPE_t* lhs,
     return lhs_result_ptr - &lhs_out[0]
 
 
-cdef _gallop_intersect_drop_parallel(DTYPE_t[:] lhs,
-                                     DTYPE_t[:] rhs,
-                                     DTYPE_t[:] lhs_splits,
-                                     DTYPE_t[:] rhs_splits,
-                                     DTYPE_t mask=ALL_BITS):
-    """Parallelize lhs / rhs intersecting using idx_lhs and idx_rhs as split points."""
-    cdef DTYPE_t* lhs_ptr = &lhs[0]
-    cdef DTYPE_t* rhs_ptr = &rhs[0]
-    cdef DTYPE_t i
-    cdef DTYPE_t amt_written = 0
-    cdef DTYPE_t num_partitions = len(lhs_splits) - 1
-    # We only need to allocate the
-    # 1, 30 -> 1
-    # 30, 60 -> 30
-    cdef DTYPE_t max_output_width = 0
-    for i in range(num_partitions):
-        max_output_width = max(min(lhs_splits[i + 1] - lhs_splits[i], rhs_splits[i + 1] - rhs_splits[i]),
-                               max_output_width)
-    cdef DTYPE_t[:, :] lhs_out = np.empty((num_partitions, max_output_width), dtype=np.uint64)
-    cdef DTYPE_t[:, :] rhs_out = np.empty((num_partitions, max_output_width), dtype=np.uint64)
-    cdef np.uint32_t[:] output_len = np.zeros(num_partitions, dtype=np.uint32)
-    # Array of ptrs to lhs_in segments
-    cdef DTYPE_t** lhs_ins
-    cdef DTYPE_t** rhs_ins
-    cdef DTYPE_t* lhs_lens
-    cdef DTYPE_t* rhs_lens
-
-    #Allocate lhs_ins, rhs_ins, lhs_lens, rhs_lens
-    lhs_ins = <DTYPE_t**> malloc(num_partitions * sizeof(DTYPE_t*))
-    rhs_ins = <DTYPE_t**> malloc(num_partitions * sizeof(DTYPE_t*))
-    lhs_lens = <DTYPE_t*> malloc(num_partitions * sizeof(DTYPE_t))
-    rhs_lens = <DTYPE_t*> malloc(num_partitions * sizeof(DTYPE_t))
-
-    if len(lhs_splits) != len(rhs_splits):
-        raise ValueError("lhs_splits and rhs_splits must have the same length")
-
-    # Copy ptrs to beginning of each split with split len
-    for i in range(num_partitions):
-        lhs_ins[i] = &lhs[lhs_splits[i]]
-        rhs_ins[i] = &rhs[rhs_splits[i]]
-        lhs_lens[i] = lhs_splits[i + 1] - lhs_splits[i]
-        rhs_lens[i] = rhs_splits[i + 1] - rhs_splits[i]
-
-    with nogil:
-
-        # Use idx_lhs / idx_rhs to split the array
-        for i in range(num_partitions):
-            output_len[i] = _gallop_intersect_drop(lhs=lhs_ins[i],
-                                                   rhs=rhs_ins[i],
-                                                   lhs_len=lhs_lens[i],
-                                                   rhs_len=rhs_lens[i],
-                                                   lhs_out=&lhs_out[i][0],
-                                                   rhs_out=&rhs_out[i][0],
-                                                   mask=mask,
-                                                   lhs_base=lhs_splits[i],
-                                                   rhs_base=rhs_splits[i])
-    all_lsh_out = np.concatenate([lhs_out[i][:output_len[i]] for i in range(num_partitions)])
-    all_rhs_out = np.concatenate([rhs_out[i][:output_len[i]] for i in range(num_partitions)])
-
-    free(lhs_ins)
-    free(rhs_ins)
-    free(lhs_lens)
-    free(rhs_lens)
-    return all_lsh_out, all_rhs_out
-
-
-
-cdef _gallop_intersect_keep(DTYPE_t[:] lhs,
-                            DTYPE_t[:] rhs,
-                            DTYPE_t mask=ALL_BITS):
+cdef void _gallop_intersect_keep(DTYPE_t* lhs,
+                                 DTYPE_t* rhs,
+                                 DTYPE_t lhs_len,
+                                 DTYPE_t rhs_len,
+                                 DTYPE_t* lhs_out,
+                                 DTYPE_t* rhs_out,
+                                 DTYPE_t* lhs_out_len,
+                                 DTYPE_t* rhs_out_len,
+                                 DTYPE_t mask=ALL_BITS) nogil:
     """Two pointer approach to find the intersection of two sorted arrays."""
     cdef DTYPE_t* lhs_ptr = &lhs[0]
     cdef DTYPE_t* rhs_ptr = &rhs[0]
-    cdef DTYPE_t* end_lhs_ptr = &lhs[lhs.shape[0]]
-    cdef DTYPE_t* end_rhs_ptr = &rhs[rhs.shape[0]]
+    cdef DTYPE_t* end_lhs_ptr = &lhs[lhs_len]
+    cdef DTYPE_t* end_rhs_ptr = &rhs[rhs_len]
     cdef DTYPE_t delta = 1
     cdef DTYPE_t target = -1
-    cdef np.uint64_t[:] lhs_out = np.empty(max(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
-    cdef np.uint64_t[:] rhs_out = np.empty(max(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
-    cdef np.uint64_t* lhs_result_ptr = &lhs_out[0]
-    cdef np.uint64_t* rhs_result_ptr = &rhs_out[0]
-    cdef np.uint64_t out_len_rhs = 0
-    cdef np.uint64_t out_len_lhs = 0
+    # cdef np.uint64_t[:] lhs_out = np.empty(max(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    # cdef np.uint64_t[:] rhs_out = np.empty(max(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef DTYPE_t* lhs_result_ptr = &lhs_out[0]
+    cdef DTYPE_t* rhs_result_ptr = &rhs_out[0]
 
     while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
         # Gallop past the current element
@@ -369,27 +306,28 @@ cdef _gallop_intersect_keep(DTYPE_t[:] lhs,
         # If delta 
         # Either we read past the array, or 
 
-    out_len_lhs = lhs_result_ptr - &lhs_out[0]
-    out_len_rhs = rhs_result_ptr - &rhs_out[0]
-    return np.asarray(lhs_out)[:out_len_lhs], np.asarray(rhs_out)[:out_len_rhs]
+    lhs_out_len[0] = lhs_result_ptr - &lhs_out[0]
+    rhs_out_len[0] = rhs_result_ptr - &rhs_out[0]
 
 
-cdef _gallop_adjacent(DTYPE_t[:] lhs,
-                      DTYPE_t[:] rhs,
-                      DTYPE_t mask=ALL_BITS,
-                      DTYPE_t delta=1):
+cdef DTYPE_t _gallop_adjacent(DTYPE_t* lhs,
+                              DTYPE_t* rhs,
+                              DTYPE_t lhs_len,
+                              DTYPE_t rhs_len,
+                              DTYPE_t* lhs_out,
+                              DTYPE_t* rhs_out,
+                              DTYPE_t mask=ALL_BITS,
+                              DTYPE_t delta=1) nogil:
     # Find all LHS / RHS indices where LHS is 1 before RHS
     cdef DTYPE_t* lhs_ptr = &lhs[0]
     cdef DTYPE_t* rhs_ptr = &rhs[0]
-    cdef DTYPE_t* end_lhs_ptr = &lhs[lhs.shape[0]]
-    cdef DTYPE_t* end_rhs_ptr = &rhs[rhs.shape[0]]
+    cdef DTYPE_t* end_lhs_ptr = &lhs[lhs_len]
+    cdef DTYPE_t* end_rhs_ptr = &rhs[rhs_len]
     cdef DTYPE_t lhs_delta = 1
     cdef DTYPE_t rhs_delta = 1
     cdef DTYPE_t last = -1
-    cdef np.uint64_t[:] lhs_indices = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
-    cdef np.uint64_t[:] rhs_indices = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
-    cdef np.uint64_t* lhs_result_ptr = &lhs_indices[0]
-    cdef np.uint64_t* rhs_result_ptr = &rhs_indices[0]
+    cdef DTYPE_t* lhs_result_ptr = &lhs_out[0]
+    cdef DTYPE_t* rhs_result_ptr = &rhs_out[0]
     
     # Read rhs until > delta
     while rhs_ptr < end_rhs_ptr and rhs_ptr[0] & mask == 0:
@@ -431,7 +369,7 @@ cdef _gallop_adjacent(DTYPE_t[:] lhs,
         # If delta 
         # Either we read past the array, or 
 
-    return np.asarray(lhs_indices), np.asarray(rhs_indices), lhs_result_ptr - &lhs_indices[0]
+    return lhs_result_ptr - &lhs_out[0]
 
 
 
@@ -453,32 +391,38 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
               bint drop_duplicates=True):
     cdef np.uint64_t[:] lhs_out
     cdef np.uint64_t[:] rhs_out
+    cdef DTYPE_t lhs_out_len = 0
+    cdef DTYPE_t rhs_out_len = 0
     if mask is None:
         mask = ALL_BITS
     if mask == 0:
         raise ValueError("Mask cannot be zero")
     if drop_duplicates:
-        # save_input(lhs, rhs, mask)
-        if lhs_splits is None or rhs_splits is None:
-            lhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
-            rhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
-            amt_written = _gallop_intersect_drop(&lhs[0], &rhs[0],
-                                                 lhs.shape[0], rhs.shape[0],
-                                                 &lhs_out[0], &rhs_out[0],
-                                                 mask)
-            return np.asarray(lhs_out)[:amt_written], np.asarray(rhs_out)[:amt_written]
-        else:
-            return _gallop_intersect_drop_parallel(lhs, rhs,
-                                                   lhs_splits, rhs_splits,
-                                                   mask)
+        lhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+        rhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+        amt_written = _gallop_intersect_drop(&lhs[0], &rhs[0],
+                                             lhs.shape[0], rhs.shape[0],
+                                             &lhs_out[0], &rhs_out[0],
+                                             mask)
+        return np.asarray(lhs_out)[:amt_written], np.asarray(rhs_out)[:amt_written]
 
     else:
-        return _gallop_intersect_keep(lhs, rhs, mask)
+        lhs_out = np.empty(max(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+        rhs_out = np.empty(max(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+        _gallop_intersect_keep(&lhs[0], &rhs[0],
+                               lhs.shape[0], rhs.shape[0],
+                               &lhs_out[0], &rhs_out[0],
+                               &lhs_out_len, &rhs_out_len,
+                               mask)
+        return np.asarray(lhs_out)[:lhs_out_len], np.asarray(rhs_out)[:rhs_out_len]
 
 
 def adjacent(np.ndarray[DTYPE_t, ndim=1] lhs,
              np.ndarray[DTYPE_t, ndim=1] rhs,
              DTYPE_t mask=ALL_BITS):
+    cdef np.uint64_t[:] lhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef np.uint64_t[:] rhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    cdef DTYPE_t amt_written = 0
     if mask == 0:
         raise ValueError("Mask cannot be zero")
     if mask is None:
@@ -487,8 +431,11 @@ def adjacent(np.ndarray[DTYPE_t, ndim=1] lhs,
     else:
         delta = (mask & -mask)  # lest significant set bit on mask
 
-    indices_lhs, indices_rhs, result_idx = _gallop_adjacent(lhs, rhs, mask, delta)
-    return indices_lhs[:result_idx], indices_rhs[:result_idx]
+    amt_written = _gallop_adjacent(&lhs[0], &rhs[0],
+                                   lhs.shape[0], rhs.shape[0],
+                                   &lhs_out[0], &rhs_out[0],
+                                   mask, delta)
+    return lhs_out[:amt_written], rhs_out[:amt_written]
 
 
 cdef _scan_unique_naive(DTYPE_t[:] arr,
