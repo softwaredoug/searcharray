@@ -9,6 +9,7 @@ https://github.com/pypa/sampleproject
 from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
 import numpy as np
+import os
 import pathlib
 
 here = pathlib.Path(__file__).parent.resolve()
@@ -18,7 +19,6 @@ long_description = (here / "README.md").read_text(encoding="utf-8")
 
 # Arguments marked as "Required" below must be included for upload to PyPI.
 # Fields marked as "Optional" may be commented out.
-
 setup(
     # This is the name of your project. The first time you publish this
     # package, this name will be registered for you. It will determine how

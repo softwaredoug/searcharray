@@ -89,6 +89,7 @@ def _compute_phrase_freqs_left_to_right(encoded_posns: List[np.ndarray],
     for rhs in encoded_posns[1:]:
         # Only count the count of the last bigram (ignoring the ones where priors did not match)
         phrase_freqs[mask] = 0
+        lhs_splits, rhs_splits = None, None
         if max_doc_id > 8 and (len(lhs) > 10000 or len(rhs) > 10000):
             lhs_splits = encoder.key_partition(lhs, max_doc_id)
             rhs_splits = encoder.key_partition(rhs, max_doc_id)
@@ -125,6 +126,7 @@ def _compute_phrase_freqs_right_to_left(encoded_posns: List[np.ndarray],
     for lhs in encoded_posns[-2::-1]:
         # Only count the count of the last bigram (ignoring the ones where priors did not match)
         phrase_freqs[mask] = 0
+        lhs_splits, rhs_splits = None, None
         if max_doc_id > 8 and (len(lhs) > 10000 or len(rhs) > 10000):
             lhs_splits = encoder.key_partition(lhs, max_doc_id)
             rhs_splits = encoder.key_partition(rhs, max_doc_id)

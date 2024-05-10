@@ -216,7 +216,7 @@ class RoaringishEncoder:
     def key_partition(self,
                       encoded: np.ndarray,
                       max_key: np.uint64,
-                      num_partitions=4) -> np.ndarray:
+                      num_partitions=32) -> np.ndarray:
         """Find indices into encoded that split it into num_partitions."""
         # Get every 1/8, 2/8, 3/8, etc of max_key
         last_partition: np.uint64 = _0

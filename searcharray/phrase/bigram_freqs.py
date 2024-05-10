@@ -120,6 +120,11 @@ def _inner_bigram_freqs(lhs: np.ndarray,
     cont_next: the next (lhs or rhs) array to continue matching
 
     """
+    if lhs_splits is not None and lhs_splits[-1] > len(lhs):
+        raise ValueError("lhs_splits is longer than lhs")
+    if rhs_splits is not None and rhs_splits[-1] > len(rhs):
+        raise ValueError("rhs_splits is longer than rhs")
+
     lhs_int, rhs_int = encoder.intersect(lhs, rhs, lhs_splits, rhs_splits)
     lhs_doc_ids = encoder.keys(lhs_int)
     if len(lhs_int) != len(rhs_int):

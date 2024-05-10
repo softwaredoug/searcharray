@@ -25,6 +25,11 @@ scenarios = {
         "phrase": ["foo", "bar"],
         "expected": [1, 0, 0, 0] * 25,
     },
+    "base10k": {
+        "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 10000),
+        "phrase": ["foo", "bar"],
+        "expected": [1, 0, 0, 0] * 10000,
+    },
     "term_does_not_exist": {
         "docs": lambda: SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["term_does", "not_exist"],
@@ -34,6 +39,11 @@ scenarios = {
         "docs": lambda: SearchArray.index(["foo bear bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),
         "phrase": ["foo", "bar"],
         "expected": [0, 0, 0, 0] * 25,
+    },
+    "and_but_not_phrase_10k": {
+        "docs": lambda: SearchArray.index(["foo bear bar baz", "data2", "data3 bar", "bunny funny wunny"] * 10000),
+        "phrase": ["foo", "bar"],
+        "expected": [0, 0, 0, 0] * 10000,
     },
     "term_repeats": {
         "docs": lambda: SearchArray.index(["foo foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25),

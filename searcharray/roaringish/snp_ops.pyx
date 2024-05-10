@@ -10,7 +10,6 @@ cimport numpy as np
 import numpy as np
 from enum import Enum
 
-from cython.parallel import prange, threadid
 
 # cimport snp_ops
 # from snp_ops cimport _galloping_search, DTYPE_t, ALL_BITS
@@ -291,17 +290,19 @@ cdef _gallop_intersect_drop_parallel(DTYPE_t[:] lhs,
         lhs_lens[i] = lhs_splits[i + 1] - lhs_splits[i]
         rhs_lens[i] = rhs_splits[i + 1] - rhs_splits[i]
 
-    # Use idx_lhs / idx_rhs to split the array
-    for i in prange(num_partitions, nogil=True, schedule='static', num_threads=8):
-        output_len[i] = _gallop_intersect_drop(lhs=lhs_ins[i],
-                                               rhs=rhs_ins[i],
-                                               lhs_len=lhs_lens[i],
-                                               rhs_len=rhs_lens[i],
-                                               lhs_out=&lhs_out[i][0],
-                                               rhs_out=&rhs_out[i][0],
-                                               mask=mask,
-                                               lhs_base=lhs_splits[i],
-                                               rhs_base=rhs_splits[i])
+    with nogil:
+
+        # Use idx_lhs / idx_rhs to split the array
+        for i in range(num_partitions):
+            output_len[i] = _gallop_intersect_drop(lhs=lhs_ins[i],
+                                                   rhs=rhs_ins[i],
+                                                   lhs_len=lhs_lens[i],
+                                                   rhs_len=rhs_lens[i],
+                                                   lhs_out=&lhs_out[i][0],
+                                                   rhs_out=&rhs_out[i][0],
+                                                   mask=mask,
+                                                   lhs_base=lhs_splits[i],
+                                                   rhs_base=rhs_splits[i])
     all_lsh_out = np.concatenate([lhs_out[i][:output_len[i]] for i in range(num_partitions)])
     all_rhs_out = np.concatenate([rhs_out[i][:output_len[i]] for i in range(num_partitions)])
 
@@ -441,9 +442,9 @@ def save_input(lhs, rhs, mask):
 
 def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
               np.ndarray[DTYPE_t, ndim=1] rhs,
+              DTYPE_t mask=ALL_BITS,
               np.ndarray[DTYPE_t, ndim=1] lhs_splits = None,
               np.ndarray[DTYPE_t, ndim=1] rhs_splits = None,
-              DTYPE_t mask=ALL_BITS,
               bint drop_duplicates=True):
     cdef np.uint64_t[:] lhs_out
     cdef np.uint64_t[:] rhs_out
