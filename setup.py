@@ -9,7 +9,6 @@ https://github.com/pypa/sampleproject
 from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
 import numpy as np
-import os
 import pathlib
 
 here = pathlib.Path(__file__).parent.resolve()
