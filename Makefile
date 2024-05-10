@@ -19,7 +19,6 @@ deps: venv
 	# If OSX install open-mpi, llvm, libomp
 	@if [[ "$$(uname)" == "Darwin" ]]; then \
 		echo "Installing OSX dependencies..."; \
-		brew install llvm open-mpi libomp; \
 	fi
 
 
@@ -54,7 +53,7 @@ destroy: clean
 
 
 extensions: clean
-	./scripts/build_extensions.sh
+	python setup.py build_ext --inplace
 
 
 annotate:

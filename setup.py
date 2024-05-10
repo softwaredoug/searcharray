@@ -131,9 +131,6 @@ setup(
     include_dirs=[np.get_include()],
     ext_modules=cythonize([Extension("searcharray.roaringish.*",
                                      ["searcharray/roaringish/*.pyx"],
-                                     # Enable clang openmp
-                                     extra_compile_args=['-fopenmp'],
-                                     extra_link_args=['-lmpi', '-lomp'],
                                      )]),
 
     # List additional groups of dependencies here (e.g. development
