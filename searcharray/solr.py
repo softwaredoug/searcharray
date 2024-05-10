@@ -246,43 +246,60 @@ def edismax(frame: pd.DataFrame,
                                                     tie=tie,
                                                     similarity=similarity)
 
-    phrase_scores = []
-    for field, boost in phrase_fields.items():
-        arr = get_field(frame, field)
-        terms = search_terms[field]
-        if len(terms) < 2:
-            continue
-        field_phrase_score = arr.score(terms, similarity=similarity[field]) * (1 if boost is None else boost)
-        boost_exp = f"{boost}" if boost is not None else "1"
-        explain += f" ({field}:\"{' '.join(terms)}\")^{boost_exp}"
-        phrase_scores.append(field_phrase_score)
-
-    bigram_scores = []
-    for field, boost in bigram_fields.items():
-        arr = get_field(frame, field)
-        terms = search_terms[field]
-        if len(terms) < 2:
-            continue
-        # For each bigram
-        for term, next_term in zip(terms, terms[1:]):
-            field_bigram_score = arr.score([term, next_term], similarity=similarity[field]) * (1 if boost is None else boost)
+    def pf_phase():
+        phrase_scores = []
+        explain = ""
+        for field, boost in phrase_fields.items():
+            arr = get_field(frame, field)
+            terms = search_terms[field]
+            if len(terms) < 2:
+                continue
+            field_phrase_score = arr.score(terms, similarity=similarity[field]) * (1 if boost is None else boost)
             boost_exp = f"{boost}" if boost is not None else "1"
-            explain += f" ({field}:\"{term} {next_term}\")^{boost_exp}"
+            explain += f" ({field}:\"{' '.join(terms)}\")^{boost_exp}"
+            phrase_scores.append(field_phrase_score)
+        return phrase_scores, explain
+    phrase_scores, pf_explain = pf_phase()
+    explain += pf_explain
+
+    def pf2_phase():
+        bigram_scores = []
+        explain = ""
+        for field, boost in bigram_fields.items():
+            arr = get_field(frame, field)
+            terms = search_terms[field]
+            if len(terms) < 2:
+                continue
+            # For each bigram
+            for term, next_term in zip(terms, terms[1:]):
+                field_bigram_score = arr.score([term, next_term], similarity=similarity[field]) * (1 if boost is None else boost)
+                boost_exp = f"{boost}" if boost is not None else "1"
+                explain += f" ({field}:\"{term} {next_term}\")^{boost_exp}"
+                bigram_scores.append(field_bigram_score)
             bigram_scores.append(field_bigram_score)
-        bigram_scores.append(field_bigram_score)
+        return bigram_scores, explain
 
-    trigram_scores = []
-    for field, boost in trigram_fields.items():
-        arr = get_field(frame, field)
-        terms = search_terms[field]
-        if len(terms) < 3:
-            continue
-        # For each trigram
-        for term, next_term, next_next_term in zip(terms, terms[1:], terms[2:]):
-            field_trigram_score = arr.score([term, next_term, next_next_term], similarity=similarity[field]) * (1 if boost is None else boost)
-            boost_exp = f"{boost}" if boost is not None else "1"
-            explain += f" ({field}:\"{term} {next_term} {next_next_term}\")^{boost_exp}"
-            trigram_scores.append(field_trigram_score)
+    bigram_scores, pf2_explain = pf2_phase()
+    explain += pf2_explain
+
+    def pf3_phase():
+        trigram_scores = []
+        explain = ""
+        for field, boost in trigram_fields.items():
+            arr = get_field(frame, field)
+            terms = search_terms[field]
+            if len(terms) < 3:
+                continue
+            # For each trigram
+            for term, next_term, next_next_term in zip(terms, terms[1:], terms[2:]):
+                field_trigram_score = arr.score([term, next_term, next_next_term], similarity=similarity[field]) * (1 if boost is None else boost)
+                boost_exp = f"{boost}" if boost is not None else "1"
+                explain += f" ({field}:\"{term} {next_term} {next_next_term}\")^{boost_exp}"
+                trigram_scores.append(field_trigram_score)
+        return trigram_scores, explain
+
+    trigram_scores, pf3_explain = pf3_phase()
+    explain += pf3_explain
 
     if len(phrase_scores) > 0:
         phrase_scores = np.sum(phrase_scores, axis=0)
