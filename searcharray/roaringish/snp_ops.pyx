@@ -27,8 +27,8 @@ cdef extern from "stddef.h":
 
 
 # Include mach performance timer
-cdef extern from "mach/mach_time.h":
-    uint64_t mach_absolute_time()
+# cdef extern from "mach/mach_time.h":
+#     uint64_t mach_absolute_time()
 
 
 cdef popcount64_arr(DTYPE_t[:] arr):
@@ -258,7 +258,6 @@ cdef _gallop_intersect_drop_parallel(DTYPE_t[:] lhs,
                                      DTYPE_t[:] rhs_splits,
                                      DTYPE_t mask=ALL_BITS):
     """Parallelize lhs / rhs intersecting using idx_lhs and idx_rhs as split points."""
-    cdef uint64_t start = mach_absolute_time()
     cdef DTYPE_t* lhs_ptr = &lhs[0]
     cdef DTYPE_t* rhs_ptr = &rhs[0]
     cdef DTYPE_t i
