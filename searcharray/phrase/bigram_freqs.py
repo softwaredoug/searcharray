@@ -102,8 +102,6 @@ def _inner_bigram_same_term(lhs_int: np.ndarray, rhs_int: np.ndarray,
 def _inner_bigram_freqs(lhs: np.ndarray,
                         rhs: np.ndarray,
                         phrase_freqs: np.ndarray,
-                        lhs_splits: Optional[np.ndarray] = None,
-                        rhs_splits: Optional[np.ndarray] = None,
                         cont: Continuation = Continuation.RHS) -> Tuple[np.ndarray, Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
     """Count bigram matches between two encoded arrays, within a 64 bit word with same MSBs.
 
@@ -120,12 +118,7 @@ def _inner_bigram_freqs(lhs: np.ndarray,
     cont_next: the next (lhs or rhs) array to continue matching
 
     """
-    if lhs_splits is not None and lhs_splits[-1] > len(lhs):
-        raise ValueError("lhs_splits is longer than lhs")
-    if rhs_splits is not None and rhs_splits[-1] > len(rhs):
-        raise ValueError("rhs_splits is longer than rhs")
-
-    lhs_int, rhs_int = encoder.intersect(lhs, rhs, lhs_splits, rhs_splits)
+    lhs_int, rhs_int = encoder.intersect(lhs, rhs)
     lhs_doc_ids = encoder.keys(lhs_int)
     if len(lhs_int) != len(rhs_int):
         raise ValueError("Encoding error, MSBs apparently are duplicated among your encoded posn arrays.")
@@ -217,8 +210,6 @@ def _set_adjbit_at_header(enc1: np.ndarray, just_lsb_enc: np.ndarray,
 def bigram_freqs(lhs: np.ndarray,
                  rhs: np.ndarray,
                  phrase_freqs: np.ndarray,
-                 lhs_splits: Optional[np.ndarray] = None,
-                 rhs_splits: Optional[np.ndarray] = None,
                  cont: Continuation = Continuation.RHS) -> Tuple[np.ndarray, Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
     """Count bigram matches between two roaringish encoded posn arrays.
        Also return connection on right hand of the bigram
@@ -255,7 +246,7 @@ def bigram_freqs(lhs: np.ndarray,
     phrase_freqs, (lhs_next_inner, rhs_next_inner)\
         = _inner_bigram_freqs(lhs, rhs,
                               phrase_freqs,
-                              lhs_splits, rhs_splits, cont)
+                              cont)
     # ***************************************************************************
     # "Adjacent" matches:
     # Of course we also need to check for matches that span two 64 bit words,

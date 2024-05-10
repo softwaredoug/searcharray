@@ -83,19 +83,11 @@ def _compute_phrase_freqs_left_to_right(encoded_posns: List[np.ndarray],
         encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
     mask = np.ones(len(phrase_freqs), dtype=bool)
 
-    lhs_splits, rhs_splits = None, None
-
     lhs = encoded_posns[0]
     for rhs in encoded_posns[1:]:
         # Only count the count of the last bigram (ignoring the ones where priors did not match)
         phrase_freqs[mask] = 0
-        lhs_splits, rhs_splits = None, None
-        if max_doc_id > 8 and (len(lhs) > 10000 or len(rhs) > 10000):
-            lhs_splits = encoder.key_partition(lhs, max_doc_id)
-            rhs_splits = encoder.key_partition(rhs, max_doc_id)
         phrase_freqs, conts = bigram_freqs(lhs, rhs, phrase_freqs,
-                                           lhs_splits=lhs_splits,
-                                           rhs_splits=rhs_splits,
                                            cont=Continuation.RHS)
         assert conts[1] is not None
         lhs = conts[1]
@@ -120,19 +112,11 @@ def _compute_phrase_freqs_right_to_left(encoded_posns: List[np.ndarray],
         encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
     mask = np.ones(len(phrase_freqs), dtype=bool)
 
-    lhs_splits, rhs_splits = None, None
-
     rhs = encoded_posns[-1]
     for lhs in encoded_posns[-2::-1]:
         # Only count the count of the last bigram (ignoring the ones where priors did not match)
         phrase_freqs[mask] = 0
-        lhs_splits, rhs_splits = None, None
-        if max_doc_id > 8 and (len(lhs) > 10000 or len(rhs) > 10000):
-            lhs_splits = encoder.key_partition(lhs, max_doc_id)
-            rhs_splits = encoder.key_partition(rhs, max_doc_id)
         phrase_freqs, conts = bigram_freqs(lhs, rhs, phrase_freqs,
-                                           lhs_splits=lhs_splits,
-                                           rhs_splits=rhs_splits,
                                            cont=Continuation.LHS)
         assert conts[0] is not None
         rhs = conts[0]
