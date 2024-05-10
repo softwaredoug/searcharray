@@ -27,8 +27,8 @@ cdef extern from "stddef.h":
 
 
 # Include mach performance timer
-# cdef extern from "mach/mach_time.h":
-#     uint64_t mach_absolute_time()
+cdef extern from "mach/mach_time.h":
+    uint64_t mach_absolute_time()
 
 
 cdef popcount64_arr(DTYPE_t[:] arr):
@@ -215,8 +215,6 @@ cdef DTYPE_t _gallop_intersect_drop(DTYPE_t* lhs,
     cdef DTYPE_t* end_rhs_ptr = &rhs[rhs_len]
     cdef DTYPE_t delta = 1
     cdef DTYPE_t last = -1
-    # cdef np.uint64_t[:] lhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
-    # cdef np.uint64_t[:] rhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
     cdef DTYPE_t* lhs_result_ptr = &lhs_out[0]
     cdef DTYPE_t* rhs_result_ptr = &rhs_out[0]
 
@@ -260,13 +258,21 @@ cdef _gallop_intersect_drop_parallel(DTYPE_t[:] lhs,
                                      DTYPE_t[:] rhs_splits,
                                      DTYPE_t mask=ALL_BITS):
     """Parallelize lhs / rhs intersecting using idx_lhs and idx_rhs as split points."""
+    cdef uint64_t start = mach_absolute_time()
     cdef DTYPE_t* lhs_ptr = &lhs[0]
     cdef DTYPE_t* rhs_ptr = &rhs[0]
     cdef DTYPE_t i
     cdef DTYPE_t amt_written = 0
     cdef DTYPE_t num_partitions = len(lhs_splits) - 1
-    cdef DTYPE_t[:, :] lhs_out = np.empty((num_partitions, min(lhs.shape[0], rhs.shape[0])), dtype=np.uint64)
-    cdef DTYPE_t[:, :] rhs_out = np.empty((num_partitions, min(lhs.shape[0], rhs.shape[0])), dtype=np.uint64)
+    # We only need to allocate the
+    # 1, 30 -> 1
+    # 30, 60 -> 30
+    cdef DTYPE_t max_output_width = 0
+    for i in range(num_partitions):
+        max_output_width = max(min(lhs_splits[i + 1] - lhs_splits[i], rhs_splits[i + 1] - rhs_splits[i]),
+                               max_output_width)
+    cdef DTYPE_t[:, :] lhs_out = np.empty((num_partitions, max_output_width), dtype=np.uint64)
+    cdef DTYPE_t[:, :] rhs_out = np.empty((num_partitions, max_output_width), dtype=np.uint64)
     cdef np.uint32_t[:] output_len = np.zeros(num_partitions, dtype=np.uint32)
     # Array of ptrs to lhs_in segments
     cdef DTYPE_t** lhs_ins
@@ -290,6 +296,8 @@ cdef _gallop_intersect_drop_parallel(DTYPE_t[:] lhs,
         lhs_lens[i] = lhs_splits[i + 1] - lhs_splits[i]
         rhs_lens[i] = rhs_splits[i + 1] - rhs_splits[i]
 
+    print(f"output shape: {lhs_out.shape} | {rhs_out.shape}")
+    print(f"Time to setup: {mach_absolute_time() - start}")
     with nogil:
 
         # Use idx_lhs / idx_rhs to split the array
@@ -303,6 +311,7 @@ cdef _gallop_intersect_drop_parallel(DTYPE_t[:] lhs,
                                                    mask=mask,
                                                    lhs_base=lhs_splits[i],
                                                    rhs_base=rhs_splits[i])
+    print(f"Time after processing: {mach_absolute_time() - start}")
     all_lsh_out = np.concatenate([lhs_out[i][:output_len[i]] for i in range(num_partitions)])
     all_rhs_out = np.concatenate([rhs_out[i][:output_len[i]] for i in range(num_partitions)])
 
@@ -310,6 +319,7 @@ cdef _gallop_intersect_drop_parallel(DTYPE_t[:] lhs,
     free(rhs_ins)
     free(lhs_lens)
     free(rhs_lens)
+    print(f"Time complete: {mach_absolute_time() - start}")
     return all_lsh_out, all_rhs_out
 
 
