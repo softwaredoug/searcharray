@@ -4,6 +4,7 @@ import numpy as np
 import pathlib
 import string
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Any, Optional
 from searcharray import SearchArray
 from searcharray.solr import edismax
@@ -319,6 +320,55 @@ def test_msmarco1m_or_search_max_posn(query, msmarco1m, benchmark, caplog):
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.mark.parametrize("query", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "the purpose"])
 def test_msmarco1m_edismax(query, msmarco1m, benchmark, caplog):
+    profiler = Profiler(benchmark)
+
+    caplog.set_level(logging.DEBUG)
+
+    def run_edismax(query):
+        return edismax(msmarco1m, q=query,
+                       mm=2,
+                       qf=['title_ws^1.0', 'body_ws^0.5'],
+                       pf=['title_ws^1.0', 'body_ws^0.5'],
+                       pf2=['title_ws^1.0', 'body_ws^0.5'],
+                       pf3=['title_ws^1.0', 'body_ws^0.5'],
+                       tie=0.3)
+
+    scores, explain = profiler.run(run_edismax, query)
+    assert len(scores) == len(msmarco1m['body_ws'].array)
+    assert np.any(scores > 0)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_msmarco1m_edismax_threaded(query, msmarco1m, benchmark, caplog):
+    profiler = Profiler(benchmark)
+
+    caplog.set_level(logging.DEBUG)
+
+    queries = ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "the purpose"]
+
+    def run_edismax_threaded(queries):
+        futures = []
+        with ThreadPoolExecutor() as executor:
+            for query in queries:
+                futures.apppend(executor.submit(edismax, msmarco1m, q=query,
+                                                mm=2,
+                                                qf=['title_ws^1.0', 'body_ws^0.5'],
+                                                pf=['title_ws^1.0', 'body_ws^0.5'],
+                                                pf2=['title_ws^1.0', 'body_ws^0.5'],
+                                                pf3=['title_ws^1.0', 'body_ws^0.5'],
+                                                tie=0.3)
+                                )
+        results = []
+        for future in as_completed(futures):
+            results.append(future.result())
+        return results
+
+    profiler.run(run_edismax_threaded, queries)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("query", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "the purpose"])
+def test_msmarco1m_edismax_mm100(query, msmarco1m, benchmark, caplog):
     profiler = Profiler(benchmark)
 
     caplog.set_level(logging.DEBUG)
