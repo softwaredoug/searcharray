@@ -13,7 +13,7 @@ from searcharray.phrase.bigram_freqs import bigram_freqs, Continuation
 from searcharray.phrase.spans import span_search
 import numbers
 import logging
-from collections import defaultdict
+from collections import defaultdict, abc
 
 
 logger = logging.getLogger(__name__)
@@ -264,6 +264,37 @@ def index_range(rng, key):
     return np.asarray(list(rng))[key]
 
 
+class FilteredPosns(abc.Mapping):
+    """When someone slices, this lets us avoid repeating constantly
+    slicing the keys out of the encoded positions."""
+
+    def __init__(self, base, doc_ids):
+        self.base = base
+        self.sliced = {}
+        self.doc_ids = doc_ids
+
+    def __getitem__(self, key):
+        """Slice with encoder, cache, and return."""
+        if key in self.sliced:
+            print(f"Returning sliced {key}")
+            return self.sliced[key]
+
+        print(f"Slicing... {key}")
+        sliced = encoder.slice(self.base[key],
+                               keys=self.doc_ids)
+        self.sliced[key] = sliced
+        return sliced
+
+    def __setitem__(self, key, value):
+        self.base[key] = value
+
+    def __iter__(self):
+        return iter(self.doc_ids)
+
+    def __len__(self):
+        return len(self.doc_ids)
+
+
 class PosnBitArray:
 
     def __init__(self, encoded_term_posns, max_doc_id: int):
@@ -279,9 +310,20 @@ class PosnBitArray:
                 self.docfreq(term_id)
                 self.termfreqs(term_id)
 
+    def filter(self, doc_ids):
+        """Filter my doc ids to only those in doc_ids."""
+        if isinstance(self.encoded_term_posns, FilteredPosns):
+            self.encoded_term_posns = self.encoded_term_posns.base
+        self.encoded_term_posns = FilteredPosns(self.encoded_term_posns, doc_ids)
+
+    def _reset_filter(self):
+        if isinstance(self.encoded_term_posns, FilteredPosns):
+            self.encoded_term_posns = self.encoded_term_posns.base
+
     def clear_cache(self):
         self.docfreq_cache = {}
         self.termfreq_cache = {}
+        self._reset_filter()
 
     def copy(self):
         new = PosnBitArray(deepcopy(self.encoded_term_posns), self.max_doc_id)

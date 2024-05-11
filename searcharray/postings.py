@@ -319,6 +319,7 @@ class SearchArray(ExtensionArray):
                 sliced_posns = self.posns.slice(sliced_tfs.rows) if not self.avoid_copies else self.posns
             else:
                 sliced_posns = self.posns
+                sliced_posns.filter(self.term_mat.rows[key])
 
             arr = SearchArray([], tokenizer=self.tokenizer)
             arr.term_mat = sliced_tfs
@@ -667,22 +668,17 @@ class SearchArray(ExtensionArray):
                     max_posn: Optional[int] = None) -> np.ndarray:
         try:
             # Decide how/if we need to filter doc ids
-            doc_ids = None
-            if self.term_mat.subset:
-                doc_ids = self.term_mat.rows
-
             term_ids = [self.term_dict.get_term_id(token) for token in tokens]
             phrase_freqs = self.posns.phrase_freqs(term_ids,
-                                                   doc_ids=doc_ids,
                                                    slop=slop,
                                                    min_posn=min_posn,
                                                    max_posn=max_posn)
-            if doc_ids is not None:
-                return phrase_freqs[doc_ids]
+            if self.term_mat.subset:
+                return phrase_freqs[self.term_mat.rows]
             return phrase_freqs
         except TermMissingError:
-            if doc_ids is not None:
-                return np.zeros(len(doc_ids))
+            if self.term_mat.subset:
+                return np.zeros(len(self), dtype=np.float32)
             return self.posns.empty_buffer()
 
     def phrase_freq_scan(self, tokens: List[str], mask=None, slop=0) -> np.ndarray:
