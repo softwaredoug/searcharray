@@ -318,8 +318,7 @@ class SearchArray(ExtensionArray):
             if not self.avoid_copies:
                 sliced_posns = self.posns.slice(sliced_tfs.rows) if not self.avoid_copies else self.posns
             else:
-                sliced_posns = self.posns
-                sliced_posns.filter(self.term_mat.rows[key])
+                sliced_posns = self.posns.filter(sliced_tfs.rows)
 
             arr = SearchArray([], tokenizer=self.tokenizer)
             arr.term_mat = sliced_tfs

@@ -276,10 +276,8 @@ class FilteredPosns(abc.Mapping):
     def __getitem__(self, key):
         """Slice with encoder, cache, and return."""
         if key in self.sliced:
-            print(f"Returning sliced {key}")
             return self.sliced[key]
 
-        print(f"Slicing... {key}")
         sliced = encoder.slice(self.base[key],
                                keys=self.doc_ids)
         self.sliced[key] = sliced
@@ -310,11 +308,12 @@ class PosnBitArray:
                 self.docfreq(term_id)
                 self.termfreqs(term_id)
 
-    def filter(self, doc_ids):
+    def filter(self, doc_ids) -> "PosnBitArray":
         """Filter my doc ids to only those in doc_ids."""
-        if isinstance(self.encoded_term_posns, FilteredPosns):
-            self.encoded_term_posns = self.encoded_term_posns.base
-        self.encoded_term_posns = FilteredPosns(self.encoded_term_posns, doc_ids)
+        enc_term_posns = self.encoded_term_posns
+        if isinstance(enc_term_posns, FilteredPosns):
+            self.encoded_term_posns = enc_term_posns.base
+        return PosnBitArray(FilteredPosns(self.encoded_term_posns, doc_ids), self.max_doc_id)
 
     def _reset_filter(self):
         if isinstance(self.encoded_term_posns, FilteredPosns):
