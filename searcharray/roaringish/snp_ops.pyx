@@ -262,7 +262,7 @@ cdef void _gallop_intersect_keep(DTYPE_t* lhs,
                                  DTYPE_t* rhs_out,
                                  DTYPE_t* lhs_out_len,
                                  DTYPE_t* rhs_out_len,
-                                 DTYPE_t mask=ALL_BITS) noexcept:
+                                 DTYPE_t mask=ALL_BITS) noexcept nogil:
     """Two pointer approach to find the intersection of two sorted arrays."""
     cdef DTYPE_t* lhs_ptr = &lhs[0]
     cdef DTYPE_t* rhs_ptr = &rhs[0]
@@ -405,27 +405,29 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
     if drop_duplicates:
         lhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
         rhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
-        amt_written = _gallop_intersect_drop(&lhs[0], &rhs[0],
-                                             lhs.strides[0] / sizeof(DTYPE_t),
-                                             rhs.strides[0] / sizeof(DTYPE_t),
-                                             lhs.shape[0] * lhs.strides[0] / sizeof(DTYPE_t),
-                                             rhs.shape[0] * rhs.strides[0] / sizeof(DTYPE_t),
-                                             &lhs_out[0], &rhs_out[0],
-                                             mask)
+        with nogil:
+            amt_written = _gallop_intersect_drop(&lhs[0], &rhs[0],
+                                                 lhs.strides[0] / sizeof(DTYPE_t),
+                                                 rhs.strides[0] / sizeof(DTYPE_t),
+                                                 lhs.shape[0] * lhs.strides[0] / sizeof(DTYPE_t),
+                                                 rhs.shape[0] * rhs.strides[0] / sizeof(DTYPE_t),
+                                                 &lhs_out[0], &rhs_out[0],
+                                                 mask)
         return np.asarray(lhs_out)[:amt_written], np.asarray(rhs_out)[:amt_written]
 
     else:
         lhs_out = np.empty(max(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
         rhs_out = np.empty(max(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
 
-        _gallop_intersect_keep(&lhs[0], &rhs[0],
-                               lhs.strides[0] / sizeof(DTYPE_t),
-                               rhs.strides[0] / sizeof(DTYPE_t),
-                               lhs.shape[0] * lhs.strides[0] / sizeof(DTYPE_t),
-                               rhs.shape[0] * rhs.strides[0] / sizeof(DTYPE_t),
-                               &lhs_out[0], &rhs_out[0],
-                               &lhs_out_len, &rhs_out_len,
-                               mask)
+        with nogil:
+            _gallop_intersect_keep(&lhs[0], &rhs[0],
+                                   lhs.strides[0] / sizeof(DTYPE_t),
+                                   rhs.strides[0] / sizeof(DTYPE_t),
+                                   lhs.shape[0] * lhs.strides[0] / sizeof(DTYPE_t),
+                                   rhs.shape[0] * rhs.strides[0] / sizeof(DTYPE_t),
+                                   &lhs_out[0], &rhs_out[0],
+                                   &lhs_out_len, &rhs_out_len,
+                                   mask)
         lhs_out, rhs_out = np.asarray(lhs_out)[:lhs_out_len], np.asarray(rhs_out)[:rhs_out_len]
         return lhs_out, rhs_out
 
@@ -444,10 +446,11 @@ def adjacent(np.ndarray[DTYPE_t, ndim=1] lhs,
     else:
         delta = (mask & -mask)  # lest significant set bit on mask
 
-    amt_written = _gallop_adjacent(&lhs[0], &rhs[0],
-                                   lhs.shape[0], rhs.shape[0],
-                                   &lhs_out[0], &rhs_out[0],
-                                   mask, delta)
+    with nogil:
+        amt_written = _gallop_adjacent(&lhs[0], &rhs[0],
+                                       lhs.shape[0], rhs.shape[0],
+                                       &lhs_out[0], &rhs_out[0],
+                                       mask, delta)
     return lhs_out[:amt_written], rhs_out[:amt_written]
 
 

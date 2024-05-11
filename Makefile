@@ -86,6 +86,10 @@ benchmark: deps extensions
 	python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_msmarco test/test_msmarco.py
 	open ./.benchmarks/histogram_msmarco.svg
 
+benchmark_one: deps extensions
+	python -m pytest -x --benchmark-only --benchmark-autosave --benchmark-histogram=./.benchmarks/histogram_one "$(TEST)"
+	open ./.benchmarks/histogram_one.svg
+
 benchmark_graph: deps
 	python scripts/graph_benchmarks.py "$(TEST)"
 

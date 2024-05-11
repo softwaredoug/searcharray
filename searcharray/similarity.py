@@ -68,12 +68,21 @@ def bm25_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
         idf = compute_idf(context.num_docs, doc_freqs)
         try:
             adj_doc_lens = context.working["adj_doc_lens"]
-        except KeyError:
-            adj_doc_lens = compute_adj_doc_lens(context.doc_lens, context.avg_doc_lens, k1, b)
-            context.working["adj_doc_lens"] = adj_doc_lens
-        term_freqs /= (term_freqs + adj_doc_lens)
-        term_freqs *= idf
-        return term_freqs
+            term_freqs /= (term_freqs + adj_doc_lens)
+            term_freqs *= idf
+            return term_freqs
+        except (KeyError, ValueError):
+            try:
+                adj_doc_lens = compute_adj_doc_lens(context.doc_lens, context.avg_doc_lens, k1, b)
+                context.working["adj_doc_lens"] = adj_doc_lens
+                term_freqs /= (term_freqs + adj_doc_lens)
+                term_freqs *= idf
+                return term_freqs
+            except ValueError:
+                adj_doc_lens = compute_adj_doc_lens(doc_lens, avg_doc_lens, k1, b)
+                term_freqs /= (term_freqs + adj_doc_lens)
+                term_freqs *= idf
+                return term_freqs
     return bm25
 
 
