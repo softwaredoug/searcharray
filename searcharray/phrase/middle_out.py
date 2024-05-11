@@ -362,7 +362,6 @@ class PosnBitArray:
                                             keys=keys,
                                             min_payload=min_posn,
                                             max_payload=max_posn) for term_id in term_ids]
-            import pdb; pdb.set_trace()
 
         if slop == 0:
             return compute_phrase_freqs(enc_term_posns, phrase_freqs, max_doc_id=np.uint64(self.max_doc_id))

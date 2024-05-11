@@ -690,7 +690,6 @@ class SearchArray(ExtensionArray):
                 doc_ids = self.term_mat.rows
 
             term_ids = [self.term_dict.get_term_id(token) for token in tokens]
-            import pdb; pdb.set_trace()
             phrase_freqs = self.posns.phrase_freqs(term_ids,
                                                    doc_ids=doc_ids,
                                                    slop=slop,

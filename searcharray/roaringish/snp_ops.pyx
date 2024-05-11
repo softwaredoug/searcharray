@@ -262,7 +262,7 @@ cdef void _gallop_intersect_keep(DTYPE_t* lhs,
                                  DTYPE_t* rhs_out,
                                  DTYPE_t* lhs_out_len,
                                  DTYPE_t* rhs_out_len,
-                                 DTYPE_t mask=ALL_BITS) noexcept nogil:
+                                 DTYPE_t mask=ALL_BITS) noexcept:
     """Two pointer approach to find the intersection of two sorted arrays."""
     cdef DTYPE_t* lhs_ptr = &lhs[0]
     cdef DTYPE_t* rhs_ptr = &rhs[0]
@@ -275,7 +275,7 @@ cdef void _gallop_intersect_keep(DTYPE_t* lhs,
     cdef DTYPE_t* lhs_result_ptr = &lhs_out[0]
     cdef DTYPE_t* rhs_result_ptr = &rhs_out[0]
 
-    while lhs_ptr < end_lhs_ptr or rhs_ptr < end_rhs_ptr:
+    while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
         # Gallop past the current element
         while lhs_ptr < end_lhs_ptr and (lhs_ptr[0] & mask) < (rhs_ptr[0] & mask):
             lhs_ptr += (delta * lhs_stride)
@@ -287,6 +287,7 @@ cdef void _gallop_intersect_keep(DTYPE_t* lhs,
             delta <<= 1
         rhs_ptr -= ((delta >> 1) * rhs_stride)
         delta = 1
+
 
         # Now that we've reset, we just do the naive 2-ptr check
         # Then next loop we pickup on exponential search
