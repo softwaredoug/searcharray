@@ -134,7 +134,26 @@ intersect_scenarios = {
         "mask": None,
         "expected": u64([32, 42])
     },
+    "trouble_scen": {
+        "lhs": u64([1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55, 57, 59, 61, 63, 65, 67, 69, 71, 73, 75, 77, 79, 81, 83, 85, 87, 89, 91, 93, 95, 97, 99, 101, 103, 105, 107, 109, 111, 113, 115, 117, 119, 121, 123]),
+
+        "rhs": u64([0, 4, 4, 5, 9, 9, 10, 14, 14, 15, 19, 19, 20, 24, 24, 25, 29, 29, 30, 34, 34, 35, 39, 39, 40, 44, 44, 45, 49, 49, 50, 54, 54, 55, 59, 59, 60, 64, 64, 65, 69, 69, 70, 74, 74, 75, 79, 79, 80, 84, 84, 85, 89, 89, 90, 94, 94, 95, 99, 99, 100, 104, 104, 105, 109, 109, 110, 114, 114, 115, 119, 119, 120, 124, 124]),
+        "mask": None,
+        "expected": u64([5, 9, 15, 19, 25, 29, 35, 39, 45, 49, 55, 59, 65, 69, 75, 79, 85, 89, 95, 99, 105, 109, 115, 119])
+    }
 }
+
+
+@w_scenarios(intersect_scenarios)
+def test_intersect_strided(lhs, rhs, mask, expected):
+    if mask is None:
+        mask = np.uint64(0xFFFFFFFFFFFFFFFF)
+    lhs = lhs[::2]
+    rhs = rhs[::2]
+    expected = np.intersect1d(lhs, rhs)
+    lhs_idx, rhs_idx = intersect(lhs, rhs, mask=mask)
+    result = lhs[lhs_idx] & mask
+    assert np.all(result == expected)
 
 
 @w_scenarios(intersect_scenarios)
@@ -155,6 +174,18 @@ def test_intersect_keep_both(lhs, rhs, mask, expected):
     expected_rhs = np.argwhere(np.in1d(rhs, lhs)).flatten()
     assert np.all(lhs_idx == expected_lhs)
     assert np.all(rhs_idx == expected_rhs)
+
+
+@w_scenarios(intersect_scenarios)
+def test_intersect_keep_both_strided(lhs, rhs, mask, expected):
+    if mask is None:
+        mask = np.uint64(0xFFFFFFFFFFFFFFFF)
+    lhs = lhs[::2]
+    rhs = rhs[::2]
+    expected = np.intersect1d(lhs, rhs)
+    lhs_idx, rhs_idx = intersect(lhs, rhs, mask=mask, drop_duplicates=False)
+    result = lhs[lhs_idx] & mask
+    assert np.all(result == expected)
 
 
 @pytest.mark.parametrize("seed", [0, 1, 2, 3, 4])

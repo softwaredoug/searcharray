@@ -340,11 +340,15 @@ class PosnBitArray:
                                    keys=np.asarray([doc_id], dtype=np.uint64))
         return term_posns
 
-    def phrase_freqs(self, term_ids: List[int], phrase_freqs: np.ndarray,
+    def empty_buffer(self):
+        return np.zeros(self.max_doc_id + 1, dtype=np.float64)
+
+    def phrase_freqs(self, term_ids: List[int],
                      slop: int = 0,
                      doc_ids: Optional[np.ndarray] = None,
                      min_posn: Optional[int] = None,
                      max_posn: Optional[int] = None) -> np.ndarray:
+        phrase_freqs = self.empty_buffer()
         if len(term_ids) < 2:
             raise ValueError("Must have at least two terms")
         if phrase_freqs.shape[0] == self.max_doc_id + 1 and min_posn is None and max_posn is None and doc_ids is None:
@@ -358,6 +362,7 @@ class PosnBitArray:
                                             keys=keys,
                                             min_payload=min_posn,
                                             max_payload=max_posn) for term_id in term_ids]
+            import pdb; pdb.set_trace()
 
         if slop == 0:
             return compute_phrase_freqs(enc_term_posns, phrase_freqs, max_doc_id=np.uint64(self.max_doc_id))

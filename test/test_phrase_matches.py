@@ -218,6 +218,19 @@ def test_phrase(docs, phrase, expected, algorithm):
 
 
 @w_scenarios(scenarios)
+def test_phrase_on_slice(docs, phrase, expected):
+    docs = docs()
+    # Get odd docs
+    docs = docs[1::2]
+    term_freqs = docs.termfreqs(phrase)
+    assert len(term_freqs) == len(docs)
+    expected = np.array(expected)
+    assert (term_freqs == expected[1::2]).all()
+    # All other 0
+    assert term_freqs[0::2].sum() == 0
+
+
+@w_scenarios(scenarios)
 def test_phrase_active_docs(docs, phrase, expected):
     docs = docs()
     # only select the first half of docs from docs

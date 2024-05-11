@@ -255,8 +255,8 @@ def edismax(frame: pd.DataFrame,
             if len(terms) < 2:
                 continue
 
+            arr = arr[curr_scores > 0]
             field_phrase_score = arr.score(terms, similarity=similarity[field],
-                                           active_docs=curr_scores,
                                            ) * (1 if boost is None else boost)
             boost_exp = f"{boost}" if boost is not None else "1"
             explain += f" ({field}:\"{' '.join(terms)}\")^{boost_exp}"
@@ -270,13 +270,13 @@ def edismax(frame: pd.DataFrame,
         explain = ""
         for field, boost in bigram_fields.items():
             arr = get_field(frame, field)
+            arr = arr[curr_scores > 0]
             terms = search_terms[field]
             if len(terms) < 2:
                 continue
             # For each bigram
             for term, next_term in zip(terms, terms[1:]):
                 field_bigram_score = arr.score([term, next_term], similarity=similarity[field],
-                                               active_docs=curr_scores,
                                                ) * (1 if boost is None else boost)
                 boost_exp = f"{boost}" if boost is not None else "1"
                 explain += f" ({field}:\"{term} {next_term}\")^{boost_exp}"
@@ -296,9 +296,9 @@ def edismax(frame: pd.DataFrame,
             if len(terms) < 3:
                 continue
             # For each trigram
+            arr = arr[curr_scores > 0]
             for term, next_term, next_next_term in zip(terms, terms[1:], terms[2:]):
                 field_trigram_score = arr.score([term, next_term, next_next_term],
-                                                active_docs=curr_scores,
                                                 similarity=similarity[field]) * (1 if boost is None else boost)
                 boost_exp = f"{boost}" if boost is not None else "1"
                 explain += f" ({field}:\"{term} {next_term} {next_next_term}\")^{boost_exp}"
@@ -312,18 +312,18 @@ def edismax(frame: pd.DataFrame,
         phrase_scores = np.sum(phrase_scores, axis=0)
         # Add where term_scores > 0
         term_match_idx = np.where(qf_scores)[0]
-        qf_scores[term_match_idx] += phrase_scores[term_match_idx]
+        qf_scores[term_match_idx] += phrase_scores
 
     if len(bigram_scores) > 0:
         bigram_scores = np.sum(bigram_scores, axis=0)
         # Add where term_scores > 0
         term_match_idx = np.where(qf_scores)[0]
-        qf_scores[term_match_idx] += bigram_scores[term_match_idx]
+        qf_scores[term_match_idx] += bigram_scores
 
     if len(trigram_scores) > 0:
         trigram_scores = np.sum(trigram_scores, axis=0)
         # Add where term_scores > 0
         term_match_idx = np.where(qf_scores)[0]
-        qf_scores[term_match_idx] += trigram_scores[term_match_idx]
+        qf_scores[term_match_idx] += trigram_scores
 
     return qf_scores, explain
