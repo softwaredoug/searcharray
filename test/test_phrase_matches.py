@@ -256,6 +256,60 @@ def test_phrase_scattered_posns(posn_offset):
 
 
 @pytest.mark.parametrize("posn_offset", range(100))
+def test_phrase_scattered_posns_sliced(posn_offset):
+    scattered = "foo bar " + " ".join(["dummy"] * posn_offset) + " foo bar baz"
+    docs = SearchArray.index([scattered,
+                             "not match"] * 1000)
+    docs = docs[::2]
+    phrase = ["foo", "bar"]
+    expected = [2] * 1000
+    phrase_matches = docs.phrase_freq(phrase)
+    assert (expected == phrase_matches).all()
+
+
+@pytest.mark.parametrize("posn_offset", range(100))
+def test_phrase_scattered_posns_sliced_one_term_rpt(posn_offset):
+    scattered = "foo bar " + " ".join(["foo"] * posn_offset) + " foo bar baz"
+    docs = SearchArray.index([scattered,
+                             "not match"] * 1000)
+    docs = docs[::2]
+    phrase = ["foo", "bar"]
+    expected = [2] * 1000
+    phrase_matches = docs.phrase_freq(phrase)
+    assert (expected == phrase_matches).all()
+
+
+@pytest.mark.parametrize("posn_offset", range(100))
+def test_phrase_scattered_posns_sliced_frequent(posn_offset):
+    scattered = "foo bar " + " ".join(["foo"] * posn_offset) + " foo bar baz"
+    idx = [scattered,
+           "foo",
+           "foo"] * 1000
+    docs = SearchArray.index(idx)
+    docs = docs[::2]
+    idx = np.array(idx)[::2]
+    phrase = ["foo", "bar"]
+    expected = [2 if "foo bar" in doc else 0 for doc in idx]
+    phrase_matches = docs.phrase_freq(phrase)
+    assert (expected == phrase_matches).all()
+
+
+@pytest.mark.parametrize("posn_offset", range(100))
+def test_phrase_scattered_posns_sliced_frequent_long(posn_offset):
+    scattered = "foo bar baz " + " ".join(["foo"] * posn_offset) + " foo bar baz"
+    idx = [scattered,
+           "foo baz",
+           "foo"] * 1000
+    docs = SearchArray.index(idx)
+    docs = docs[::2]
+    idx = np.array(idx)[::2]
+    phrase = ["foo", "bar", "baz"]
+    expected = [2 if " ".join(phrase) in doc else 0 for doc in idx]
+    phrase_matches = docs.phrase_freq(phrase)
+    assert (expected == phrase_matches).all()
+
+
+@pytest.mark.parametrize("posn_offset", range(100))
 def test_phrase_scattered_posns3(posn_offset):
     scattered = "foo bar baz " + " ".join(["dummy"] * posn_offset) + " foo bar baz"
     docs = SearchArray.index([scattered,
