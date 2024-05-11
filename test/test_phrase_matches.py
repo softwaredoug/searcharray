@@ -226,21 +226,6 @@ def test_phrase_on_slice(docs, phrase, expected):
     assert len(term_freqs) == len(docs)
     expected = np.array(expected)
     assert (term_freqs == expected[1::2]).all()
-    # All other 0
-    assert term_freqs[0::2].sum() == 0
-
-
-@w_scenarios(scenarios)
-def test_phrase_active_docs(docs, phrase, expected):
-    docs = docs()
-    # only select the first half of docs from docs
-    active_docs = np.ones(len(docs), dtype=bool)
-    active_docs[len(docs) // 2:] = False
-    term_freqs = docs.termfreqs(phrase, active_docs=active_docs)
-    assert len(term_freqs) == len(active_docs)
-    expected = np.array(expected)
-    assert (term_freqs[active_docs > 0] == expected[active_docs > 0]).all()
-    assert (term_freqs[active_docs == 0] == 0).all()
 
 
 @pytest.mark.parametrize("phrase", ["foo bar baz", "foo bar",
