@@ -354,28 +354,7 @@ def test_msmarco100k_edismax_mulitple(msmarco100k, benchmark, caplog):
     run_edismax_threaded(queries)
 
 
-QUERY_SET = ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "the purpose of dustbusters", "who is", "who is the", "who is the purpose", "who is the purpose of", "who is the purpose of cats", "star wars", "star wars the next generation", "who who who", "spaceballs", "space balls", "space balls the movie", "where is", "where is the", "where is the purpose", "where is the purpose of", "where is the purpose of cats", "star trek", "star trek deep space nine", "where where where", "the purpose", "best pair of headphones", "worst headphones", "civilization 6", "video games for kids", "goofy hats"] * 10
-
-
-@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-def test_msmarco100k_edismax_serial(msmarco100k, benchmark, caplog):
-    profiler = Profiler(benchmark)
-
-    caplog.set_level(logging.DEBUG)
-
-    queries = QUERY_SET
-
-    def run_edismax_threaded(queries):
-        for query in queries:
-            edismax(msmarco100k, q=query,
-                    mm=2,
-                    qf=['title_ws^1.0', 'body_ws^0.5'],
-                    pf=['title_ws^1.0', 'body_ws^0.5'],
-                    pf2=['title_ws^1.0', 'body_ws^0.5'],
-                    pf3=['title_ws^1.0', 'body_ws^0.5'],
-                    tie=0.3)
-
-    profiler.run(run_edismax_threaded, queries)
+QUERY_SET = ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "the purpose of dustbusters", "who is", "who is the", "who is the purpose", "who is the purpose of", "who is the purpose of cats", "star wars", "star wars the next generation", "who who who", "What is a corporation?", "What is the average speed of an unladen swallow?", "how much does the human brain weigh?", "what is the longest river in the world?", "how to make a cake?", "what causes heart disease? ", "how many teeth do adults have?", "what is the smallest country in the world?", "what is photosynthesis", "what are the ingredients in a Big Mac", "spaceballs", "space balls", "space balls the movie", "star trek deep space nine", "where where where", "the purpose", "best pair of headphones", "worst headphones", "civilization 6", "video games for kids", "goofy hats for pet dogs"] * 4
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
@@ -403,27 +382,6 @@ def test_msmarco100k_edismax_threaded(msmarco100k, benchmark, caplog):
         for future in as_completed(futures):
             results.append(future.result())
         return results
-
-    profiler.run(run_edismax_threaded, queries)
-
-
-@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-def test_msmarco1m_edismax_serial(msmarco1m, benchmark, caplog):
-    profiler = Profiler(benchmark)
-
-    caplog.set_level(logging.DEBUG)
-
-    queries = QUERY_SET
-
-    def run_edismax_threaded(queries):
-        for query in queries:
-            edismax(msmarco1m, q=query,
-                    mm=2,
-                    qf=['title_ws^1.0', 'body_ws^0.5'],
-                    pf=['title_ws^1.0', 'body_ws^0.5'],
-                    pf2=['title_ws^1.0', 'body_ws^0.5'],
-                    pf3=['title_ws^1.0', 'body_ws^0.5'],
-                    tie=0.3)
 
     profiler.run(run_edismax_threaded, queries)
 
