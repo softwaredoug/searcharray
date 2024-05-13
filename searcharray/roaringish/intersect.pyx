@@ -11,7 +11,7 @@ import numpy as np
 
 
 cimport searcharray.roaringish.snp_ops
-from searcharray.roaringish.snp_ops cimport _galloping_search, DTYPE_t, int64_t
+from searcharray.roaringish.snp_ops cimport DTYPE_t, int64_t
 
 cdef DTYPE_t ALL_BITS = 0xFFFFFFFFFFFFFFFF
 

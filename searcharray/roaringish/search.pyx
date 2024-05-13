@@ -13,7 +13,7 @@ import numpy as np
 # cimport snp_ops
 # from snp_ops cimport _galloping_search, DTYPE_t, ALL_BITS
 cimport searcharray.roaringish.snp_ops
-from searcharray.roaringish.snp_ops cimport _galloping_search, DTYPE_t, int64_t
+from searcharray.roaringish.snp_ops cimport DTYPE_t, int64_t
 
 from libc.stdlib cimport malloc, free
 
@@ -139,9 +139,3 @@ def galloping_search(np.ndarray[DTYPE_t, ndim=1] array,
 
 def _u64(lst) -> np.ndarray:
     return np.array(lst, dtype=np.uint64)
-
-
-def save_input(lhs, rhs, mask):
-    np.save(f"lhs_{len(lhs)}.npy", lhs)
-    np.save(f"rhs_{len(lhs)}.npy", rhs)
-    np.save(f"mask_{len(lhs)}.npy", mask)

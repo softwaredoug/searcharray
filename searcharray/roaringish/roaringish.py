@@ -7,11 +7,13 @@ import logging
 import numbers
 from typing import Optional, Tuple, List, Union
 
-from searcharray.roaringish.snp_ops import galloping_search
+from searcharray.roaringish.search import galloping_search
 from searcharray.roaringish.merge import merge
 from searcharray.roaringish.unique import unique
 from searcharray.roaringish.intersect import intersect, adjacent
-from searcharray.roaringish.roaringish_ops import popcount64_reduce, payload_slice
+from searcharray.roaringish.popcount import popcount64_reduce
+from searcharray.roaringish.roaringish_ops import payload_slice
+
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +223,7 @@ class RoaringishEncoder:
         """Find indices into encoded that split it into num_partitions."""
         # Get every 1/8, 2/8, 3/8, etc of max_key
         last_partition: np.uint64 = _0
-        partitions = [0]
+        partitions = [np.uint64(0)]
         for i in range(num_partitions - 1):
             max_key_partition = np.uint64(max_key * (i + 1) // num_partitions)
             partition_shifted = max_key_partition << (_64 - self.key_bits)
@@ -229,7 +231,7 @@ class RoaringishEncoder:
             last_partition = idx
             partitions.append(idx)
         # Append last index
-        partitions.append(len(encoded))
+        partitions.append(np.uint64(len(encoded)))
         return np.asarray(partitions, dtype=np.uint64)
 
     def slice(self,

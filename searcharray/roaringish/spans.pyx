@@ -1,10 +1,16 @@
+# cython: boundscheck=False
+# cython: wraparound=False
+# cython: initializedcheck=False
+# cython: cdivision=True
+# cython: nonecheck=False
+# cython: language_level=3
 """Utilities for computing spans for position aware search with slop > 0."""
 cimport numpy as np
 import numpy as np
 from enum import Enum
 
 cimport searcharray.roaringish.snp_ops
-from searcharray.roaringish.snp_ops cimport _galloping_search, DTYPE_t
+from searcharray.roaringish.snp_ops cimport DTYPE_t
 
 
 # cdef extern from "stddef.h":
