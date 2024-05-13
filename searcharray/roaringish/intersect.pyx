@@ -15,6 +15,14 @@ from searcharray.roaringish.snp_ops cimport DTYPE_t, int64_t
 
 cdef DTYPE_t ALL_BITS = 0xFFFFFFFFFFFFFFFF
 
+# include mach absolute time for profiling
+# from mach_time.h
+cdef extern from "mach/mach_time.h":
+    ctypedef unsigned long long uint64_t
+    uint64_t mach_absolute_time()
+
+
+
 # Struct with intersect args
 cdef struct intersect_args:
     DTYPE_t* lhs
@@ -214,38 +222,63 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
                                       DTYPE_t delta,
                                       DTYPE_t* adj_lhs_out,
                                       DTYPE_t* adj_rhs_out,
-                                      DTYPE_t* adj_out_len) nogil:
+                                      DTYPE_t* adj_out_len):
     """Two pointer approach to find the intersection of two sorted arrays."""
+    cdef DTYPE_t start = mach_absolute_time()
+    cdef DTYPE_t gallop_time = 0
+    cdef DTYPE_t collect_time = 0
+    cdef DTYPE_t total_time = 0
     cdef DTYPE_t* lhs_ptr = &args.lhs[0]
     cdef DTYPE_t* rhs_ptr = &args.rhs[0]
     cdef DTYPE_t* end_lhs_ptr = &args.lhs[args.lhs_len]
     cdef DTYPE_t* end_rhs_ptr = &args.rhs[args.rhs_len]
     cdef DTYPE_t gallop = 1
     cdef DTYPE_t last = -1
+    cdef DTYPE_t target = 0
     cdef DTYPE_t last_adj = -1
     cdef DTYPE_t* lhs_result_ptr = &args.lhs_out[0]
     cdef DTYPE_t* rhs_result_ptr = &args.rhs_out[0]
     cdef DTYPE_t* lhs_adj_result_ptr = &adj_lhs_out[0]
     cdef DTYPE_t* rhs_adj_result_ptr = &adj_rhs_out[0]
-    
+    cdef DTYPE_t i = 0
+    cdef DTYPE_t[22] lhs_powers_of_two = [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576]
+    cdef DTYPE_t[22] rhs_powers_of_two = [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576]
+
+    if args.lhs_stride > 1:
+        # Multiply lhs powers of two by stride
+        for i in range(16):
+            lhs_powers_of_two[i] *= args.lhs_stride
+    if args.rhs_stride > 1:
+        # Multiply lhs powers of two by stride
+        for i in range(16):
+            lhs_powers_of_two[i] *= args.lhs_stride
+
+
     while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
 
         # Gallop to adjacent or equal value
         # if value_lhs < value_rhs - delta:
         # Gallop past the current element
+        # start = mach_absolute_time()
         if (lhs_ptr[0] & args.mask) != (rhs_ptr[0] & args.mask):
-            while lhs_ptr < end_lhs_ptr and ((lhs_ptr[0] & args.mask) + delta) < (rhs_ptr[0] & args.mask):
-                lhs_ptr += (gallop * args.lhs_stride)
-                gallop <<= 1
-            lhs_ptr -= (gallop >> 1) * args.lhs_stride
+            target = (rhs_ptr[0] & args.mask)
+            while lhs_ptr < end_lhs_ptr and ((lhs_ptr[0] & args.mask) + delta) < target:
+                lhs_ptr += lhs_powers_of_two[gallop]
+                gallop += 1
+            # assert gallop >= 1 and gallop < 16, f"Gallop: {gallop}"                  
+            lhs_ptr -= lhs_powers_of_two[gallop - 1]
             gallop = 1
-            while rhs_ptr < end_rhs_ptr and (rhs_ptr[0] & args.mask) < ((lhs_ptr[0] & args.mask) + delta):
-                rhs_ptr += (gallop * args.rhs_stride)
-                gallop <<= 1
-            rhs_ptr -= (gallop >> 1) * args.rhs_stride
+            target = (lhs_ptr[0] & args.mask) + delta
+            while rhs_ptr < end_rhs_ptr and (rhs_ptr[0] & args.mask) < target:
+                rhs_ptr += rhs_powers_of_two[gallop]
+                gallop += 1
+            # assert gallop >= 1 and gallop < 16, f"Gallop: {gallop}"                  
+            rhs_ptr -= rhs_powers_of_two[gallop - 1]
             gallop = 1
             # Now lhs is at or before RHS - delta  
             # RHS is 4, LHS is at most 3
+        # gallop_time += mach_absolute_time() - start
+        # start = mach_absolute_time()
         # Collect adjacent avalues
         if ((lhs_ptr[0] & args.mask) + delta) == ((rhs_ptr[0] & args.mask)):
             if (last_adj & args.mask) != (lhs_ptr[0] & args.mask):
@@ -270,8 +303,12 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
                 lhs_result_ptr += 1
                 rhs_result_ptr += 1
             rhs_ptr += args.rhs_stride
+        # collect_time += mach_absolute_time() - start
 
     adj_out_len[0] = lhs_adj_result_ptr - &adj_lhs_out[0]
+    # total_time = collect_time + gallop_time
+    # print(f"Gallop time: {gallop_time}, Collect time: {collect_time}, Total time: {total_time}")
+    # print(f"Gallop time: {float(gallop_time) / float(total_time)}, Collect time: {float(collect_time) / float(total_time)}")
     return lhs_result_ptr - &args.lhs_out[0]
 
 
@@ -386,10 +423,9 @@ def intersect_with_adjacents(np.ndarray[DTYPE_t, ndim=1] lhs,
     args.rhs_out = &rhs_out[0]
     adj_lhs_out_begin = &adj_lhs_out[0]
     adj_rhs_out_begin = &adj_rhs_out[0]
-    with nogil:
-        amt_written = _gallop_int_and_adj_drop(args, delta, 
-                                               adj_lhs_out_begin,
-                                               adj_rhs_out_begin,
-                                               &adj_out_len)
+    amt_written = _gallop_int_and_adj_drop(args, delta, 
+                                           adj_lhs_out_begin,
+                                           adj_rhs_out_begin,
+                                           &adj_out_len)
     return (np.asarray(lhs_out)[:amt_written], np.asarray(rhs_out)[:amt_written],
             np.asarray(adj_lhs_out)[:adj_out_len], np.asarray(adj_rhs_out)[:adj_out_len])
