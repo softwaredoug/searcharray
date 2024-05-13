@@ -10,7 +10,7 @@ from typing import Optional, Tuple, List, Union
 from searcharray.roaringish.search import galloping_search
 from searcharray.roaringish.merge import merge
 from searcharray.roaringish.unique import unique
-from searcharray.roaringish.intersect import intersect, adjacent
+from searcharray.roaringish.intersect import intersect, adjacent, intersect_with_adjacents
 from searcharray.roaringish.popcount import popcount64_reduce
 from searcharray.roaringish.roaringish_ops import payload_slice
 
@@ -188,6 +188,13 @@ class RoaringishEncoder:
     def header(self, encoded: np.ndarray) -> np.ndarray:
         """Return header from encoded -- all but lsb bits."""
         return encoded & ~self.payload_lsb_mask
+
+    def intersect_candidates(self, lhs: np.ndarray, rhs: np.ndarray) -> Tuple[np.ndarray, np.ndarray,
+                                                                              np.ndarray, np.ndarray]:
+
+        lhs_idx, rhs_idx, lhs_adj, rhs_adj = intersect_with_adjacents(lhs, rhs,
+                                                                      mask=self.header_mask)
+        return lhs[lhs_idx], rhs[rhs_idx], lhs[lhs_adj], rhs[rhs_adj]
 
     def intersect_rshift(self, lhs: np.ndarray, rhs: np.ndarray,
                          rshift: np.int64 = _neg1) -> Tuple[np.ndarray, np.ndarray]:

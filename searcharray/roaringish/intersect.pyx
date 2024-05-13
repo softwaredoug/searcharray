@@ -190,11 +190,31 @@ cdef DTYPE_t _gallop_adjacent(DTYPE_t* lhs,
     return lhs_result_ptr - &lhs_out[0]
 
 
+# Can you gallop adjacent and intersect at the same time?
+#
+# lhs      1     5       9
+# rhs        2   5 6 7     10
+# 
+# With a scan you would be able to
+# 
+# lhs      1*      5
+# rhs         2*   5   6
+#          ----
+# lhs      1       5*
+# rhs         2*   5   6
+#
+# lhs      1       5*
+# rhs         2    5*  6
+#                  ---
+# lhs      1       5*
+# rhs         2    5   6*
+#                      ---
+
 cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
                                       DTYPE_t delta,
                                       DTYPE_t* adj_lhs_out,
                                       DTYPE_t* adj_rhs_out,
-                                      DTYPE_t* adj_out_len) nogil:
+                                      DTYPE_t* adj_out_len):
     """Two pointer approach to find the intersection of two sorted arrays."""
     cdef DTYPE_t* lhs_ptr = &args.lhs[0]
     cdef DTYPE_t* rhs_ptr = &args.rhs[0]
@@ -205,33 +225,23 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
     cdef DTYPE_t last_adj = -1
     cdef DTYPE_t* lhs_result_ptr = &args.lhs_out[0]
     cdef DTYPE_t* rhs_result_ptr = &args.rhs_out[0]
+    cdef DTYPE_t* lhs_adj_result_ptr = &adj_lhs_out[0]
+    cdef DTYPE_t* rhs_adj_result_ptr = &adj_rhs_out[0]
 
     while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
 
-        # Gallop past the current element
-        while lhs_ptr < end_lhs_ptr and (lhs_ptr[0] & args.mask) < (rhs_ptr[0] &args. mask):
-            lhs_ptr+= (gallop * args.lhs_stride)
-            gallop *= 2
-        lhs_ptr -= ((gallop // 2) * args.lhs_stride)
-        gallop = 1
-        while rhs_ptr < end_rhs_ptr and (rhs_ptr[0] & args.mask) < (lhs_ptr[0] & args.mask):
-            rhs_ptr+= (gallop * args.rhs_stride)
-            gallop *= 2
-        rhs_ptr -= ((gallop // 2) * args.rhs_stride)
-        gallop = 1
-            
         # Collect adjacent avalues
         if (lhs_ptr[0] & args.mask) == ((rhs_ptr[0] & args.mask) - delta):
             if (last_adj & args.mask) != (lhs_ptr[0] & args.mask):
-                adj_lhs_out[0] = (lhs_ptr - &args.lhs[0]) / args.lhs_stride
-                adj_rhs_out[0] = (rhs_ptr - &args.rhs[0]) / args.rhs_stride
+                lhs_adj_result_ptr[0] = (lhs_ptr - &args.lhs[0]) / args.lhs_stride
+                rhs_adj_result_ptr[0] = (rhs_ptr - &args.rhs[0]) / args.rhs_stride
                 last_adj = lhs_ptr[0]
-                adj_lhs_out += 1
-                adj_rhs_out += 1
-
+                lhs_adj_result_ptr += 1
+                rhs_adj_result_ptr += 1
+            lhs_ptr += args.lhs_stride
         # Now that we've reset, we just do the naive 2-ptr check
         # Then next loop we pickup on exponential search
-        if (lhs_ptr[0] & args.mask) < (rhs_ptr[0] & args.mask):
+        elif (lhs_ptr[0] & args.mask) < (rhs_ptr[0] & args.mask):
             lhs_ptr = lhs_ptr + args.lhs_stride
         elif (rhs_ptr[0] & args.mask) < (lhs_ptr[0] & args.mask):
             rhs_ptr = rhs_ptr + args.rhs_stride
@@ -243,10 +253,10 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
                 last = lhs_ptr[0]
                 lhs_result_ptr += 1
                 rhs_result_ptr += 1
-            lhs_ptr += args.lhs_stride
+            # lhs_ptr += args.lhs_stride
             rhs_ptr += args.rhs_stride
 
-    adj_out_len[0] = adj_lhs_out - &args.lhs_out[0]
+    adj_out_len[0] = lhs_adj_result_ptr - &adj_lhs_out[0]
     return lhs_result_ptr - &args.lhs_out[0]
 
 
@@ -334,7 +344,7 @@ def intersect_with_adjacents(np.ndarray[DTYPE_t, ndim=1] lhs,
     cdef DTYPE_t rhs_out_len = 0
     cdef intersect_args_t args
     cdef DTYPE_t delta = 1
-    cdef DTYPE_t adj_out_len
+    cdef DTYPE_t adj_out_len = 0
 
     if mask is None:
         mask = ALL_BITS
@@ -356,14 +366,14 @@ def intersect_with_adjacents(np.ndarray[DTYPE_t, ndim=1] lhs,
     rhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
     adj_lhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
     adj_rhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+
     args.lhs_out = &lhs_out[0]
     args.rhs_out = &rhs_out[0]
     adj_lhs_out_begin = &adj_lhs_out[0]
     adj_rhs_out_begin = &adj_rhs_out[0]
-    with nogil:
-        amt_written = _gallop_int_and_adj_drop(args, delta, 
-                                               adj_lhs_out_begin,
-                                               adj_rhs_out_begin,
-                                               &adj_out_len)
+    amt_written = _gallop_int_and_adj_drop(args, delta, 
+                                           adj_lhs_out_begin,
+                                           adj_rhs_out_begin,
+                                           &adj_out_len)
     return (np.asarray(lhs_out)[:amt_written], np.asarray(rhs_out)[:amt_written],
             np.asarray(adj_lhs_out)[:adj_out_len], np.asarray(adj_rhs_out)[:adj_out_len])

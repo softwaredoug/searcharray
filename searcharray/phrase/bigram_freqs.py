@@ -101,6 +101,8 @@ def _inner_bigram_same_term(lhs_int: np.ndarray, rhs_int: np.ndarray,
 
 def _inner_bigram_freqs(lhs: np.ndarray,
                         rhs: np.ndarray,
+                        lhs_int: np.ndarray,
+                        rhs_int: np.ndarray,
                         phrase_freqs: np.ndarray,
                         cont: Continuation = Continuation.RHS) -> Tuple[np.ndarray, Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
     """Count bigram matches between two encoded arrays, within a 64 bit word with same MSBs.
@@ -118,7 +120,7 @@ def _inner_bigram_freqs(lhs: np.ndarray,
     cont_next: the next (lhs or rhs) array to continue matching
 
     """
-    lhs_int, rhs_int = encoder.intersect(lhs, rhs)
+    # lhs_int, rhs_int = encoder.intersect(lhs, rhs)
     lhs_doc_ids = encoder.keys(lhs_int)
     if len(lhs_int) != len(rhs_int):
         raise ValueError("Encoding error, MSBs apparently are duplicated among your encoded posn arrays.")
@@ -150,6 +152,7 @@ def _inner_bigram_freqs(lhs: np.ndarray,
 
 
 def _adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
+                           lhs_adj: np.ndarray, rhs_adj: np.ndarray,
                            phrase_freqs: np.ndarray,
                            cont: Continuation = Continuation.RHS) -> Tuple[np.ndarray, Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
     """Count bigram matches between two encoded arrays where they occur in adjacent 64 bit words.
@@ -160,10 +163,9 @@ def _adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     rhs_next: the next rhs array to continue matching
 
     """
-    lhs_int, rhs_int = encoder.intersect_rshift(lhs, rhs, rshift=_neg1)
-    lhs_doc_ids = encoder.keys(lhs_int)
+    lhs_doc_ids = encoder.keys(lhs_adj)
     # lhs lsb set and rhs lsb's most significant bit set
-    matches = ((lhs_int & _upper_bit) != 0) & ((rhs_int & _1) != 0)
+    matches = ((lhs_adj & _upper_bit) != 0) & ((rhs_adj & _1) != 0)
     unique, counts = np.unique(lhs_doc_ids[matches], return_counts=True)
     phrase_freqs[unique] += counts
     # Set lsb to 0 where no match, lsb to 1 where match
@@ -171,16 +173,16 @@ def _adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     lhs_next = None if cont == Continuation.RHS else np.asarray([], dtype=np.uint64)
     if np.any(matches):
         if cont in [Continuation.RHS, Continuation.BOTH]:
-            rhs_next = rhs_int[matches]
+            rhs_next = rhs_adj[matches]
             assert rhs_next is not None
-            rhs_next = encoder.header(rhs_int) | _1
+            rhs_next = encoder.header(rhs_adj) | _1
         elif cont in [Continuation.LHS, Continuation.BOTH]:
-            rhs_next = rhs_int[matches]
+            rhs_next = rhs_adj[matches]
             assert rhs_next is not None
             rhs_next |= _1
-            rhs_next = encoder.header(rhs_int) | _1
-            lhs_next = lhs_int[matches]
-            lhs_next = encoder.header(lhs_int) | _upper_bit
+            rhs_next = encoder.header(rhs_adj) | _1
+            lhs_next = lhs_adj[matches]
+            lhs_next = encoder.header(lhs_adj) | _upper_bit
             rhs_next = None
     return phrase_freqs, (lhs_next, rhs_next)
 
@@ -243,8 +245,11 @@ def bigram_freqs(lhs: np.ndarray,
     # rhs_term:   1234        101   0101000100
     #                                 ^^  ^^  <- inner matches, terms next to each other
     #
+    lhs_int, rhs_int, lhs_adj, rhs_adj = encoder.intersect_candidates(lhs, rhs)
+
     phrase_freqs, (lhs_next_inner, rhs_next_inner)\
         = _inner_bigram_freqs(lhs, rhs,
+                              lhs_int, rhs_int,
                               phrase_freqs,
                               cont)
     # ***************************************************************************
@@ -261,7 +266,9 @@ def bigram_freqs(lhs: np.ndarray,
     #                                              1 less than the posn_msb of rhs
     #                                              so we detect these differently
     phrase_freqs, (lhs_next_adj, rhs_next_adj)\
-        = _adjacent_bigram_freqs(lhs, rhs, phrase_freqs, cont)
+        = _adjacent_bigram_freqs(lhs, rhs,
+                                 lhs_adj, rhs_adj,
+                                 phrase_freqs, cont)
 
     # ***************************************************************************
     # rhs_next is where the bigram ends on the rhs side, we can use this
