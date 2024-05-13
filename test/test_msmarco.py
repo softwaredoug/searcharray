@@ -338,22 +338,6 @@ def test_msmarco1m_edismax(query, msmarco1m, benchmark, caplog):
     assert np.any(scores > 0)
 
 
-def test_msmarco100k_edismax_mulitple(msmarco100k, benchmark, caplog):
-    queries = ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "the purpose"]
-
-    def run_edismax_threaded(queries):
-        for query in queries:
-            edismax(msmarco100k, q=query,
-                    mm=2,
-                    qf=['title_ws^1.0', 'body_ws^0.5'],
-                    pf=['title_ws^1.0', 'body_ws^0.5'],
-                    pf2=['title_ws^1.0', 'body_ws^0.5'],
-                    pf3=['title_ws^1.0', 'body_ws^0.5'],
-                    tie=0.3)
-
-    run_edismax_threaded(queries)
-
-
 QUERY_SET = ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "the purpose of dustbusters", "who is", "who is the", "who is the purpose", "who is the purpose of", "who is the purpose of cats", "star wars", "star wars the next generation", "who who who", "What is a corporation?", "What is the average speed of an unladen swallow?", "how much does the human brain weigh?", "what is the longest river in the world?", "how to make a cake?", "what causes heart disease? ", "how many teeth do adults have?", "what is the smallest country in the world?", "what is photosynthesis", "what are the ingredients in a Big Mac", "spaceballs", "space balls", "space balls the movie", "star trek deep space nine", "where where where", "the purpose", "best pair of headphones", "worst headphones", "civilization 6", "video games for kids", "goofy hats for pet dogs"] * 4
 
 
