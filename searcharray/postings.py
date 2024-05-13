@@ -12,8 +12,6 @@ from typing import List, Union, Optional, Iterable
 
 
 import numpy as np
-from searcharray.phrase.scan_merge import scan_merge_ins
-from searcharray.phrase.posn_diffs import compute_phrase_freqs
 from searcharray.phrase.middle_out import PosnBitArray
 from searcharray.similarity import Similarity, default_bm25
 from searcharray.indexing import build_index_from_tokenizer, build_index_from_terms_list
@@ -568,7 +566,7 @@ class SearchArray(ExtensionArray):
                   max_posn: Optional[int] = None) -> np.ndarray:
         token = self._check_token_arg(token)
         if isinstance(token, list):
-            return self.phrase_freq(token, slop=slop, min_posn=min_posn, max_posn=max_posn)
+            return self._phrase_freq(token, slop=slop, min_posn=min_posn, max_posn=max_posn)
 
         try:
             term_id = self.term_dict.get_term_id(token)
@@ -607,7 +605,7 @@ class SearchArray(ExtensionArray):
         """Return a boolean numpy array indicating which elements contain the given term."""
         token = self._check_token_arg(token)
         if isinstance(token, list):
-            term_freq = self.phrase_freq(token, slop=slop)
+            term_freq = self._phrase_freq(token, slop=slop)
         else:
             term_freq = self.termfreqs(token)
         return term_freq > 0
@@ -661,10 +659,10 @@ class SearchArray(ExtensionArray):
         mask = np.sum(masks, axis=0) >= min_should_match
         return mask
 
-    def phrase_freq(self, tokens: List[str],
-                    slop=0,
-                    min_posn: Optional[int] = None,
-                    max_posn: Optional[int] = None) -> np.ndarray:
+    def _phrase_freq(self, tokens: List[str],
+                     slop=0,
+                     min_posn: Optional[int] = None,
+                     max_posn: Optional[int] = None) -> np.ndarray:
         try:
             # Decide how/if we need to filter doc ids
             term_ids = [self.term_dict.get_term_id(token) for token in tokens]
@@ -679,38 +677,3 @@ class SearchArray(ExtensionArray):
             if self.term_mat.subset:
                 return np.zeros(len(self), dtype=np.float32)
             return self.posns.empty_buffer()
-
-    def phrase_freq_scan(self, tokens: List[str], mask=None, slop=0) -> np.ndarray:
-        if mask is None:
-            mask = self.and_query(tokens)
-
-        if np.sum(mask) == 0:
-            return mask
-
-        # Gather positions
-        posns = [self.positions(token, mask) for token in tokens]
-        phrase_freqs = np.zeros(len(self))
-
-        phrase_freqs[mask] = scan_merge_ins(posns, phrase_freqs[mask], slop=slop + 1)
-        return phrase_freqs
-
-    def phrase_freq_every_diff(self, tokens: List[str], slop=0) -> np.ndarray:
-        phrase_freqs = -np.ones(len(self))
-
-        mask = self.and_query(tokens)
-        phrase_freqs[~mask] = 0
-        if np.sum(mask) == 0:
-            return phrase_freqs
-
-        term_posns = [self.positions(term, mask) for term in tokens]
-        for width in [10, 20, 30, 40]:
-            phrase_freqs[mask] = compute_phrase_freqs(term_posns,
-                                                      phrase_freqs[mask],
-                                                      slop=slop + 1,
-                                                      width=width)
-
-        remaining_mask = phrase_freqs == -1
-        if np.any(remaining_mask):
-            remainder_freqs = self.phrase_freq_scan(tokens, mask=remaining_mask, slop=slop)
-            phrase_freqs[remaining_mask] = remainder_freqs[remaining_mask]
-        return phrase_freqs

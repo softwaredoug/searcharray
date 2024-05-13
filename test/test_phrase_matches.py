@@ -200,24 +200,6 @@ def test_phrase_api(docs, phrase, expected):
 
 
 @w_scenarios(scenarios)
-@pytest.mark.parametrize("algorithm", ["phrase_freq", "phrase_freq_scan",
-                                       "phrase_freq_every_diff"])
-def test_phrase(docs, phrase, expected, algorithm):
-    # if np.all(expected[:5] == [0, 1, 1, 0, 0]) and algorithm in ["phrase_freq_scan", "phrase_freq_scan_inplace"]:
-    #     pytest.skip("phrase_freq_scan known failure - different_num_posns_mixed_and_not_phrase")
-    #     return
-
-    docs = docs()
-    docs_before = docs.copy()
-    if len(phrase) > 1:
-        phrase_matches = getattr(docs, algorithm)(phrase)
-        assert (expected == phrase_matches).all()
-        assert (docs == docs_before).all()
-        phrase_matches2 = getattr(docs_before, algorithm)(phrase)
-        assert (expected == phrase_matches2).all()
-
-
-@w_scenarios(scenarios)
 def test_phrase_on_slice(docs, phrase, expected):
     docs = docs()
     # Get odd docs
@@ -240,7 +222,7 @@ def test_phrase_different_posns(posn_offset, phrase):
                              "not match"])
     phrase = phrase.split()
     expected = [1, 0]
-    phrase_matches = docs.phrase_freq(phrase)
+    phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
 
 
@@ -251,7 +233,7 @@ def test_phrase_scattered_posns(posn_offset):
                              "not match"])
     phrase = ["foo", "bar"]
     expected = [2, 0]
-    phrase_matches = docs.phrase_freq(phrase)
+    phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
 
 
@@ -263,7 +245,7 @@ def test_phrase_scattered_posns_sliced(posn_offset):
     docs = docs[::2]
     phrase = ["foo", "bar"]
     expected = [2] * 1000
-    phrase_matches = docs.phrase_freq(phrase)
+    phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
 
 
@@ -275,7 +257,7 @@ def test_phrase_scattered_posns_sliced_one_term_rpt(posn_offset):
     docs = docs[::2]
     phrase = ["foo", "bar"]
     expected = [2] * 1000
-    phrase_matches = docs.phrase_freq(phrase)
+    phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
 
 
@@ -290,7 +272,7 @@ def test_phrase_scattered_posns_sliced_frequent(posn_offset):
     idx = np.array(idx)[::2]
     phrase = ["foo", "bar"]
     expected = [2 if "foo bar" in doc else 0 for doc in idx]
-    phrase_matches = docs.phrase_freq(phrase)
+    phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
 
 
@@ -305,7 +287,7 @@ def test_phrase_scattered_posns_sliced_frequent_long(posn_offset):
     idx = np.array(idx)[::2]
     phrase = ["foo", "bar", "baz"]
     expected = [2 if " ".join(phrase) in doc else 0 for doc in idx]
-    phrase_matches = docs.phrase_freq(phrase)
+    phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
 
 
@@ -316,7 +298,7 @@ def test_phrase_scattered_posns3(posn_offset):
                              "not match"])
     phrase = ["foo", "bar", "baz"]
     expected = [2, 0]
-    phrase_matches = docs.phrase_freq(phrase)
+    phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
 
 
@@ -330,7 +312,7 @@ def test_phrase_too_many_posns_with_truncate():
     big_str = "foo bar baz " + " ".join(["dummy"] * MAX_POSN) + " blah blah blah"
     arr = SearchArray.index([big_str, "not match"], truncate=True)
     assert len(arr) == 2
-    phrase_matches = arr.phrase_freq(["foo", "bar", "baz"])
+    phrase_matches = arr.termfreqs(["foo", "bar", "baz"])
     expected = [1, 0]
     assert (expected == phrase_matches).all()
 
