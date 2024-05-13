@@ -2,7 +2,8 @@ from typing import Tuple
 import numpy as np
 import sortednp as snp
 import pytest
-from searcharray.roaringish.snp_ops import binary_search, galloping_search, unique, merge, count_odds
+from searcharray.roaringish.snp_ops import binary_search, galloping_search, merge, count_odds
+from searcharray.roaringish.unique import unique
 from searcharray.roaringish.intersect import intersect, adjacent
 from test_utils import w_scenarios
 from test_utils import Profiler, profile_enabled

@@ -7,7 +7,8 @@ import logging
 import numbers
 from typing import Optional, Tuple, List, Union
 
-from searcharray.roaringish.snp_ops import unique, merge, galloping_search
+from searcharray.roaringish.snp_ops import merge, galloping_search
+from searcharray.roaringish.unique import unique
 from searcharray.roaringish.intersect import intersect, adjacent
 from searcharray.roaringish.roaringish_ops import popcount64_reduce, payload_slice
 
