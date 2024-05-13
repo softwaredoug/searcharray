@@ -7,7 +7,8 @@ import logging
 import numbers
 from typing import Optional, Tuple, List, Union
 
-from searcharray.roaringish.snp_ops import intersect, unique, adjacent, merge, galloping_search
+from searcharray.roaringish.snp_ops import unique, merge, galloping_search
+from searcharray.roaringish.intersect import intersect, adjacent
 from searcharray.roaringish.roaringish_ops import popcount64_reduce, payload_slice
 
 logger = logging.getLogger(__name__)
@@ -198,9 +199,7 @@ class RoaringishEncoder:
         lhs_idx, rhs_idx = adjacent(lhs, rhs, mask=self.header_mask)
         return lhs[lhs_idx], rhs[rhs_idx]
 
-    def intersect(self, lhs: np.ndarray, rhs: np.ndarray,
-                  lhs_splits: Optional[np.ndarray] = None,
-                  rhs_splits: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
+    def intersect(self, lhs: np.ndarray, rhs: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Return the MSBs that are common to both lhs and rhs (same keys, same MSBs) as well as post processed values
 
         Parameters
@@ -209,8 +208,7 @@ class RoaringishEncoder:
         rhs : np.ndarray of uint64 (encoded) values
         """
         # assert np.all(np.diff(rhs_shifted) >= 0), "not sorted"
-        lhs_idx, rhs_idx = intersect(lhs, rhs, mask=self.header_mask,
-                                     lhs_splits=lhs_splits, rhs_splits=rhs_splits)
+        lhs_idx, rhs_idx = intersect(lhs, rhs, mask=self.header_mask)
         return lhs[lhs_idx], rhs[rhs_idx]
 
     def key_partition(self,
