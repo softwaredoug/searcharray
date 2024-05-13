@@ -111,6 +111,8 @@ def _inner_bigram_freqs(lhs: np.ndarray,
     -----------
     lhs: roaringish encoded posn array of left term
     rhs: roaringish encoded posn array of right term
+    lhs_int: np.ndarray, intersected lhs
+    rhs_int: np.ndarray, intersected rhs
     phrase_freqs: np.ndarray, preallocated phrase freqs for output
     cont_rhs: bool, whether to continue matching on the rhs or lhs
 
@@ -187,26 +189,26 @@ def _adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
     return phrase_freqs, (lhs_next, rhs_next)
 
 
-def _set_adjbit_at_header(enc1: np.ndarray, just_lsb_enc: np.ndarray,
+def _set_adjbit_at_header(next_inner: np.ndarray, next_adj: np.ndarray,
                           cont: Continuation = Continuation.RHS) -> np.ndarray:
     """Merge two encoded arrays on their headers."""
-    if len(enc1) == 0:
-        return just_lsb_enc
-    if len(just_lsb_enc) == 0:
-        return enc1
+    if len(next_inner) == 0:
+        return next_adj
+    if len(next_adj) == 0:
+        return next_inner
 
-    same_header_enc1, same_header_just_lsb = intersect(enc1, just_lsb_enc,
-                                                       mask=encoder.header_mask)
+    same_header_inner, same_header_adj = intersect(next_inner, next_adj,
+                                                   mask=encoder.header_mask)
     # Set _1 on intersection
-    ignore_mask = np.ones(len(just_lsb_enc), dtype=bool)
-    ignore_mask[same_header_just_lsb] = False
-    if len(same_header_enc1) > 0 and cont == Continuation.RHS:
-        enc1[same_header_enc1] |= _1
-        just_lsb_enc = just_lsb_enc[ignore_mask]
-    if len(same_header_just_lsb) > 0 and cont == Continuation.LHS:
-        enc1[same_header_enc1] |= _upper_bit
-        just_lsb_enc = just_lsb_enc[ignore_mask]
-    return merge(enc1, just_lsb_enc)
+    ignore_mask = np.ones(len(next_adj), dtype=bool)
+    ignore_mask[same_header_adj] = False
+    if len(same_header_inner) > 0 and cont == Continuation.RHS:
+        next_inner[same_header_inner] |= _1
+        next_adj = next_adj[ignore_mask]
+    if len(same_header_adj) > 0 and cont == Continuation.LHS:
+        next_inner[same_header_adj] |= _upper_bit
+        next_adj = next_adj[ignore_mask]
+    return merge(next_inner, next_adj)
 
 
 def bigram_freqs(lhs: np.ndarray,

@@ -52,19 +52,16 @@ cdef _merge_naive(DTYPE_t[:] lhs,
     return np.asarray(results), result_idx
 
 
-cdef _merge(DTYPE_t[:] lhs,
-            DTYPE_t[:] rhs):
-    cdef np.intp_t len_lhs = lhs.shape[0]
-    cdef np.intp_t len_rhs = rhs.shape[0]
-
+cdef DTYPE_t _merge(DTYPE_t* lhs,
+                    DTYPE_t* rhs,
+                    DTYPE_t len_lhs,
+                    DTYPE_t len_rhs,
+                    DTYPE_t* results) nogil:
     cdef DTYPE_t* lhs_ptr = &lhs[0]
     cdef DTYPE_t* end_lhs_ptr = &lhs[len_lhs]
     cdef DTYPE_t* rhs_ptr = &rhs[0]
     cdef DTYPE_t* end_rhs_ptr = &rhs[len_rhs]
-
-    # Outputs as numpy arrays
-    cdef np.uint64_t[:] results = np.empty(len_lhs + len_rhs, dtype=np.uint64)
-    cdef np.uint64_t* result_ptr = &results[0]
+    cdef DTYPE_t* result_ptr = &results[0]
 
     # Copy elements from both arrays
     while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
@@ -93,22 +90,20 @@ cdef _merge(DTYPE_t[:] lhs,
         lhs_ptr += 1
         result_ptr += 1
 
-    return np.asarray(results), result_ptr - &results[0]
+    return result_ptr - &results[0]
 
 
-cdef _merge_w_drop(DTYPE_t[:] lhs,
-                   DTYPE_t[:] rhs):
-    cdef np.intp_t len_lhs = lhs.shape[0]
-    cdef np.intp_t len_rhs = rhs.shape[0]
-
+cdef DTYPE_t _merge_w_drop(DTYPE_t* lhs,
+                           DTYPE_t* rhs,
+                           DTYPE_t len_lhs,
+                           DTYPE_t len_rhs,
+                           DTYPE_t* results) nogil:
     cdef DTYPE_t* lhs_ptr = &lhs[0]
     cdef DTYPE_t* end_lhs_ptr = &lhs[len_lhs]
     cdef DTYPE_t* rhs_ptr = &rhs[0]
     cdef DTYPE_t* end_rhs_ptr = &rhs[len_rhs]
 
-    # Outputs as numpy arrays
-    cdef np.uint64_t[:] results = np.empty(len_lhs + len_rhs, dtype=np.uint64)
-    cdef np.uint64_t* result_ptr = &results[0]
+    cdef DTYPE_t* result_ptr = &results[0]
 
     # Copy elements from both arrays
     while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
@@ -135,16 +130,31 @@ cdef _merge_w_drop(DTYPE_t[:] lhs,
         lhs_ptr += 1
         result_ptr += 1
 
-    return np.asarray(results), result_ptr - &results[0]
-
+    return result_ptr - &results[0]
 
 
 
 def merge(np.ndarray[DTYPE_t, ndim=1] lhs,
           np.ndarray[DTYPE_t, ndim=1] rhs,
           bint drop_duplicates=False):
-    if drop_duplicates:
-        result, result_idx = _merge_w_drop(lhs, rhs)
-    else:
-        result, result_idx = _merge(lhs, rhs)
-    return np.array(result[:result_idx])
+    # Outputs as numpy arrays
+    cdef DTYPE_t result_idx
+
+    cdef DTYPE_t* lhs_ptr = &lhs[0]
+    cdef DTYPE_t* rhs_ptr = &rhs[0]
+    cdef DTYPE_t lhs_len = lhs.shape[0]
+    cdef DTYPE_t rhs_len = rhs.shape[0]
+    cdef DTYPE_t[:] results = np.empty(lhs.shape[0] + rhs.shape[0], dtype=np.uint64)
+    cdef DTYPE_t* result_ptr = &results[0]
+
+    with nogil:
+        if drop_duplicates:
+            result_idx = _merge_w_drop(lhs_ptr, rhs_ptr,
+                                       lhs_len, rhs_len,
+                                       result_ptr)
+        else:
+            result_idx = _merge(lhs_ptr, rhs_ptr,
+                                lhs_len, rhs_len,
+                                result_ptr)
+
+    return np.array(results[:result_idx])
