@@ -214,7 +214,7 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
                                       DTYPE_t delta,
                                       DTYPE_t* adj_lhs_out,
                                       DTYPE_t* adj_rhs_out,
-                                      DTYPE_t* adj_out_len):
+                                      DTYPE_t* adj_out_len) nogil:
     """Two pointer approach to find the intersection of two sorted arrays."""
     cdef DTYPE_t* lhs_ptr = &args.lhs[0]
     cdef DTYPE_t* rhs_ptr = &args.rhs[0]
@@ -386,9 +386,10 @@ def intersect_with_adjacents(np.ndarray[DTYPE_t, ndim=1] lhs,
     args.rhs_out = &rhs_out[0]
     adj_lhs_out_begin = &adj_lhs_out[0]
     adj_rhs_out_begin = &adj_rhs_out[0]
-    amt_written = _gallop_int_and_adj_drop(args, delta, 
-                                           adj_lhs_out_begin,
-                                           adj_rhs_out_begin,
-                                           &adj_out_len)
+    with nogil:
+        amt_written = _gallop_int_and_adj_drop(args, delta, 
+                                               adj_lhs_out_begin,
+                                               adj_rhs_out_begin,
+                                               &adj_out_len)
     return (np.asarray(lhs_out)[:amt_written], np.asarray(rhs_out)[:amt_written],
             np.asarray(adj_lhs_out)[:adj_out_len], np.asarray(adj_rhs_out)[:adj_out_len])
