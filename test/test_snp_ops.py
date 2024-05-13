@@ -5,7 +5,7 @@ import pytest
 from searcharray.roaringish.search import binary_search, galloping_search, count_odds
 from searcharray.roaringish.unique import unique
 from searcharray.roaringish.merge import merge
-from searcharray.roaringish.intersect import intersect, adjacent
+from searcharray.roaringish.intersect import intersect, adjacent, intersect_with_adjacents
 from test_utils import w_scenarios
 from test_utils import Profiler, profile_enabled
 
@@ -148,6 +148,18 @@ intersect_scenarios = {
 
 
 @w_scenarios(intersect_scenarios)
+def test_int_w_adj_intersects_strided(lhs, rhs, mask, expected):
+    if mask is None:
+        mask = np.uint64(0xFFFFFFFFFFFFFFFF)
+    lhs = lhs[::2]
+    rhs = rhs[::2]
+    expected = np.intersect1d(lhs, rhs)
+    lhs_idx, rhs_idx, _, _ = intersect_with_adjacents(lhs, rhs, mask=mask)
+    result = lhs[lhs_idx] & mask
+    assert np.all(result == expected)
+
+
+@w_scenarios(intersect_scenarios)
 def test_intersect_strided(lhs, rhs, mask, expected):
     if mask is None:
         mask = np.uint64(0xFFFFFFFFFFFFFFFF)
@@ -164,6 +176,15 @@ def test_intersect(lhs, rhs, mask, expected):
     if mask is None:
         mask = np.uint64(0xFFFFFFFFFFFFFFFF)
     lhs_idx, rhs_idx = intersect(lhs, rhs, mask=mask)
+    result = lhs[lhs_idx] & mask
+    assert np.all(result == expected)
+
+
+@w_scenarios(intersect_scenarios)
+def test_int_w_adj_intersects(lhs, rhs, mask, expected):
+    if mask is None:
+        mask = np.uint64(0xFFFFFFFFFFFFFFFF)
+    lhs_idx, rhs_idx, _, _ = intersect_with_adjacents(lhs, rhs, mask=mask)
     result = lhs[lhs_idx] & mask
     assert np.all(result == expected)
 
