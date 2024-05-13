@@ -7,7 +7,8 @@ import logging
 import numbers
 from typing import Optional, Tuple, List, Union
 
-from searcharray.roaringish.snp_ops import merge, galloping_search
+from searcharray.roaringish.snp_ops import galloping_search
+from searcharray.roaringish.merge import merge
 from searcharray.roaringish.unique import unique
 from searcharray.roaringish.intersect import intersect, adjacent
 from searcharray.roaringish.roaringish_ops import popcount64_reduce, payload_slice
@@ -113,7 +114,8 @@ class RoaringishEncoder:
         change_indices_one_doc = change_indices_one_doc.view(np.uint64)
         change_indices_one_doc = np.concatenate([[_0], change_indices_one_doc], dtype=np.uint64)
         if boundaries is not None:
-            change_indices = merge(change_indices_one_doc, boundaries,
+            change_indices = merge(change_indices_one_doc.view(np.uint64),
+                                   boundaries.view(np.uint64),
                                    drop_duplicates=True)
             new_boundaries = intersect(boundaries,
                                        change_indices)[-1]
