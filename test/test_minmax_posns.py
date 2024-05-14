@@ -1,6 +1,5 @@
 from searcharray.postings import SearchArray
 from test_utils import w_scenarios
-import numpy as np
 
 
 scenarios = {
@@ -44,13 +43,10 @@ scenarios = {
 
 
 @w_scenarios(scenarios)
-def test_phrase_freq(docs, phrase, min_posn, max_posn, expected):
+def test_min_max(docs, phrase, min_posn, max_posn, expected):
     docs = docs()
     docs_before = docs.copy()
     term_freqs = docs.termfreqs(phrase, min_posn=min_posn,
                                 max_posn=max_posn)
-    expected_matches = np.array(expected) > 0
-    matches = docs.match(phrase)
     assert (term_freqs == expected).all()
-    assert (matches == expected_matches).all()
     assert (docs == docs_before).all()

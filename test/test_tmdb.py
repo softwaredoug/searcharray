@@ -90,7 +90,7 @@ def test_tokenize_tmdb(tmdb_raw_data):
 
 
 def test_slice_then_search(tmdb_data):
-    star_wars_in_title = tmdb_data['title_tokens'].array.match(["Star", "Wars"])
+    star_wars_in_title = tmdb_data['title_tokens'].array.termfreqs(["Star", "Wars"]) > 0
     star_wars_in_title = tmdb_data[star_wars_in_title]
     skywalkec_docfreq = star_wars_in_title['overview_tokens'].array.docfreq("Skywalker")
     assert skywalkec_docfreq <= star_wars_in_title['overview_tokens'].array.corpus_size

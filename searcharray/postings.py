@@ -558,7 +558,7 @@ class SearchArray(ExtensionArray):
         """
 
     # ***********************************************************
-    # Search functionality
+    # Search API
     # ***********************************************************
     def termfreqs(self, token: Union[List[str], str],
                   slop: int = 0,
@@ -600,15 +600,6 @@ class SearchArray(ExtensionArray):
 
     def doclengths(self) -> np.ndarray:
         return self.doc_lens
-
-    def match(self, token: Union[List[str], str], slop: int = 0) -> np.ndarray:
-        """Return a boolean numpy array indicating which elements contain the given term."""
-        token = self._check_token_arg(token)
-        if isinstance(token, list):
-            term_freq = self._phrase_freq(token, slop=slop)
-        else:
-            term_freq = self.termfreqs(token)
-        return term_freq > 0
 
     def score(self, token: Union[str, List[str]],
               similarity: Similarity = default_bm25,

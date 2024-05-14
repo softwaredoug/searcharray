@@ -13,12 +13,12 @@ def data():
 
 
 def test_match(data):
-    matches = data.match("foo")
+    matches = data.termfreqs("foo") > 0
     assert (matches == [True, False, False, False] * 25).all()
 
 
 def test_match_missing_term(data):
-    matches = data.match("not_present")
+    matches = data.termfreqs("not_present") > 0
     assert (matches == [False, False, False, False] * 25).all()
 
 

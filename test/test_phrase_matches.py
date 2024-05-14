@@ -193,7 +193,7 @@ def test_phrase_api(docs, phrase, expected):
     docs_before = docs.copy()
     term_freqs = docs.termfreqs(phrase)
     expected_matches = np.array(expected) > 0
-    matches = docs.match(phrase)
+    matches = docs.termfreqs(phrase) > 0
     assert (term_freqs == expected).all()
     assert (matches == expected_matches).all()
     assert (docs == docs_before).all()
