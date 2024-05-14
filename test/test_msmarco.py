@@ -4,13 +4,20 @@ import numpy as np
 import pathlib
 import string
 import logging
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Any, Optional
 from searcharray import SearchArray
 from searcharray.solr import edismax
 from searcharray.utils.sort import SetOfResults
 from test_utils import Profiler, profile_enabled
+from tokenizers import snowball_tokenizer
 from msmarco_utils import msmarco1m_raw_path, msmarco100k_raw_path, msmarco_all_raw_path, csv_col_iter
+
+# Set logging output to stdout
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    stream=sys.stdout)
 
 
 def ws_punc_tokenizer(text):
@@ -94,11 +101,35 @@ def msmarco_all():
     if not msmarco_path.exists():
         print("Indexing all docs...")
 
-        msmarco = msmarco_all_raw(msmarco_all_raw)
+        msmarco = msmarco_all_raw
         msmarco['title'].fillna('', inplace=True)
         msmarco['body'].fillna('', inplace=True)
         msmarco["title_ws"] = SearchArray.index(msmarco["title"], tokenizer=ws_punc_tokenizer)
         msmarco["body_ws"] = SearchArray.index(msmarco["body"], tokenizer=ws_punc_tokenizer)
+        msmarco.to_pickle(msmarco_path_str)
+        return msmarco
+    else:
+        print("Loading idxed pkl docs...")
+        msmarco = pd.read_pickle(msmarco_path_str)
+        print(f"Loaded msmarco -- {len(msmarco)} -- {msmarco['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB | {msmarco['title_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+        return msmarco
+
+
+# @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.fixture(scope="session")
+def msmarco_all_snowball():
+    msmarco_all_raw = pd.read_pickle(msmarco_all_raw_path())
+    msmarco_path_str = 'data/msmarco_all_snowball.pkl'
+    msmarco_path = pathlib.Path(msmarco_path_str)
+
+    if not msmarco_path.exists():
+        print("Indexing all docs...")
+
+        msmarco = msmarco_all_raw
+        msmarco['title'].fillna('', inplace=True)
+        msmarco['body'].fillna('', inplace=True)
+        msmarco["title_idx"] = SearchArray.index(msmarco["title"], tokenizer=snowball_tokenizer)
+        msmarco["body_idx"] = SearchArray.index(msmarco["body"], tokenizer=snowball_tokenizer)
         msmarco.to_pickle(msmarco_path_str)
         return msmarco
     else:
@@ -575,3 +606,18 @@ def test_msmarco100k_or_search_max_posn(query, msmarco100k, benchmark, caplog):
     scores = profiler.run(sum_scores, query)
     assert len(scores) == len(msmarco100k['body_ws'].array)
     assert np.any(scores > 0)
+
+
+# Debug scenarios one-off we move to another test
+# pytest.skip(allow_module_level=True)
+
+
+def test_msmarco_debug1(msmarco_all_snowball, caplog):
+    query = "q=how soon  after preen use can seeds germinate"
+    caplog.set_level(logging.DEBUG)
+    # to stdout
+    edismax(msmarco_all_snowball,
+            q=query,
+            qf=['title_ws^0.7045814603565304', 'body_ws^1.5314218827516857'],
+            tie=0,
+            pf=['title_ws^6.31267306851508', 'body_ws^6.999580415732333'])
