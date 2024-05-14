@@ -49,6 +49,12 @@ class SparseMatSet:
             cols = np.asarray([], dtype=np.uint32)
         return SparseMatSet(cols, rows)
 
+    def append(self, other: 'SparseMatSet'):
+        self.cols = np.concatenate([self.cols, other.cols])
+        # Increment other rows
+        self.rows = np.concatenate([self.rows, self.rows[-1] + other.rows])
+        return self
+
     def ensure_capacity(self, row):
         if row >= len(self):
             append_amt = row - (len(self.rows) - 1) + 1

@@ -1,7 +1,9 @@
 import numpy as np
 import math
 import gc
-from typing import Iterable
+import sys
+from typing import Iterable, Optional, Tuple, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import islice
 from searcharray.phrase.middle_out import MAX_POSN, PosnBitArrayFromFlatBuilder, PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder
 from searcharray.term_dict import TermDict
@@ -10,6 +12,15 @@ from searcharray.utils.row_viewable_matrix import RowViewableMatrix
 
 import logging
 logger = logging.getLogger(__name__)
+handler = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger.setLevel(logging.INFO)
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+
+# Set to stdout for debugging
+# logging.basicConfig(level=logging.DEBUG)
 
 
 def _compute_doc_lens(posns: np.ndarray, doc_ids: np.ndarray, num_docs: int) -> np.ndarray:
@@ -90,11 +101,12 @@ def _invert_docs_terms(terms_w_posns):
     return terms_w_posns[:, lexsort]
 
 
-def _tokenize_batch(array, tokenizer, term_dict, term_doc, batch_size, batch_beg, truncate=False):
+def _tokenize_batch(array, tokenizer, term_dict, batch_size, batch_beg, truncate=False):
     trunc_posn = None
     if truncate:
         trunc_posn = MAX_POSN
 
+    term_doc = SparseMatSetBuilder()
     terms_w_posns, term_dict, term_doc = _gather_tokens(array, tokenizer,
                                                         term_dict, term_doc, start_doc_id=batch_beg,
                                                         trunc_posn=trunc_posn)
@@ -114,12 +126,11 @@ def _tokenize_batch(array, tokenizer, term_dict, term_doc, batch_size, batch_beg
     if np.any(doc_lens > MAX_POSN):
         raise ValueError(f"Document length exceeds maximum of {MAX_POSN}")
 
-    return term_doc, bit_posns, term_dict, doc_lens
+    return batch_beg, term_doc, bit_posns, term_dict, doc_lens
 
 
 def batch_iterator(iterator, batch_size):
     """
-    Slices an iterator into batches of specified size and yields each batch until the iterator is exhausted.
 
     :param iterator: The iterator to slice into batches.
     :param batch_size: The size of each batch.
@@ -134,7 +145,8 @@ def batch_iterator(iterator, batch_size):
         batch_beg += batch_size
 
 
-def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000, truncate=False):
+def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000,
+                               truncate=False, workers=4):
     """Build index directly from tokenizing docs (array of string)."""
     term_dict = TermDict()
     term_doc = SparseMatSetBuilder()
@@ -143,29 +155,47 @@ def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000, tru
     batch_bit_posns = None
 
     logger.info("Indexing begins")
+    futures = []
+    last_batch_beg_processed = 0
 
-    for batch_beg, batch in batch_iterator(array, batch_size):
-        try:
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+
+        for batch_beg, batch in batch_iterator(array, batch_size):
             logger.info(f"{batch_beg} Batch Start")
-            term_doc, batch_bit_posns, term_dict, batch_doc_lens = _tokenize_batch(batch, tokenizer,
-                                                                                   term_dict, term_doc,
-                                                                                   batch_size, batch_beg,
-                                                                                   truncate=truncate)
-        except ValueError as e:
-            logger.error(e)
-            logger.error(f"Batch {batch_beg} failed to tokenize")
-            raise e
+            futures.append(executor.submit(_tokenize_batch, batch, tokenizer,
+                                           term_dict,
+                                           batch_size, batch_beg,
+                                           truncate=truncate))
 
-        if bit_posns is None:
-            bit_posns = batch_bit_posns
-        else:
-            bit_posns.concat(batch_bit_posns)
+            if len(futures) > workers:
+                batch_results: List[Optional[Tuple]] = [None] * len(futures)
+                for future in as_completed(futures):
+                    try:
+                        batch_beg, batch_term_doc, batch_bit_posns, term_dict, batch_doc_lens = future.result()
+                        # Save in batch order
+                        batch_results[(batch_beg // batch_size) + last_batch_beg_processed] \
+                            = (batch_beg, term_doc, batch_bit_posns, term_dict, batch_doc_lens)
+                    except ValueError as e:
+                        logger.error(e)
+                        logger.error(f"Batch {batch_beg} failed to tokenize")
+                        raise e
 
-        doc_lens.append(batch_doc_lens)
+                for result in batch_results:
+                    if result is None:
+                        continue
+                    batch_beg, batch_term_doc, batch_bit_posns, term_dict, batch_doc_lens = result
+                    term_doc.append(batch_term_doc)
+                    if bit_posns is None:
+                        bit_posns = batch_bit_posns
+                    else:
+                        bit_posns.concat(batch_bit_posns)
 
-        logger.info(f"{batch_beg} Batch Complete")
-        logger.info(f"Roaringish NBytes -- {convert_size(bit_posns.nbytes)}")
-        logger.info(f"Term Dict Size -- {len(term_dict)}")
+                    doc_lens.append(batch_doc_lens)
+                    logger.info(f"{batch_beg} Batch Complete")
+                    logger.info(f"Roaringish NBytes -- {convert_size(bit_posns.nbytes)}")
+                    logger.info(f"Term Dict Size -- {len(term_dict)}")
+
+            last_batch_beg_processed += workers
 
     doc_lens = np.concatenate(doc_lens)
 
