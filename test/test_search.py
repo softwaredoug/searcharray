@@ -85,7 +85,7 @@ and_scenarios = {
 @w_scenarios(and_scenarios)
 def test_and_query(data, docs, keywords, expected):
     docs = docs()
-    matches = data.and_query(keywords)
+    matches = np.all([data.score(k) for k in keywords], axis=0)
     assert (expected == matches).all()
 
 
@@ -138,7 +138,8 @@ or_scenarios = {
 @w_scenarios(or_scenarios)
 def test_or_query(docs, keywords, expected, min_should_match):
     docs = docs()
-    matches = docs.or_query(keywords, min_should_match=min_should_match)
+    num_matches = np.sum(np.array([docs.score(k) for k in keywords]) > 0, axis=0)
+    matches = num_matches >= min_should_match
     assert (expected == matches).all()
 
 
@@ -148,7 +149,8 @@ def test_or_query_sliced(docs, keywords, expected, min_should_match):
     num_docs = len(docs)
     sliced = docs[:num_docs // 2]
     expected_sliced = expected[:num_docs // 2]
-    matches = sliced.or_query(keywords, min_should_match=min_should_match)
+    num_matches = np.sum(np.array([sliced.score(k) for k in keywords]) > 0, axis=0)
+    matches = num_matches >= min_should_match
     assert (expected_sliced == matches).all()
 
 
@@ -158,5 +160,6 @@ def test_or_query_copy(docs, keywords, expected, min_should_match):
     num_docs = len(docs)
     sliced = docs[:num_docs // 2].copy()
     expected_sliced = expected[:num_docs // 2]
-    matches = sliced.or_query(keywords, min_should_match=min_should_match)
+    num_matches = np.sum(np.array([sliced.score(k) for k in keywords]) > 0, axis=0)
+    matches = num_matches >= min_should_match
     assert (expected_sliced == matches).all()

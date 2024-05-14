@@ -645,20 +645,6 @@ class SearchArray(ExtensionArray):
         posns = self.posns.positions(term_id, doc_ids=key)
         return posns
 
-    def and_query(self, tokens: Union[List[str], List[List[str]]]) -> np.ndarray:
-        """Return a mask on the postings array indicating which elements contain all terms."""
-        masks = [self.match(term) for term in tokens]
-        mask = np.ones(len(self), dtype=bool)
-        for curr_mask in masks:
-            mask = mask & curr_mask
-        return mask
-
-    def or_query(self, tokens: Union[List[str], List[List[str]]], min_should_match: int = 1) -> np.ndarray:
-        """Return a mask on the postings array indicating which elements contain all terms."""
-        masks = [self.match(term) for term in tokens]
-        mask = np.sum(masks, axis=0) >= min_should_match
-        return mask
-
     def _phrase_freq(self, tokens: List[str],
                      slop=0,
                      min_posn: Optional[int] = None,
