@@ -14,6 +14,11 @@ class SparseMatSetBuilder:
         self.rows.append(len(self.cols))
         return 0
 
+    def concat(self, other: 'SparseMatSetBuilder'):
+        self.rows.extend([row + len(self.cols) for row in other.rows[1:]])
+        self.cols.extend(other.cols)
+        return 0
+
     def build(self):
         return SparseMatSet(cols=np.asarray(self.cols, dtype=np.uint32),
                             rows=np.asarray(self.rows, dtype=np.uint32))
