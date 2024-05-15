@@ -129,7 +129,7 @@ tmdb_phrase_matches = [
 @pytest.mark.parametrize("phrase,expected_matches", tmdb_phrase_matches)
 def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
     prof = Profiler(benchmark)
-    mask = prof.run(tmdb_data['title_tokens'].array.match, phrase)
+    mask = prof.run(tmdb_data['title_tokens'].array.score, phrase)
     matches = tmdb_data[mask].index.sort_values()
     assert (matches == expected_matches).all()
 
