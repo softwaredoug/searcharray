@@ -102,7 +102,12 @@ def test_slice_then_search(tmdb_data):
 def test_batch_sizes_give_same(tmdb_data):
     with_batch_10k = SearchArray.index(tmdb_data['overview'], batch_size=10000)
     with_batch_5k = SearchArray.index(tmdb_data['overview'], batch_size=5000)
-    assert np.all(with_batch_10k == with_batch_5k)
+    # We don't expect the full array to be compatible given term dict assigned
+    # different term ids given threading, but individual docs should be the same
+    assert np.all(with_batch_10k[-1] == with_batch_5k[-1])
+    assert np.all(with_batch_10k[100] == with_batch_5k[100])
+    assert np.all(with_batch_10k[5000] == with_batch_5k[5000])
+    assert np.all(with_batch_10k[5001] == with_batch_5k[5001])
 
 
 tmdb_term_matches = [

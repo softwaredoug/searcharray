@@ -153,6 +153,7 @@ def _process_batches(term_doc, batch_size,
                      doc_lens=None,
                      truncate=False):
     batch_results = [None] * len(futures)
+    batch_beg = 0
     for future in as_completed(futures):
         try:
             batch_beg, batch_term_doc, batch_bit_posns, batch_doc_lens = future.result()
