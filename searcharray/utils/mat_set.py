@@ -14,6 +14,11 @@ class SparseMatSetBuilder:
         self.rows.append(len(self.cols))
         return 0
 
+    def concat(self, other: 'SparseMatSetBuilder'):
+        self.rows.extend([row + len(self.cols) for row in other.rows[1:]])
+        self.cols.extend(other.cols)
+        return 0
+
     def build(self):
         return SparseMatSet(cols=np.asarray(self.cols, dtype=np.uint32),
                             rows=np.asarray(self.rows, dtype=np.uint32))
@@ -48,6 +53,12 @@ class SparseMatSet:
         except ValueError:
             cols = np.asarray([], dtype=np.uint32)
         return SparseMatSet(cols, rows)
+
+    def append(self, other: 'SparseMatSet'):
+        self.cols = np.concatenate([self.cols, other.cols])
+        # Increment other rows
+        self.rows = np.concatenate([self.rows, self.rows[-1] + other.rows])
+        return self
 
     def ensure_capacity(self, row):
         if row >= len(self):
