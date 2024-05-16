@@ -228,6 +228,7 @@ class SearchArray(ExtensionArray):
               truncate=False,
               batch_size=100000,
               avoid_copies=True,
+              workers=4,
               autowarm=True) -> 'SearchArray':
         """Index an array of strings into SearchArray using tokenizer.
 
@@ -255,7 +256,8 @@ class SearchArray(ExtensionArray):
 
         term_mat, posns, term_dict, avg_doc_length, doc_lens =\
             build_index_from_tokenizer(array, tokenizer, batch_size=batch_size,
-                                       truncate=truncate)
+                                       truncate=truncate,
+                                       workers=workers)
 
         if autowarm:
             posns.warm()
