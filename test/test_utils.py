@@ -1,5 +1,6 @@
 import pytest
 import datetime
+import pandas as pd
 from typing import Dict, Any, cast, Sequence, Type, Union
 import cProfile
 import sys
@@ -44,6 +45,12 @@ class CProfileProfiler:
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         self.cprofiler.dump_stats(f".benchmarks/{self.name}_{timestamp}.prof")
         return rval
+
+
+def naive_find_term(text: pd.Series, term: str,
+                    tokenizer):
+    text_as_tokens = text.apply(tokenizer)
+    return text_as_tokens.apply(lambda tokens: term in tokens)
 
 
 Profiler: Union[Type[JustBenchmarkProfiler], Type[CProfileProfiler]]
