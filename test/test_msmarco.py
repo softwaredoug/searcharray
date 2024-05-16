@@ -12,7 +12,7 @@ from searcharray.solr import edismax
 from searcharray.utils.sort import SetOfResults
 from test_utils import Profiler, profile_enabled
 from tokenizers import snowball_tokenizer
-from msmarco_utils import msmarco1m_raw_path, msmarco100k_raw_path, msmarco_all_raw_path, csv_col_iter, msmarco_gz_path
+from msmarco_utils import msmarco1m_raw_path, msmarco100k_raw_path, msmarco_all_raw_path, csv_col_iter
 
 # Set logging output to stdout
 logging.basicConfig(level=logging.DEBUG,
