@@ -101,14 +101,9 @@ def msmarco_all():
         body_iter = csv_col_iter(3)
         title_iter = csv_col_iter(2)
         df = pd.DataFrame()
-        print("Saving ids")
-        df['id'] = pd.read_csv(msmarco_gz_path(), delimiter="\t", usecols=[0], header=None)
-        print("Getting URL")
-        df['url'] = pd.read_csv(msmarco_gz_path(), delimiter="\t", usecols=[1], header=None)
-        print("Getting Title")
-        df['title'] = pd.read_csv(msmarco_gz_path(), delimiter="\t", usecols=[2], header=None)
         print("Indexing body")
-        df['body_idx'] = SearchArray.index(body_iter, truncate=True, tokenizer=snowball_tokenizer)
+        df['body_idx'] = SearchArray.index(body_iter, truncate=True, tokenizer=snowball_tokenizer,
+                                           workers=2)
         print("Indexing title")
         df['title_idx'] = SearchArray.index(title_iter, truncate=True, tokenizer=snowball_tokenizer)
         # Save to pickle
@@ -116,7 +111,7 @@ def msmarco_all():
     else:
         print("Loading idxed pkl docs...")
         msmarco = pd.read_pickle(msmarco_path_str)
-        print(f"Loaded msmarco -- {len(msmarco)} -- {msmarco['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB | {msmarco['title_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+        print(f"Loaded msmarco -- {len(msmarco)} -- {msmarco['body_idx'].array.memory_usage() / 1024 ** 2:.2f} MB | {msmarco['title_idx'].array.memory_usage() / 1024 ** 2:.2f} MB")
         return msmarco
 
 
@@ -587,18 +582,3 @@ def test_msmarco100k_or_search_max_posn(query, msmarco100k, benchmark, caplog):
     scores = profiler.run(sum_scores, query)
     assert len(scores) == len(msmarco100k['body_ws'].array)
     assert np.any(scores > 0)
-
-
-# Debug scenarios one-off we move to another test
-pytest.skip(allow_module_level=True)
-
-
-def test_msmarco_debug1(msmarco_all, caplog):
-    query = "q=how soon  after preen use can seeds germinate"
-    caplog.set_level(logging.DEBUG)
-    # to stdout
-    edismax(msmarco_all,
-            q=query,
-            qf=['title_ws^0.7045814603565304', 'body_ws^1.5314218827516857'],
-            tie=0,
-            pf=['title_ws^6.31267306851508', 'body_ws^6.999580415732333'])
