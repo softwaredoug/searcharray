@@ -11,7 +11,7 @@ from searcharray import SearchArray
 from searcharray.solr import edismax
 from searcharray.utils.sort import SetOfResults
 from test_utils import Profiler, profile_enabled
-from tokenizers import snowball_tokenizer
+from tokenizers import ws_tokenizer
 from msmarco_utils import msmarco1m_raw_path, msmarco100k_raw_path, msmarco_all_raw_path, csv_col_iter
 
 # Set logging output to stdout
@@ -94,7 +94,7 @@ def msmarco1m():
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
 def msmarco_all():
-    msmarco_path_str = 'data/msmarco_all_snowball.pkl'
+    msmarco_path_str = 'data/msmarco_all.pkl'
     msmarco_path = pathlib.Path(msmarco_path_str)
 
     if not msmarco_path.exists():
@@ -102,10 +102,10 @@ def msmarco_all():
         title_iter = csv_col_iter(2)
         df = pd.DataFrame()
         print("Indexing body")
-        df['body_idx'] = SearchArray.index(body_iter, truncate=True, tokenizer=snowball_tokenizer,
+        df['body_idx'] = SearchArray.index(body_iter, truncate=True, tokenizer=ws_tokenizer,
                                            workers=2)
         print("Indexing title")
-        df['title_idx'] = SearchArray.index(title_iter, truncate=True, tokenizer=snowball_tokenizer)
+        df['title_idx'] = SearchArray.index(title_iter, truncate=True, tokenizer=ws_tokenizer)
         # Save to pickle
         df.to_pickle(msmarco_path_str)
     else:
