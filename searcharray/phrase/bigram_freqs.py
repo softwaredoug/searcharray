@@ -206,7 +206,7 @@ def _set_adjbit_at_header(next_inner: np.ndarray, next_adj: np.ndarray,
         next_inner[same_header_inner] |= _1
         next_adj = next_adj[ignore_mask]
     if len(same_header_adj) > 0 and cont == Continuation.LHS:
-        next_inner[same_header_adj] |= _upper_bit
+        next_inner[same_header_inner] |= _upper_bit
         next_adj = next_adj[ignore_mask]
     return merge(next_inner, next_adj)
 
