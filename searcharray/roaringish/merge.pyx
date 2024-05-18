@@ -16,7 +16,6 @@ cimport searcharray.roaringish.snp_ops
 from searcharray.roaringish.snp_ops cimport DTYPE_t, int64_t
 
 
-
 cdef _merge_naive(DTYPE_t[:] lhs,
                   DTYPE_t[:] rhs):
     cdef np.intp_t len_lhs = lhs.shape[0]
@@ -131,7 +130,6 @@ cdef DTYPE_t _merge_w_drop(DTYPE_t* lhs,
         result_ptr += 1
 
     return result_ptr - &results[0]
-
 
 
 def merge(np.ndarray[DTYPE_t, ndim=1] lhs,

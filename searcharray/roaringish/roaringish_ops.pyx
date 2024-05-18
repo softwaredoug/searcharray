@@ -8,7 +8,6 @@
 # cython: language_level=3
 cimport numpy as np
 import numpy as np
-from enum import Enum
 
 cimport searcharray.roaringish.snp_ops
 from searcharray.roaringish.snp_ops cimport DTYPE_t

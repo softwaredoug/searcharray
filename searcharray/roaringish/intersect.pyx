@@ -11,7 +11,7 @@ import numpy as np
 
 
 cimport searcharray.roaringish.snp_ops
-from searcharray.roaringish.snp_ops cimport DTYPE_t, int64_t
+from searcharray.roaringish.snp_ops cimport DTYPE_t
 
 cdef DTYPE_t ALL_BITS = 0xFFFFFFFFFFFFFFFF
 
@@ -275,9 +275,6 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
     return lhs_result_ptr - &args.lhs_out[0]
 
 
-
-
-
 def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
               np.ndarray[DTYPE_t, ndim=1] rhs,
               DTYPE_t mask=ALL_BITS,
@@ -297,7 +294,7 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
     args.lhs = &lhs[0]
     args.rhs = &rhs[0]
     args.lhs_stride = lhs.strides[0] / sizeof(DTYPE_t)
-    args.rhs_stride =  rhs.strides[0] / sizeof(DTYPE_t)
+    args.rhs_stride = rhs.strides[0] / sizeof(DTYPE_t)
     args.lhs_len = lhs.shape[0] * lhs.strides[0] / sizeof(DTYPE_t)
     args.rhs_len = rhs.shape[0] * rhs.strides[0] / sizeof(DTYPE_t)
 
@@ -355,8 +352,6 @@ def intersect_with_adjacents(np.ndarray[DTYPE_t, ndim=1] lhs,
     cdef np.uint64_t[:] adj_rhs_out
     cdef np.uint64_t* adj_lhs_out_begin
     cdef np.uint64_t* adj_rhs_out_begin
-    cdef DTYPE_t lhs_out_len = 0
-    cdef DTYPE_t rhs_out_len = 0
     cdef intersect_args_t args
     cdef DTYPE_t delta = 1
     cdef DTYPE_t adj_out_len = 0
@@ -373,7 +368,7 @@ def intersect_with_adjacents(np.ndarray[DTYPE_t, ndim=1] lhs,
     args.lhs = &lhs[0]
     args.rhs = &rhs[0]
     args.lhs_stride = lhs.strides[0] / sizeof(DTYPE_t)
-    args.rhs_stride =  rhs.strides[0] / sizeof(DTYPE_t)
+    args.rhs_stride = rhs.strides[0] / sizeof(DTYPE_t)
     args.lhs_len = lhs.shape[0] * lhs.strides[0] / sizeof(DTYPE_t)
     args.rhs_len = rhs.shape[0] * rhs.strides[0] / sizeof(DTYPE_t)
 

@@ -13,7 +13,7 @@ import numpy as np
 # cimport snp_ops
 # from snp_ops cimport _galloping_search, DTYPE_t, ALL_BITS
 cimport searcharray.roaringish.snp_ops
-from searcharray.roaringish.snp_ops cimport DTYPE_t, int64_t
+from searcharray.roaringish.snp_ops cimport DTYPE_t
 
 
 cdef extern from "stddef.h":
@@ -56,7 +56,6 @@ def popcount64(np.ndarray[DTYPE_t, ndim=1] arr):
 cdef _popcount_reduce_at(DTYPE_t[:] ids, DTYPE_t[:] payload, double[:] output):
     cdef DTYPE_t idx = 1
     cdef DTYPE_t popcount_sum = __builtin_popcountll(payload[0])
-    cdef DTYPE_t result_idx = 1
 
     # We already have 0, now add new values
     while idx < ids.shape[0]:

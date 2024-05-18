@@ -13,9 +13,7 @@ import numpy as np
 # cimport snp_ops
 # from snp_ops cimport _galloping_search, DTYPE_t, ALL_BITS
 cimport searcharray.roaringish.snp_ops
-from searcharray.roaringish.snp_ops cimport DTYPE_t, int64_t
-
-from libc.stdlib cimport malloc, free
+from searcharray.roaringish.snp_ops cimport DTYPE_t
 
 cdef DTYPE_t ALL_BITS = 0xFFFFFFFFFFFFFFFF
 cdef void _binary_search(DTYPE_t[:] array,
@@ -37,7 +35,7 @@ cdef void _binary_search(DTYPE_t[:] array,
 
     if array[i_right] & mask < target:
         idx_out[0] = i_right
-        return # indicate target value too large
+        return  # indicate target value too large
 
     while i_left + 1 < i_right:
         idx_out[0] = (i_right + i_left) // 2  # midpoint
@@ -50,6 +48,7 @@ cdef void _binary_search(DTYPE_t[:] array,
 
     idx_out[0] = i_right
 
+
 # Python wrapper for binary search
 def binary_search(np.ndarray[DTYPE_t, ndim=1] array,
                   DTYPE_t target,
@@ -59,7 +58,6 @@ def binary_search(np.ndarray[DTYPE_t, ndim=1] array,
     cdef np.uint64_t len = array.shape[0]
     _binary_search(array, target, mask, &i, len)
     return i, (array[i] & mask) == (target & mask)
-
 
 
 cdef inline void _galloping_search(DTYPE_t[:] array,
@@ -136,6 +134,7 @@ def galloping_search(np.ndarray[DTYPE_t, ndim=1] array,
     cdef np.uint64_t len = array.shape[0]
     _galloping_search(array, target, mask, &i, len)
     return i, (array[i] & mask) == (target & mask)
+
 
 def _u64(lst) -> np.ndarray:
     return np.array(lst, dtype=np.uint64)
