@@ -3,3 +3,6 @@
 # https://pip.pypa.io/en/stable/reference/pip/#pep-517-and-518-support
 requires = ["setuptools>=43.0.0", "wheel", "numpy", "cython"]
 build-backend = "setuptools.build_meta"
+
+[tool.cython-lint]
+max-line-length = 120

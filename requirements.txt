@@ -87,3 +87,4 @@ wcwidth==0.2.9
 zipp==3.17.0
 memray==1.11.0
 pytest-memray==1.5.0
+cython-lint
