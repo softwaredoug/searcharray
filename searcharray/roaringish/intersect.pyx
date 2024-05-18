@@ -121,8 +121,8 @@ cdef void _gallop_intersect_keep(intersect_args_t args,
                 rhs_result_ptr += 1
                 rhs_ptr += args.rhs_stride
 
-        # If delta 
-        # Either we read past the array, or 
+        # If delta
+        # Either we read past the array, or
 
     lhs_out_len[0] = lhs_result_ptr - &args.lhs_out[0]
     rhs_out_len[0] = rhs_result_ptr - &args.rhs_out[0]
@@ -146,7 +146,7 @@ cdef DTYPE_t _gallop_adjacent(DTYPE_t* lhs,
     cdef DTYPE_t last = -1
     cdef DTYPE_t* lhs_result_ptr = &lhs_out[0]
     cdef DTYPE_t* rhs_result_ptr = &rhs_out[0]
-    
+
     # Read rhs until > delta
     while rhs_ptr < end_rhs_ptr and rhs_ptr[0] & mask == 0:
         rhs_ptr += 1
@@ -184,8 +184,8 @@ cdef DTYPE_t _gallop_adjacent(DTYPE_t* lhs,
                 lhs_ptr += 1
                 rhs_ptr += 1
 
-        # If delta 
-        # Either we read past the array, or 
+        # If delta
+        # Either we read past the array, or
 
     return lhs_result_ptr - &lhs_out[0]
 
@@ -194,9 +194,9 @@ cdef DTYPE_t _gallop_adjacent(DTYPE_t* lhs,
 #
 # lhs      1     5       9
 # rhs        2   5 6 7     10
-# 
+#
 # With a scan you would be able to
-# 
+#
 # lhs      1*      5
 # rhs         2*   5   6
 #          ----
@@ -227,7 +227,7 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
     cdef DTYPE_t* rhs_result_ptr = &args.rhs_out[0]
     cdef DTYPE_t* lhs_adj_result_ptr = &adj_lhs_out[0]
     cdef DTYPE_t* rhs_adj_result_ptr = &adj_rhs_out[0]
-    
+
     while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
 
         # Gallop to adjacent or equal value
@@ -244,7 +244,7 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
                 gallop <<= 1
             rhs_ptr -= (gallop >> 1) * args.rhs_stride
             gallop = 1
-            # Now lhs is at or before RHS - delta  
+            # Now lhs is at or before RHS - delta
             # RHS is 4, LHS is at most 3
         # Collect adjacent avalues
         if ((lhs_ptr[0] & args.mask) + delta) == ((rhs_ptr[0] & args.mask)):
@@ -292,7 +292,7 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
         mask = ALL_BITS
     if mask == 0:
         raise ValueError("Mask cannot be zero")
-    
+
     args.mask = mask
     args.lhs = &lhs[0]
     args.rhs = &rhs[0]
@@ -300,7 +300,7 @@ def intersect(np.ndarray[DTYPE_t, ndim=1] lhs,
     args.rhs_stride =  rhs.strides[0] / sizeof(DTYPE_t)
     args.lhs_len = lhs.shape[0] * lhs.strides[0] / sizeof(DTYPE_t)
     args.rhs_len = rhs.shape[0] * rhs.strides[0] / sizeof(DTYPE_t)
-   
+
     if drop_duplicates:
         lhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
         rhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
@@ -368,7 +368,7 @@ def intersect_with_adjacents(np.ndarray[DTYPE_t, ndim=1] lhs,
         delta = (mask & -mask)  # lest significant set bit on mask
     if mask == 0:
         raise ValueError("Mask cannot be zero")
-    
+
     args.mask = mask
     args.lhs = &lhs[0]
     args.rhs = &rhs[0]
@@ -376,7 +376,7 @@ def intersect_with_adjacents(np.ndarray[DTYPE_t, ndim=1] lhs,
     args.rhs_stride =  rhs.strides[0] / sizeof(DTYPE_t)
     args.lhs_len = lhs.shape[0] * lhs.strides[0] / sizeof(DTYPE_t)
     args.rhs_len = rhs.shape[0] * rhs.strides[0] / sizeof(DTYPE_t)
-   
+
     lhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
     rhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
     adj_lhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
@@ -387,7 +387,7 @@ def intersect_with_adjacents(np.ndarray[DTYPE_t, ndim=1] lhs,
     adj_lhs_out_begin = &adj_lhs_out[0]
     adj_rhs_out_begin = &adj_rhs_out[0]
     with nogil:
-        amt_written = _gallop_int_and_adj_drop(args, delta, 
+        amt_written = _gallop_int_and_adj_drop(args, delta,
                                                adj_lhs_out_begin,
                                                adj_rhs_out_begin,
                                                &adj_out_len)

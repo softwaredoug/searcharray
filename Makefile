@@ -72,6 +72,10 @@ lint: deps
 	mypy searcharray test
 	cython-lint searcharray
 
+fix: deps
+	@echo "Fixing..."
+	./scripts/fixup.sh searcharray/roaringish/*.pyx
+
 
 benchmark_dry_run: deps
 	python -m pytest -x --benchmark-only

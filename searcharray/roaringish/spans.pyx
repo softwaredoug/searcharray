@@ -27,11 +27,11 @@ cdef _count_spans_of_slop(DTYPE_t[:] posns, DTYPE_t slop):
     return 1
 
 
-cdef _span_search(DTYPE_t[:, :] posns_arr, 
+cdef _span_search(DTYPE_t[:, :] posns_arr,
                   DTYPE_t[:] phrase_freqs,
                   DTYPE_t slop,
                   DTYPE_t key_mask,
-                  DTYPE_t header_mask, 
+                  DTYPE_t header_mask,
                   DTYPE_t lsb_bits):
 
     cdef DTYPE_t i = 0
@@ -47,7 +47,7 @@ cdef _span_search(DTYPE_t[:, :] posns_arr,
         # per term
         #         i:    adj:
         #         10    11         14
-        # termA   0011  0001       0010 
+        # termA   0011  0001       0010
         # termB   0100  1000       0001
         #
         # curr_posns now:
@@ -56,7 +56,7 @@ cdef _span_search(DTYPE_t[:, :] posns_arr,
         # termB:   00100000]
         #
         # Now we can check for minspans in each terms words
-        # 
+        #
         doc_id = posns_arr[0, i] & key_mask
         for j in range(posns_arr.shape[0]):
             curr_posns[j] = posns_arr[j, i] << lsb_bits

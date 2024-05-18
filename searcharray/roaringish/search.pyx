@@ -67,7 +67,7 @@ cdef inline void _galloping_search(DTYPE_t[:] array,
                                    DTYPE_t mask,
                                    np.uint64_t* idx_out,
                                    np.uint64_t len):
-    cdef DTYPE_t value = array[idx_out[0]] & mask 
+    cdef DTYPE_t value = array[idx_out[0]] & mask
     target &= mask
 
     # If already at correct location or beyond
