@@ -208,6 +208,19 @@ def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_repr_html(tmdb_data, benchmark):
+    prof = Profiler(benchmark)
+    html = prof.run(tmdb_data._repr_html_)
+    assert "<th>title</th>" in html
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_unique(tmdb_data, benchmark):
+    prof = Profiler(benchmark)
+    prof.run(tmdb_data['overview'].array.unique)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 def test_index_benchmark(benchmark, tmdb_pd_data):
     prof = Profiler(benchmark)
     results = prof.run(SearchArray.index, tmdb_pd_data['overview'], autowarm=False)

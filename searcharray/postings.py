@@ -464,6 +464,11 @@ class SearchArray(ExtensionArray):
         empties = self.doc_lens == 0
         return empties
 
+    def unique(self):
+        """This is a hack for colab which wants to visit every element of the array."""
+        logger.warning("Unique called on SearchArray. This is not supported.")
+        return self[:]
+
     def take(self, indices, allow_fill=False, fill_value=None):
         # Want to take rows of term freqs
         row_indices = np.arange(len(self.term_mat.rows))

@@ -149,7 +149,14 @@ class TestInterface(base.BaseInterfaceTests):
 
 
 class TestMethods(base.BaseMethodsTests):
-    pass
+
+    # Unique not supported on inverted index rows, for performance
+    # reasons
+    def test_value_counts_with_normalize(self, data):
+        pass
+
+    def test_unique(self, data):
+        pass
 
 
 class TestConstructors(base.BaseConstructorsTests):
