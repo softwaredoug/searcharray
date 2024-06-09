@@ -8,7 +8,7 @@ import json
 from collections import Counter
 import warnings
 import logging
-from typing import List, Union, Optional, Iterable
+from typing import List, Union, Optional, Iterable, Iterator, Any
 
 
 import numpy as np
@@ -141,11 +141,67 @@ class Terms:
         return hash(json.dumps(self.postings, sort_keys=True))
 
 
+class LazyTerms:
+    """Implements a view to a doc in the postings, but only
+       fetches the postings when needed."""
+
+    def __init__(self, doc_id=-1, posns=None, terms=None):
+        self.posns = posns
+        self.doc_id = doc_id
+        self.terms = terms
+        if self.terms is None:
+            self.terms = []
+
+    def __eq__(self, other):
+        # Flip to the other implementation if we're comparing to a SearchArray
+        # to get a boolean array back
+        if isinstance(other, SearchArray):
+            return other == self
+        return isinstance(other, LazyTerms) and self.terms.cols == other.terms.cols
+
+    def __len__(self):
+        return len(self.terms)
+
+    def __repr__(self):
+        return f"LazyTerms(doc_id={self.doc_id})"
+
+    def __str__(self):
+        return f"LazyTerms(doc_id={self.doc_id})"
+
+    def __lt__(self, other):
+        return self.doc_id < other.doc_id
+
+    def __le__(self, other):
+        return self.doc_id < other.doc_id or self.doc_id == other.doc_id
+
+    def __gt__(self, other):
+        return self.doc_id > other.doc_id
+
+    def __hash__(self):
+        return hash(str(self.doc_id))
+
+    def raw_positions(self, term_dict, term=None):
+        tfs = {}
+        posns = {}
+        for term_idx in self.terms:
+            tfs[term] = 1
+            enc_term_posns = posns.doc_encoded_posns(term_idx, doc_id=self.doc_id)
+            posns[term] = enc_term_posns
+
+        if posns is None:
+            return {}
+        if term is None:
+            raw_posns = [(term_dict.get_term_id(term), posns) for term, posns in posns.items()]
+        else:
+            raw_posns = [(term_dict.get_term_id(term), posns[term])]
+        return raw_posns
+
+
 class TermsDtype(ExtensionDtype):
     """Pandas dtype for terms."""
 
     name = 'tokenized_text'
-    type = Terms
+    type = LazyTerms
     kind = 'O'
 
     @classmethod
@@ -170,10 +226,10 @@ class TermsDtype(ExtensionDtype):
 
     @property
     def na_value(self):
-        return Terms({})
+        return LazyTerms()
 
     def valid_value(self, value):
-        return isinstance(value, dict) or pd.isna(value) or isinstance(value, Terms)
+        return isinstance(value, dict) or pd.isna(value) or isinstance(value, LazyTerms)
 
 
 register_extension_dtype(TermsDtype)
@@ -219,7 +275,7 @@ class SearchArray(ExtensionArray):
         self.tokenizer = tokenizer
         self.term_mat, self.posns, \
             self.term_dict, self.avg_doc_length, \
-            self.doc_lens = build_index_from_terms_list(postings, Terms)
+            self.doc_lens = build_index_from_terms_list(postings, LazyTerms)
         self.corpus_size = len(self.doc_lens)
 
     @classmethod
@@ -258,6 +314,7 @@ class SearchArray(ExtensionArray):
             build_index_from_tokenizer(array, tokenizer, batch_size=batch_size,
                                        truncate=truncate,
                                        workers=workers)
+        import pdb; pdb.set_trace()
 
         if autowarm:
             posns.warm()
@@ -303,13 +360,11 @@ class SearchArray(ExtensionArray):
         # Want to take rows of term freqs
         if isinstance(key, numbers.Integral):
             try:
-                rows = self.term_mat[key]
-                doc_len = self.doc_lens[key]
+                # rows = self.term_mat[key]
                 doc_id = key
-                if doc_id < 0:
-                    doc_id += len(self)
-                return _row_to_postings_row(doc_id, rows[0], doc_len,
-                                            self.term_dict, self.posns)
+                return LazyTerms(doc_id, self.posns, self.term_mat[key])
+                # return _row_to_postings_row(doc_id, rows[0], doc_len,
+                #                             self.term_dict, self.posns)
             except IndexError:
                 raise IndexError("index out of bounds")
         else:
@@ -356,7 +411,7 @@ class SearchArray(ExtensionArray):
             if isinstance(value, float):
                 term_mat = np.asarray([value])
                 doc_lens = np.asarray([0])
-            elif isinstance(value, Terms):
+            elif isinstance(value, LazyTerms):
                 term_mat = np.asarray([value.tf_to_dense(self.term_dict)])
                 doc_lens = np.asarray([value.doc_len])
                 is_encoded = value.encoded
@@ -386,7 +441,7 @@ class SearchArray(ExtensionArray):
         warnings.warn(msg)
 
         scan_value = value
-        if isinstance(value, Terms):
+        if isinstance(value, LazyTerms):
             scan_value = np.asarray([value])
         for row in scan_value:
             for term in row.terms():
@@ -401,8 +456,9 @@ class SearchArray(ExtensionArray):
         dropna: bool = True,
     ):
         if dropna:
+            import pdb; pdb.set_trace()
             counts = Counter(self[:])
-            counts.pop(Terms({}), None)
+            counts.pop(LazyTerms(), None)
         else:
             counts = Counter(self[:])
         return pd.Series(counts)
@@ -439,7 +495,7 @@ class SearchArray(ExtensionArray):
             # return np.array(self[:]) == np.array(other[:])
 
         # When other is a scalar value
-        elif isinstance(other, Terms):
+        elif isinstance(other, LazyTerms):
             other = SearchArray([other], tokenizer=self.tokenizer)
             warnings.warn("Comparing a scalar value to a SearchArray. This is slow.")
             return np.array(self[:]) == np.array(other[:])
@@ -477,7 +533,7 @@ class SearchArray(ExtensionArray):
 
         if allow_fill and -1 in result_indices:
             if fill_value is None or pd.isna(fill_value):
-                fill_value = Terms({}, encoded=True)
+                fill_value = LazyTerms()
 
             to_fill_mask = result_indices == -1
             # This is slow as it rebuilds all the term dictionaries
@@ -518,7 +574,7 @@ class SearchArray(ExtensionArray):
     def _values_for_factorize(self):
         """Return an array and missing value suitable for factorization (ie grouping)."""
         arr = np.asarray(self[:], dtype=object)
-        return arr, Terms({})
+        return arr, LazyTerms()
 
     def _check_token_arg(self, token):
         if isinstance(token, str):

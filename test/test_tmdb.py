@@ -302,3 +302,13 @@ def test_eq_benchmark(benchmark, tmdb_data):
     assert np.sum(results) == compare_amount
 
     # eq = benchmark(tmdb_data['overview_tokens'].array.__eq__, idx_again)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+def test_iterrows_benchmark(benchmark, tmdb_data):
+    prof = Profiler(benchmark)
+
+    def loop_over():
+        for idx, row in tmdb_data.iterrows():
+            pass
+    prof.run(loop_over)
