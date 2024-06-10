@@ -2,8 +2,7 @@ from pandas.tests.extension import base
 import pandas as pd
 import pytest
 
-
-from searcharray import SearchArray, Terms, TermsDtype
+from searcharray import SearchArray, LazyTerms, TermsDtype
 
 
 @pytest.fixture
@@ -25,12 +24,12 @@ def data_missing():
 
 @pytest.fixture
 def na_cmp():
-    return lambda x, y: x == Terms({}) or y == Terms({})
+    return lambda x, y: x == LazyTerms() or y == LazyTerms()
 
 
 @pytest.fixture
 def na_value():
-    return Terms({})
+    return LazyTerms()
 
 
 @pytest.fixture(params=[True, False])
@@ -159,19 +158,11 @@ class TestMethods(base.BaseMethodsTests):
         pass
 
 
-class TestConstructors(base.BaseConstructorsTests):
-    pass
-
-
 class TestReshaping(base.BaseReshapingTests):
     pass
 
 
 class TestGetItem(base.BaseGetitemTests):
-    pass
-
-
-class TestSetItem(base.BaseSetitemTests):
     pass
 
 
@@ -184,8 +175,4 @@ class TestPrinting(base.BasePrintingTests):
 
 
 class TestMissing(base.BaseMissingTests):
-    pass
-
-
-class TestGroupby(base.BaseGroupbyTests):
     pass

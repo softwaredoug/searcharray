@@ -14,7 +14,7 @@ from typing import List, Union, Optional, Iterable, Iterator, Any
 import numpy as np
 from searcharray.phrase.middle_out import PosnBitArray
 from searcharray.similarity import Similarity, default_bm25
-from searcharray.indexing import build_index_from_tokenizer, build_index_from_terms_list
+from searcharray.indexing import build_index_from_tokenizer
 from searcharray.term_dict import TermMissingError
 from searcharray.roaringish.roaringish_ops import as_dense
 
@@ -30,7 +30,7 @@ logger.addHandler(handler)
 logger.setLevel(logging.ERROR)
 
 
-class Terms:
+class EagerTerms:
     """An indexed search doc - a single bag of tokenized words and positions."""
 
     def __init__(self,
@@ -99,7 +99,7 @@ class Terms:
         # to get a boolean array back
         if isinstance(other, SearchArray):
             return other == self
-        same_postings = isinstance(other, Terms) and self.postings == other.postings
+        same_postings = isinstance(other, EagerTerms) and self.postings == other.postings
         if same_postings and self.doc_len == other.doc_len:
             return True
 
@@ -157,7 +157,7 @@ class LazyTerms:
         # to get a boolean array back
         if isinstance(other, SearchArray):
             return other == self
-        return isinstance(other, LazyTerms) and self.terms.cols == other.terms.cols
+        return isinstance(other, LazyTerms) and np.all(self.terms.cols == other.terms.cols)
 
     def __len__(self):
         return len(self.terms)
@@ -179,6 +179,12 @@ class LazyTerms:
 
     def __hash__(self):
         return hash(str(self.doc_id))
+
+    def to_eager(self) -> EagerTerms:
+        posns = self.raw_positions(self.posns, self.terms)
+        doc_len = len(self.terms)
+        return EagerTerms(self.terms, doc_len=doc_len, posns=posns,
+                          encoded=True)
 
     def raw_positions(self, term_dict, term=None):
         tfs = {}
@@ -252,8 +258,8 @@ def _row_to_postings_row(doc_id, row, doc_len, term_dict, posns: PosnBitArray):
         enc_term_posns = posns.doc_encoded_posns(term_idx, doc_id=doc_id)
         labeled_posns[term] = enc_term_posns
 
-    result = Terms(tfs, posns=labeled_posns,
-                   doc_len=doc_len, encoded=True)
+    result = EagerTerms(tfs, posns=labeled_posns,
+                        doc_len=doc_len, encoded=True)
     return result
 
 
@@ -266,17 +272,14 @@ class SearchArray(ExtensionArray):
 
     dtype = TermsDtype()
 
-    def __init__(self, postings, tokenizer=ws_tokenizer, avoid_copies=True):
-        # Check dtype, raise TypeError
-        if not is_list_like(postings):
-            raise TypeError("Expected list-like object, got {}".format(type(postings)))
-
+    def __init__(self, tokenizer=ws_tokenizer, avoid_copies=True):
+        """Do not call this directly. Use `SearchArray.index` instead."""
         self.avoid_copies = avoid_copies
         self.tokenizer = tokenizer
         self.term_mat, self.posns, \
             self.term_dict, self.avg_doc_length, \
-            self.doc_lens = build_index_from_terms_list(postings, LazyTerms)
-        self.corpus_size = len(self.doc_lens)
+            self.doc_lens = None, None, None, None, None
+        self.corpus_size = None
 
     @classmethod
     def index(cls, array: Iterable,
@@ -314,12 +317,10 @@ class SearchArray(ExtensionArray):
             build_index_from_tokenizer(array, tokenizer, batch_size=batch_size,
                                        truncate=truncate,
                                        workers=workers)
-        import pdb; pdb.set_trace()
-
         if autowarm:
             posns.warm()
 
-        postings = cls([], tokenizer=tokenizer, avoid_copies=avoid_copies)
+        postings = cls(tokenizer=tokenizer, avoid_copies=avoid_copies)
         postings.term_mat = term_mat
         postings.posns = posns
         postings.term_dict = term_dict
@@ -363,8 +364,6 @@ class SearchArray(ExtensionArray):
                 # rows = self.term_mat[key]
                 doc_id = key
                 return LazyTerms(doc_id, self.posns, self.term_mat[key])
-                # return _row_to_postings_row(doc_id, rows[0], doc_len,
-                #                             self.term_dict, self.posns)
             except IndexError:
                 raise IndexError("index out of bounds")
         else:
@@ -375,7 +374,7 @@ class SearchArray(ExtensionArray):
             else:
                 sliced_posns = self.posns.filter(sliced_tfs.rows)
 
-            arr = SearchArray([], tokenizer=self.tokenizer)
+            arr = SearchArray(tokenizer=self.tokenizer)
             arr.term_mat = sliced_tfs
             arr.doc_lens = self.doc_lens[key]
             arr.posns = sliced_posns
@@ -384,79 +383,11 @@ class SearchArray(ExtensionArray):
             arr.corpus_size = self.corpus_size
             return arr
 
-    def __setitem__(self, key, value):
-        """Set an item in the array."""
-        key = pd.api.indexers.check_array_indexer(self, key)
-        if isinstance(value, pd.Series):
-            value = value.values
-        if isinstance(value, pd.DataFrame):
-            value = value.values.flatten()
-        if isinstance(value, SearchArray):
-            value = value.to_numpy()
-        if isinstance(value, list):
-            value = np.asarray(value, dtype=object)
-
-        if not isinstance(value, np.ndarray) and not self.dtype.valid_value(value):
-            raise ValueError(f"Cannot set non-object array to SearchArray -- you passed type:{type(value)} -- {value}")
-
-        # Cant set a single value to an array
-        if isinstance(key, numbers.Integral) and isinstance(value, np.ndarray):
-            raise ValueError("Cannot set a single value to an array")
-
-        try:
-            is_encoded = False
-            posns = None
-            term_mat = np.asarray([])
-            doc_lens = np.asarray([])
-            if isinstance(value, float):
-                term_mat = np.asarray([value])
-                doc_lens = np.asarray([0])
-            elif isinstance(value, LazyTerms):
-                term_mat = np.asarray([value.tf_to_dense(self.term_dict)])
-                doc_lens = np.asarray([value.doc_len])
-                is_encoded = value.encoded
-                posns = [value.raw_positions(self.term_dict)]
-            elif isinstance(value, np.ndarray):
-                term_mat = np.asarray([x.tf_to_dense(self.term_dict) for x in value])
-                doc_lens = np.asarray([x.doc_len for x in value])
-                is_encoded = value[0].encoded if len(value) > 0 else False
-                posns = [x.raw_positions(self.term_dict) for x in value]
-            np.nan_to_num(term_mat, copy=False, nan=0)
-            self.term_mat[key] = term_mat
-            self.doc_lens[key] = doc_lens
-
-            if posns is not None:
-                self.posns.insert(key, posns, is_encoded)
-
-            # Assume we have a positions for each term, doc pair. We can just update it.
-            # Otherwise we would have added new terms
-        except TermMissingError:
-            self._add_new_terms(key, value)
-
-    def _add_new_terms(self, key, value):
-        msg = """Adding new terms! This might not be good if you tokenized this new text
-                 with a different tokenizer.
-
-                 Also. This is slow."""
-        warnings.warn(msg)
-
-        scan_value = value
-        if isinstance(value, LazyTerms):
-            scan_value = np.asarray([value])
-        for row in scan_value:
-            for term in row.terms():
-                self.term_dict.add_term(term[0])
-
-        self.term_mat.resize((self.term_mat.shape[0], len(self.term_dict)))
-        # Ensure posns_lookup has at least max self.posns
-        self[key] = value
-
     def value_counts(
         self,
         dropna: bool = True,
     ):
         if dropna:
-            import pdb; pdb.set_trace()
             counts = Counter(self[:])
             counts.pop(LazyTerms(), None)
         else:
@@ -532,24 +463,13 @@ class SearchArray(ExtensionArray):
         result_indices = take(row_indices, indices, allow_fill=allow_fill, fill_value=-1)
 
         if allow_fill and -1 in result_indices:
-            if fill_value is None or pd.isna(fill_value):
-                fill_value = LazyTerms()
-
-            to_fill_mask = result_indices == -1
-            # This is slow as it rebuilds all the term dictionaries
-            # on the subsequent assignment lines
-            # However, this case tends to be the exception for
-            # most dataframe operations
-            taken = SearchArray([fill_value] * len(result_indices))
-            taken[~to_fill_mask] = self[result_indices[~to_fill_mask]].copy()
-
-            return taken
+            raise NotImplementedError("Filling not implemented for take")
         else:
             taken = self[result_indices].copy()
             return taken
 
     def copy(self):
-        postings_arr = SearchArray([], tokenizer=self.tokenizer)
+        postings_arr = SearchArray(tokenizer=self.tokenizer)
         postings_arr.doc_lens = self.doc_lens.copy()
         postings_arr.term_mat = self.term_mat.copy()
         postings_arr.posns = self.posns
