@@ -17,6 +17,7 @@ from searcharray.similarity import Similarity, default_bm25
 from searcharray.indexing import build_index_from_tokenizer
 from searcharray.term_dict import TermMissingError
 from searcharray.roaringish.roaringish_ops import as_dense
+from searcharray.utils.mat_set import SparseMatSet
 
 logger = logging.getLogger(__name__)
 
@@ -150,14 +151,16 @@ class LazyTerms:
         self.doc_id = doc_id
         self.terms = terms
         if self.terms is None:
-            self.terms = []
+            self.terms = SparseMatSet()
 
     def __eq__(self, other):
         # Flip to the other implementation if we're comparing to a SearchArray
         # to get a boolean array back
         if isinstance(other, SearchArray):
             return other == self
-        return isinstance(other, LazyTerms) and np.all(self.terms.cols == other.terms.cols)
+        return isinstance(other, LazyTerms) \
+            and len(self.terms.cols) == len(other.terms.cols) \
+            and np.all(self.terms.cols == other.terms.cols)
 
     def __len__(self):
         return len(self.terms)
@@ -233,6 +236,10 @@ class TermsDtype(ExtensionDtype):
     @property
     def na_value(self):
         return LazyTerms()
+
+    @property
+    def _is_immutable(self):
+        return True
 
     def valid_value(self, value):
         return isinstance(value, dict) or pd.isna(value) or isinstance(value, LazyTerms)
@@ -425,11 +432,14 @@ class SearchArray(ExtensionArray):
                     return np.zeros(len(self), dtype=bool)
             # return np.array(self[:]) == np.array(other[:])
 
-        # When other is a scalar value
+        # When other is a scalar value,
+        # naive compare doc_ids
         elif isinstance(other, LazyTerms):
-            other = SearchArray([other], tokenizer=self.tokenizer)
-            warnings.warn("Comparing a scalar value to a SearchArray. This is slow.")
-            return np.array(self[:]) == np.array(other[:])
+            r_val = np.zeros(len(self), dtype=bool)
+            for idx, lazy_doc in enumerate(self):
+                if lazy_doc == other:
+                    r_val[idx] = True
+            return r_val
 
         # When other is a sequence but not an ExtensionArray
         # its an array of dicts
@@ -438,9 +448,9 @@ class SearchArray(ExtensionArray):
                 return False
             elif len(other) == 0:
                 return np.array([], dtype=bool)
-            # We actually don't know how it was tokenized
-            other = SearchArray(other, tokenizer=self.tokenizer)
-            return np.array(self[:]) == np.array(other[:])
+            my_doc_ids = [doc.doc_id for doc in self]
+            other_doc_ids = [doc.doc_id for doc in other]
+            return np.array(my_doc_ids) == np.array(other_doc_ids)
 
         # Return False where 'other' is neither the same length nor a scalar
         else:
@@ -463,7 +473,20 @@ class SearchArray(ExtensionArray):
         result_indices = take(row_indices, indices, allow_fill=allow_fill, fill_value=-1)
 
         if allow_fill and -1 in result_indices:
-            raise NotImplementedError("Filling not implemented for take")
+            if fill_value is not None and not pd.isna(fill_value):
+                raise NotImplementedError("Filling not implemented for take")
+            if fill_value is None or pd.isna(fill_value):
+                fill_value = LazyTerms()
+
+            to_fill_mask = result_indices == -1
+            # This is slow as it rebuilds all the term dictionaries
+            # on the subsequent assignment lines
+            # However, this case tends to be the exception for
+            # most dataframe operations
+            taken = SearchArray([fill_value] * len(result_indices))
+            taken[~to_fill_mask] = self[result_indices[~to_fill_mask]].copy()
+
+            return taken
         else:
             taken = self[result_indices].copy()
             return taken
