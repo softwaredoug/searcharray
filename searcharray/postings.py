@@ -469,6 +469,15 @@ class SearchArray(ExtensionArray):
         logger.warning("Unique called on SearchArray. This is not supported.")
         return self[:]
 
+    def __iter__(self):
+        if len(self) > 10000:
+            warning_text = """Iterating over SearchArray is very slow and not reccomended.
+
+            If you're looping a dataframe, slice out the non-SearchArray columns first."""
+            logger.warning(warning_text)
+            warnings.warn(warning_text)
+        return super().__iter__()
+
     def take(self, indices, allow_fill=False, fill_value=None):
         # Want to take rows of term freqs
         row_indices = np.arange(len(self.term_mat.rows))
