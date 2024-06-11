@@ -153,3 +153,6 @@ class SparseMatSet:
         for idx, (row, row_next) in enumerate(zip(self.rows, self.rows[1:])):
             as_str.append(f"{idx}: {self.cols[row:row_next]}")
         return "\n".join(as_str)
+
+    def __hash__(self):
+        return hash((self.cols.tobytes(), self.rows.tobytes()))

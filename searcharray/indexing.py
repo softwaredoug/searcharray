@@ -5,7 +5,7 @@ import sys
 from typing import Iterable, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import islice
-from searcharray.phrase.middle_out import MAX_POSN, PosnBitArrayFromFlatBuilder, PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder
+from searcharray.phrase.middle_out import MAX_POSN, PosnBitArrayFromFlatBuilder, PosnBitArrayAlreadyEncBuilder
 from searcharray.term_dict import TermDict
 from searcharray.utils.mat_set import SparseMatSetBuilder
 from searcharray.utils.row_viewable_matrix import RowViewableMatrix
@@ -227,3 +227,32 @@ def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000,
     term_doc_built = RowViewableMatrix(term_doc.build())
     logger.info("Indexing from tokenization complete")
     return term_doc_built, bit_posns, term_dict, avg_doc_length, np.array(doc_lens)
+
+
+def build_index_from_eager_terms(array):
+    term_dict = TermDict()
+    term_doc = SparseMatSetBuilder()
+    doc_lens = []
+    avg_doc_length = 0
+    num_postings = 0
+    posns = PosnBitArrayAlreadyEncBuilder()
+
+    for doc_id, doc in enumerate(array):
+        doc_lens.append(doc.doc_len)
+        avg_doc_length += doc_lens[-1]
+        terms = []
+        for token, term_freq in doc.terms():
+            term_id = term_dict.add_term(token)
+            terms.append(term_id)
+            positions = doc.positions(token)
+            if positions is not None:
+                posns.add_posns(doc_id, term_id, positions)
+        term_doc.append(terms)
+
+        posns.ensure_capacity(doc_id)
+        num_postings += 1
+
+    if num_postings > 0:
+        avg_doc_length /= num_postings
+    bit_posns = posns.build()
+    return RowViewableMatrix(term_doc.build()), bit_posns, term_dict, avg_doc_length, np.array(doc_lens)

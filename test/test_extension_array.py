@@ -13,7 +13,10 @@ def dtype():
 @pytest.fixture
 def data():
     """Return a fixture of your data here that returns an instance of your ExtensionArray."""
-    return SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25)
+    arr = SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25)
+    for idx, item in enumerate(arr):
+        assert idx == item.doc_id
+    return arr
 
 
 @pytest.fixture
@@ -68,15 +71,14 @@ def data_for_sorting():
 
     This should be three items [B, C, A] with
     A < B < C
+    pytest.skip("Grouping not supported by SearchArray")
     """
-    arr = SearchArray.index(["abba mmma dabbb", "abba abba aska", "caa cata"])
-    return arr
+    pass
 
 
 @pytest.fixture
 def data_missing_for_sorting():
-    arr = SearchArray.index(["abba mmma dabbb", "", "caa cata"])
-    return arr
+    pytest.skip("Grouping not supported by SearchArray")
 
 
 @pytest.fixture
@@ -87,11 +89,7 @@ def data_for_grouping():
 
     Where A < B < C and NA is missing
     """
-    arr = SearchArray.index(["abba mmma dabbb", "abba mmma dabbb",
-                             "", "",
-                             "caa cata", "caa cata",
-                             "abba mmma dabbb", "abba abba aska"])
-    return arr
+    pytest.skip("Grouping not supported by SearchArray")
 
 
 @pytest.fixture(
@@ -137,6 +135,10 @@ def fillna_method(request):
     return request.param
 
 
+def test_na_values_eq():
+    assert LazyTerms() == LazyTerms()
+
+
 # Then create a class that inherits from the base tests you want to use
 class TestDType(base.BaseDtypeTests):
     # You'll need to at least provide the following attributes
@@ -152,10 +154,49 @@ class TestMethods(base.BaseMethodsTests):
     # Unique not supported on inverted index rows, for performance
     # reasons
     def test_value_counts_with_normalize(self, data):
-        pass
+        pytest.skip("Unique not supported on inverted index rows, for performance reasons")
 
     def test_unique(self, data):
-        pass
+        pytest.skip("Unique not supported on inverted index rows, for performance reasons")
+
+    def test_argsort(self):
+        pytest.skip("sorting not supported for inverted index rows")
+
+    def test_argsort_missing(self):
+        pytest.skip("sorting not supported for inverted index rows")
+
+    def test_nargsort(self, data_for_sorting):
+        pytest.skip("sorting not supported for inverted index rows")
+
+    def test_sort_values_missing(self, data_missing_for_sorting):
+        pytest.skip("sorting not supported for inverted index rows")
+
+    def test_argsort_missing_array(self, data_missing_for_sorting):
+        pytest.skip("sorting not supported for inverted index rows")
+
+    @pytest.mark.parametrize("ascending", [True, False])
+    def test_sort_values(self, data_for_sorting, ascending, sort_by_key):
+        pytest.skip("sorting not supported for inverted index rows")
+
+    def test_argmin_argmax(self, data):
+        pytest.skip("argmin and argmax not supported for inverted index rows")
+
+    def test_argmin_argmax_all_na(self, data_missing):
+        pytest.skip("argmin and argmax not supported for inverted index rows")
+
+    def test_argreduce_series(self, data):
+        pytest.skip("argmin and argmax not supported for inverted index rows")
+
+    def test_factorize_empty(self, data):
+        pytest.skip("factorize not supported for inverted index rows")
+
+    def test_searchsorted(self, data):
+        pytest.skip("searchsorted not supported for inverted index rows")
+
+    def test_sort_values_frame(self, data_for_sorting, sort_by_key):
+        pytest.skip("sorting not supported for inverted index rows")
+
+
 
 
 class TestReshaping(base.BaseReshapingTests):

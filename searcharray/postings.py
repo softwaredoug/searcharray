@@ -8,16 +8,17 @@ import json
 from collections import Counter
 import warnings
 import logging
-from typing import List, Union, Optional, Iterable, Iterator, Any
+from typing import List, Union, Optional, Iterable, Iterator, Any, Sequence
 
 
 import numpy as np
 from searcharray.phrase.middle_out import PosnBitArray
 from searcharray.similarity import Similarity, default_bm25
-from searcharray.indexing import build_index_from_tokenizer
+from searcharray.indexing import build_index_from_tokenizer, build_index_from_eager_terms
 from searcharray.term_dict import TermMissingError
 from searcharray.roaringish.roaringish_ops import as_dense
 from searcharray.utils.mat_set import SparseMatSet
+from searcharray.term_dict import TermDict
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ class EagerTerms:
     """An indexed search doc - a single bag of tokenized words and positions."""
 
     def __init__(self,
-                 postings,
+                 postings: dict[str, int],
                  doc_len: int = 0,
                  posns: Optional[dict] = None,
                  encoded=False):
@@ -146,12 +147,16 @@ class LazyTerms:
     """Implements a view to a doc in the postings, but only
        fetches the postings when needed."""
 
-    def __init__(self, doc_id=-1, posns=None, terms=None):
+    def __init__(self, doc_id=-1,
+                 posns: Optional[PosnBitArray] = None,
+                 terms: Optional[SparseMatSet] = None,
+                 tokenizer=None,
+                 term_dict=None):
         self.posns = posns
         self.doc_id = doc_id
-        self.terms = terms
-        if self.terms is None:
-            self.terms = SparseMatSet()
+        self.terms: SparseMatSet = SparseMatSet() if terms is None else terms
+        self.term_dict = TermDict() if term_dict is None else term_dict
+        self.tokenizer = tokenizer
 
     def __eq__(self, other):
         # Flip to the other implementation if we're comparing to a SearchArray
@@ -159,6 +164,8 @@ class LazyTerms:
         if isinstance(other, SearchArray):
             return other == self
         return isinstance(other, LazyTerms) \
+            and self.term_dict.compatible(other.term_dict) \
+            and self.tokenizer == other.tokenizer \
             and len(self.terms.cols) == len(other.terms.cols) \
             and np.all(self.terms.cols == other.terms.cols)
 
@@ -166,13 +173,13 @@ class LazyTerms:
         return len(self.terms)
 
     def __repr__(self):
-        return f"LazyTerms(doc_id={self.doc_id})"
+        return f"LazyTerms(doc_id={self.doc_id}, posns={id(self.posns)})"
 
     def __str__(self):
-        return f"LazyTerms(doc_id={self.doc_id})"
+        return f"LazyTerms(doc_id={self.doc_id}), posns={id(self.posns)})"
 
     def __lt__(self, other):
-        return self.doc_id < other.doc_id
+        return hash(self.terms) < hash(other.terms)
 
     def __le__(self, other):
         return self.doc_id < other.doc_id or self.doc_id == other.doc_id
@@ -184,25 +191,36 @@ class LazyTerms:
         return hash(str(self.doc_id))
 
     def to_eager(self) -> EagerTerms:
-        posns = self.raw_positions(self.posns, self.terms)
-        doc_len = len(self.terms)
-        return EagerTerms(self.terms, doc_len=doc_len, posns=posns,
+        """Conversion to an eager view is expensive!"""
+        raw_posns = self.raw_positions()
+        doc_len = 0
+        # Get term freqs for terms
+        tfs_as_dicts = {}
+        if self.posns is not None:
+            for term_id in self.terms.cols:
+                tf = self.posns.termfreqs(term_id,
+                                          doc_ids=np.asarray([self.doc_id]))[1][0]
+                doc_len += tf
+                tfs_as_dicts[term_id] = tf
+        return EagerTerms(tfs_as_dicts,
+                          doc_len=doc_len,
+                          posns=raw_posns,
                           encoded=True)
 
-    def raw_positions(self, term_dict, term=None):
+    def raw_positions(self, term=None):
         tfs = {}
         posns = {}
-        for term_idx in self.terms:
-            tfs[term] = 1
-            enc_term_posns = posns.doc_encoded_posns(term_idx, doc_id=self.doc_id)
-            posns[term] = enc_term_posns
+        for term_idx in self.terms.cols:
+            tfs[term_idx] = 1
+            enc_term_posns = self.posns.doc_encoded_posns(term_idx, doc_id=self.doc_id)
+            posns[term_idx] = enc_term_posns
 
         if posns is None:
             return {}
         if term is None:
-            raw_posns = [(term_dict.get_term_id(term), posns) for term, posns in posns.items()]
+            return posns
         else:
-            raw_posns = [(term_dict.get_term_id(term), posns[term])]
+            raw_posns = [(self.term_dict.get_term_id(term), posns[term])]
         return raw_posns
 
 
@@ -336,6 +354,35 @@ class SearchArray(ExtensionArray):
         postings.corpus_size = len(doc_lens)
         return postings
 
+    @classmethod
+    def from_docs(cls, terms: Sequence[LazyTerms]) -> 'SearchArray':
+        """Create a SearchArray from a list of LazyTerms.
+
+        Will extract the term frequencies and positions from each LazyTerms (expensive)
+        and construct a new SearchArray.
+        """
+        term_mat = SparseMatSet()
+        tokenizer = terms[0].tokenizer if len(terms) > 0 else None
+        # Check for compatibility
+        eager_terms = []
+        for term in terms:
+            if not term.tokenizer == tokenizer:
+                raise ValueError("All terms must have the same tokenizer")
+            if not term.term_dict.compatible(terms[0].term_dict):
+                raise ValueError("All terms must have the same term dictionary")
+            eager_terms.append(term.to_eager())
+        term_mat, posns, term_dict, avg_doc_length, doc_lens =\
+            build_index_from_eager_terms(eager_terms)
+
+        postings = cls(tokenizer=tokenizer, avoid_copies=True)
+        postings.term_mat = term_mat
+        postings.posns = posns
+        postings.term_dict = term_dict
+        postings.avg_doc_length = avg_doc_length
+        postings.doc_lens = doc_lens
+        postings.corpus_size = len(terms)
+        return postings
+
     def warm(self):
         self.posns.warm()
 
@@ -346,14 +393,14 @@ class SearchArray(ExtensionArray):
             if not isinstance(dtype, TermsDtype):
                 return scalars
         if isinstance(scalars, np.ndarray) and scalars.dtype == TermsDtype():
-            return cls(scalars)
+            return cls.from_docs(scalars)
         # String types
         elif isinstance(scalars, np.ndarray) and scalars.dtype.kind in 'US':
-            return cls(scalars)
+            return cls.from_docs(scalars)
         # Other objects
         elif isinstance(scalars, np.ndarray) and scalars.dtype != object:
             return scalars
-        return cls(scalars)
+        return cls.from_docs(scalars)
 
     def memory_usage(self, deep=False):
         """Return memory usage of this array in bytes."""
@@ -370,7 +417,12 @@ class SearchArray(ExtensionArray):
             try:
                 # rows = self.term_mat[key]
                 doc_id = key
-                return LazyTerms(doc_id, self.posns, self.term_mat[key])
+                if len(self.term_mat[key].cols) == 0:
+                    return LazyTerms()
+                return LazyTerms(doc_id=doc_id, posns=self.posns,
+                                 terms=self.term_mat[key],
+                                 tokenizer=self.tokenizer,
+                                 term_dict=self.term_dict)
             except IndexError:
                 raise IndexError("index out of bounds")
         else:
@@ -507,17 +559,17 @@ class SearchArray(ExtensionArray):
 
     @classmethod
     def _concat_same_type(cls, to_concat):
+        import pdb; pdb.set_trace()
         concatenated_data = np.concatenate([ea[:] for ea in to_concat])
-        return SearchArray(concatenated_data, tokenizer=to_concat[0].tokenizer)
+        return cls.from_docs(concatenated_data)
 
     @classmethod
     def _from_factorized(cls, values, original):
-        return cls(values)
+        raise NotImplementedError("Factorization/Grouping not supported by SearchArray")
 
     def _values_for_factorize(self):
         """Return an array and missing value suitable for factorization (ie grouping)."""
-        arr = np.asarray(self[:], dtype=object)
-        return arr, LazyTerms()
+        raise NotImplementedError("Factorization/Grouping not supported by SearchArray")
 
     def _check_token_arg(self, token):
         if isinstance(token, str):
