@@ -83,21 +83,6 @@ def popcount64(np.ndarray[DTYPE_t, ndim=1] arr):
     return np.array(popcount64_arr(arr))
 
 
-def ctz64(np.ndarray[DTYPE_t, ndim=1] arr):
-    """Count trailing zeros of a 64-bit integer."""
-    return np.array(ctz_arr(arr))
-
-
-def clz64(np.ndarray[DTYPE_t, ndim=1] arr):
-    """Count leading zeros of a 64-bit integer."""
-    return np.array(clz_arr(arr))
-
-
-def msb_mask64(DTYPE_t value):
-    """Get the mask of the most significant bit of a 64-bit integer."""
-    return 1 << (63 - __builtin_clzll(value))
-
-
 cdef _popcount_reduce_at(DTYPE_t[:] ids, DTYPE_t[:] payload, double[:] output):
     cdef DTYPE_t idx = 1
     cdef DTYPE_t popcount_sum = __builtin_popcountll(payload[0])

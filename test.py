@@ -1,5 +1,5 @@
 import numpy as np
-from searcharray.roaringish import popcount64
+from searcharray.roaringish import popcount64, msb_mask64
 #
 #              streak each some given slop amount
 # 001100       self >> 2 | self >> 1 | self | self << 1 | self << 2 | .. | self << n
@@ -50,6 +50,47 @@ from searcharray.roaringish import popcount64
 # Expected:
 # 111111
 
+#
+# How would you adapt this to span across multiple values?
+#
+# 100 100000000
+# 010 000000001
+# 001 000000010
+# 000 100000000
+# 000 010000001
+# 000 001000000  (streak phrase size bits + slop)
+# Expected:
+# 111 111
+#
+# 1001 00000000
+# 0100 00000001
+# 0010 00000010
+# 0001 00000000
+# 0000 10000001
+# 0000 01000000  (streak phrase size bits + slop)
+# Expected:
+# 1111 11
+# If there are N
+#
+#
+# One option, just take the candidate mask and concat from each side
+#
+# mask = (lhs_mask, adj_bits)
+#
+# Get a mask of adj_bits num bits:
+# mask_of_adj_bit_len = (1 << adj_bits) - 1
+#
+# Shift to upper 64 bits:
+# rhs_mask = mask_of_adj_bit_len << 64 - adj_bits
+# values = (lhs & lhs_mask << adj_bits) | (rhs & rhs_mask)
+#
+# Run the normal argorithm on values
+#  1. all bits must be set
+#  2. shrink span based on leading / trailing zeros
+#
+#
+# lhs &
+
 
 _1 = np.uint64(1)
 
@@ -69,7 +110,6 @@ def i64(v):
 # 00001111  <-- this feels closer!
 
 # (Pdb) dump( (u64(~mask >> u64(3)) & mask) & (u64(~mask >> u64(4)) & mask) & (u64(~mask >> u64
-(2)) & mask)  )
 
 def dump(v):
     if isinstance(v, np.ndarray):
@@ -88,7 +128,7 @@ def lsb(val):
 
 
 def msb(val):
-    return np.uint64((~val >> _1) & val)
+    return msb_mask64(np.asarray([val], dtype=np.uint64))[0]
 
 
 def spans_within_mask(bit_vals, mask):
@@ -107,7 +147,6 @@ def naive_max_span(bit_vals):
     """Closest sets of bits for each bit val."""
     # Create a mask of len(bit_vals) + slop
     mask = np.bitwise_xor.reduce(bit_vals)
-    import pdb; pdb.set_trace()
     # For every such mask, can we find smallest place where each has bits set
     # This can be a one step ctz / clz
     while True:
