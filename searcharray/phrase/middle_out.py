@@ -158,8 +158,9 @@ class PosnBitArrayFromFlatBuilder:
 
     """
 
-    def __init__(self, flat_array: np.ndarray):
+    def __init__(self, flat_array: np.ndarray, max_doc_id: int) -> None:
         self.flat_array = flat_array
+        self.max_doc_id = max_doc_id
 
     def build(self):
         """Slice the flat array into a 2d array of doc ids and posns."""
@@ -179,7 +180,9 @@ class PosnBitArrayFromFlatBuilder:
             sliced = encoded[beg_idx:end_idx]
             encoded_term_posns[term_ids[into_terms]] = sliced
 
-        return PosnBitArray(encoded_term_posns, self.flat_array[1].max())
+        largest_doc_id_with_term = np.max(self.flat_array[1])
+        assert self.max_doc_id >= largest_doc_id_with_term
+        return PosnBitArray(encoded_term_posns, self.max_doc_id)
 
 
 class PosnBitArrayBuilder:
@@ -390,6 +393,7 @@ class PosnBitArray:
                      min_posn: Optional[int] = None,
                      max_posn: Optional[int] = None) -> np.ndarray:
         phrase_freqs = self.empty_buffer()
+
         if len(term_ids) < 2:
             raise ValueError("Must have at least two terms")
         if phrase_freqs.shape[0] == self.max_doc_id + 1 and min_posn is None and max_posn is None and doc_ids is None:

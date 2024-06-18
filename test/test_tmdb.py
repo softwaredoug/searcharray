@@ -41,11 +41,16 @@ def tmdb_pd_data(tmdb_raw_data):
     return df
 
 
-@pytest.fixture(scope="session")
-def tmdb_data(tmdb_pd_data):
+@pytest.fixture(scope="module", params=["full", "ends_empty"])
+def tmdb_data(tmdb_pd_data, request):
     df = tmdb_pd_data
     indexed = SearchArray.index(df['title'])
     df['title_tokens'] = indexed
+
+    # set last 3 overview strings to empty
+    if request.param == "ends_empty":
+        df['overview'][-3:] = ''
+        df['overview'][:3] = ''
 
     indexed = SearchArray.index(df['overview'])
     df['overview_tokens'] = indexed
@@ -195,7 +200,14 @@ tmdb_phrase_matches = [
     (["Star", "Wars"], ['11', '330459', '76180']),
     (["Black", "Mirror:"], ['374430']),
     (["this", "doesnt", "match", "anything"], []),
+    (["teeeeerms", "dooooont", "exiiiiist"], []),
 ]
+
+
+@pytest.mark.parametrize("phrase,expected_matches", tmdb_phrase_matches)
+def test_phrase_match_tmdb_matches(phrase, expected_matches, tmdb_data, benchmark):
+    scores = tmdb_data['overview_tokens'].array.score(phrase)
+    assert len(scores) == len(tmdb_data)
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")

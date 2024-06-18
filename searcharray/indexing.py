@@ -121,7 +121,7 @@ def _tokenize_batch(array, tokenizer, term_dict, batch_size, batch_beg, truncate
 
     # Encode posns to bit array
     logger.info("Encoding positions to bit array")
-    posns = PosnBitArrayFromFlatBuilder(terms_w_posns)
+    posns = PosnBitArrayFromFlatBuilder(terms_w_posns, max_doc_id=(batch_beg + len(array) - 1))
     bit_posns = posns.build()
 
     if np.any(doc_lens > MAX_POSN):
