@@ -42,6 +42,7 @@ cdef _span_freqs(DTYPE_t[:, :] posns_arr,
                  DTYPE_t slop,
                  DTYPE_t key_mask,
                  DTYPE_t header_mask,
+                 DTYPE_t key_bits,
                  DTYPE_t lsb_bits):
     """Get unscored spans, within 64 bits."""
 
@@ -122,14 +123,15 @@ cdef _span_freqs(DTYPE_t[:, :] posns_arr,
     cdef np.uint64_t all_terms_mask = (1 << num_terms) - 1
     cdef np.uint64_t term_ord = 0
     cdef np.uint64_t curr_key = 0
+    cdef np.uint64_t last_key = 0
     cdef np.uint64_t payload_base = 0
     last_set_idx = 0
     for i in range(posns_arr.shape[1]):
-        curr_key = posns_arr[0, i] & key_mask
+        curr_key = posns_arr[0, i] >> (64 - key_bits)
+        print(f"curr_key: {curr_key}")
 
         if curr_key != last_key:
-            print(f"Collecting spans for {curr_key}")
-            next_active_beg = 0
+            print(f"Collecting spans for {last_key}")
         
             # Make new active span queue
             new_active_span_queue = np.empty(64, dtype=np.uint64)
@@ -142,10 +144,11 @@ cdef _span_freqs(DTYPE_t[:, :] posns_arr,
                 if popcount != num_terms:
                     continue
                 print(f"Collecting span {span_idx} | popcount {popcount} -- begin: {span_beg[span_idx]}, end: {span_end[span_idx]}")
-                phrase_freqs[curr_key] += 1
-            print(f"Phrase freqs: {phrase_freqs[curr_key]}")
+                phrase_freqs[last_key] += 1
+            print(f"Phrase freqs: {phrase_freqs[last_key]}")
 
             # Reset
+            next_active_beg = 0
             active_spans_queue = new_active_span_queue
             span_beg = new_span_beg
             span_end = new_span_end
@@ -185,7 +188,7 @@ cdef _span_freqs(DTYPE_t[:, :] posns_arr,
         last_key = curr_key
     # Make new active span queue
     # Count phrase freqs
-    print(f"Collecting spans for {curr_key}")
+    print(f"Collecting spans for {curr_key} (DONE)")
     for span_idx in range(next_active_beg):
         if __builtin_popcountll(active_spans_queue[span_idx]) != num_terms:
             print(f"Skipping span {span_idx} -- begin: {span_beg[span_idx]}, end: {span_end[span_idx]}")
@@ -201,5 +204,6 @@ def span_search(np.ndarray[DTYPE_t, ndim=2] posns_arr,
                 DTYPE_t slop,
                 DTYPE_t key_mask,
                 DTYPE_t header_mask,
+                DTYPE_t key_bits,
                 DTYPE_t lsb_bits):
-    _span_freqs(posns_arr, phrase_freqs, slop, key_mask, header_mask, lsb_bits)
+    _span_freqs(posns_arr, phrase_freqs, slop, key_mask, header_mask, key_bits, lsb_bits)

@@ -128,5 +128,6 @@ def span_search(posns_encoded: List[np.ndarray],
     r_span_search(np.asarray(posns_encoded), phrase_freqs, slop,
                   encoder.key_mask,
                   encoder.header_mask,
+                  encoder.key_bits,
                   encoder.payload_lsb_bits)
     return phrase_freqs
