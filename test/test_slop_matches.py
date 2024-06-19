@@ -34,7 +34,7 @@ scenarios = {
     "slop_5": {
         "phrase": "spice found substance",
         "doc": """
-In the year 10,191, the world is at war for control of the desert planet Dune—the only place where the time-travel substance 'Spice' can be found. But when one leader gives up control, it's only so he can stage a coup with some unsavory characters.""",
+In the year 10,191, the world is at war for control of the desert planet Dune—the only place where the time-travel substance spice can be found But when one leader gives up control, it's only so he can stage a coup with some unsavory characters.""",
         "slop": 5
     },
 }
