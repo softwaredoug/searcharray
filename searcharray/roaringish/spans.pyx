@@ -114,7 +114,6 @@ cdef _span_freqs(DTYPE_t[:, :] posns_arr,
     # curr_posns are current bits analyzed for slop
     cdef np.uint64_t[:] curr_posns = np.empty(posns_arr.shape[0], dtype=np.uint64)
     cdef np.uint64_t[:] active_spans_queue = np.empty(64, dtype=np.uint64)
-    cdef np.uint64_t[:] active_spans_keys = np.empty(64, dtype=np.uint64)
     cdef np.uint64_t[:] span_score_queue = np.empty(64, dtype=np.uint64)
     cdef np.uint64_t next_active_beg = 0
     cdef np.uint64_t curr_term_mask = 0
@@ -122,17 +121,18 @@ cdef _span_freqs(DTYPE_t[:, :] posns_arr,
     cdef np.uint64_t all_terms_mask = (1 << num_terms) - 1
     cdef np.uint64_t term_ord = 0
     cdef np.uint64_t curr_key = 0
+    cdef np.uint64_t payload_base = 0
     last_set_idx = 0
     for i in range(posns_arr.shape[1]):
         curr_key = posns_arr[0, i] & key_mask
         
         if curr_key != last_key:
+            print(f"Collecting spans for {curr_key}")
             next_active_beg = 0
         
             # Make new active span queue
             new_active_span_queue = np.empty(64, dtype=np.uint64)
             new_span_score_queue = np.empty(64, dtype=np.uint64)
-            new_span_keys_queue = np.empty(64, dtype=np.uint64)
 
             # Copy existing
             for span_idx in range(next_active_beg):
@@ -142,7 +142,10 @@ cdef _span_freqs(DTYPE_t[:, :] posns_arr,
                 print("Span score: ", span_score_queue[span_idx])
                 new_active_span_queue[span_idx] = active_spans_queue[span_idx]
                 new_span_score_queue[span_idx] = span_score_queue[span_idx]
-                new_span_keys_queue[span_idx] = active_spans_keys[span_idx]
+                phrase_freqs[curr_key] += 1
+
+            active_spans_queue = new_active_span_queue
+            span_score_queue = new_span_score_queue
 
         # Each term is potentially a new span
         for term_ord in range(num_terms):
@@ -152,42 +155,36 @@ cdef _span_freqs(DTYPE_t[:, :] posns_arr,
             # Start a span
             curr_term_mask = 0x1 << term_ord
             active_spans_queue[next_active_beg] = curr_term_mask
-            active_spans_keys[next_active_beg] = curr_key
             span_score_queue[next_active_beg] = term_ord   # The term index as start score, because 0 is in order
             for span_idx in range(next_active_beg):
                 active_spans_queue[span_idx] |= curr_term_mask
-                span_score_queue[span_idx] += set_idx - last_set_idx - 1      # distance of 1, score 0
+                span_score_queue[span_idx] += payload_base + (set_idx - last_set_idx - 1)      # distance of 1, score 0
                 if span_score_queue[span_idx] > slop:
                     print(f"Removing span {span_idx}")
                     active_spans_queue[span_idx] = 0
-                    active_spans_keys[span_idx] = 0
                     span_score_queue[span_idx] = 0x7FFFFFFFFFFFFFFF
                 print(f"Score of {span_idx} is {span_score_queue[span_idx]}")
             next_active_beg += 1
             last_set_idx = set_idx
 
+        payload_base += lsb_bits
         last_key = curr_key
+    # Make new active span queue
+    new_active_span_queue = np.empty(64, dtype=np.uint64)
+    new_span_score_queue = np.empty(64, dtype=np.uint64)
 
-    # Collect last
     # Copy existing
     for span_idx in range(next_active_beg):
         if __builtin_popcountll(active_spans_queue[span_idx]) != num_terms:
             continue
-        print("For key ", curr_key)
         print("Keeping span")
         print("Span score: ", span_score_queue[span_idx])
         new_active_span_queue[span_idx] = active_spans_queue[span_idx]
         new_span_score_queue[span_idx] = span_score_queue[span_idx]
-        new_span_keys_queue[span_idx] = active_spans_keys[span_idx]
+        phrase_freqs[curr_key] += 1
 
-            
-
-        # The min popcount is the upper bound of phrase freq
-        # popcount_xored_min = 128
-        # for j in range(posns_arr.shape[0]):
-        #     popcount_xored = __builtin_popcountll(posns_arr[j, i] ^ max_span_mask)
-        #     if popcount_xored < popcount_xored_min:
-        #         popcount_xored_min = popcount_xored
+    active_spans_queue = new_active_span_queue
+    span_score_queue = new_span_score_queue
 
 
 def span_search(np.ndarray[DTYPE_t, ndim=2] posns_arr,
