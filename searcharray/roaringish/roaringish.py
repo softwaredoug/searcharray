@@ -244,10 +244,19 @@ class RoaringishEncoder:
     def slice(self,
               encoded: np.ndarray,
               keys: Optional[np.ndarray] = None,
+              header: Optional[np.ndarray] = None,
               max_payload: Optional[int] = None,
               min_payload: Optional[int] = None) -> np.ndarray:
         """Get list of encoded that have values in keys."""
         # encoded_keys = encoded.view(np.uint64) >> (_64 - self.key_bits)
+        if header is not None:
+            if keys is not None:
+                raise ValueError("Can't specify both keys and header")
+            encoded_header = self.header(encoded)
+            idx_docs, idx_enc = intersect(header.view(np.uint64),
+                                          encoded_header.view(np.uint64),
+                                          drop_duplicates=False)
+            encoded = encoded[idx_enc]
         if keys is not None:
             encoded_keys = self.keys(encoded)
             idx_docs, idx_enc = intersect(keys.view(np.uint64),

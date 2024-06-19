@@ -619,6 +619,7 @@ class SearchArray(ExtensionArray):
 
     def score(self, token: Union[str, List[str]],
               similarity: Similarity = default_bm25,
+              slop: int = 0,
               min_posn: Optional[int] = None,
               max_posn: Optional[int] = None) -> np.ndarray:
         """Score each doc using a similarity function.
@@ -638,7 +639,8 @@ class SearchArray(ExtensionArray):
         tokens_l = [token] if isinstance(token, str) else token
         all_dfs = np.asarray([self.docfreq(token) for token in tokens_l])
 
-        tfs = self.termfreqs(token, min_posn=min_posn, max_posn=max_posn)
+        tfs = self.termfreqs(token, min_posn=min_posn, max_posn=max_posn,
+                             slop=slop)
         token = self._check_token_arg(token)
         doc_lens = self.doclengths()
 

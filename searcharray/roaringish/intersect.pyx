@@ -340,7 +340,7 @@ def adjacent(np.ndarray[DTYPE_t, ndim=1] lhs,
                                        lhs.shape[0], rhs.shape[0],
                                        &lhs_out[0], &rhs_out[0],
                                        mask, delta)
-    return lhs_out[:amt_written], rhs_out[:amt_written]
+    return np.asarray(lhs_out[:amt_written]), np.asarray(rhs_out[:amt_written])
 
 
 def intersect_with_adjacents(np.ndarray[DTYPE_t, ndim=1] lhs,

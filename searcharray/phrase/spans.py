@@ -67,9 +67,9 @@ def _intersect_all(posns_encoded: List[np.ndarray]):
     merged = merge(int_header, to_left_header, drop_duplicates=True)
     merged = merge(merged, to_right_header, drop_duplicates=True)
 
-    # Slice only matches at MSBs
+    # Slice only matches at header MSBs
     for i in range(len(posns_encoded)):
-        posns_encoded[i] = encoder.slice(posns_encoded[i], merged)
+        posns_encoded[i] = encoder.slice(posns_encoded[i], header=merged)
 
 
 #     Picking up from intersections:
@@ -125,7 +125,7 @@ def span_search(posns_encoded: List[np.ndarray],
     _intersect_all(posns_encoded)
 
     # Populate phrase freqs with matches of slop
-    r_span_search(posns_encoded, phrase_freqs, slop,
+    r_span_search(np.asarray(posns_encoded), phrase_freqs, slop,
                   encoder.key_mask,
                   encoder.header_mask,
                   encoder.payload_lsb_bits)

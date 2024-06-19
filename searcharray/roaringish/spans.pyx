@@ -10,7 +10,7 @@ import numpy as np
 
 cimport searcharray.roaringish.snp_ops
 from searcharray.roaringish.snp_ops cimport DTYPE_t
-from searcharray.roaringish.snp_ops cimport ctz
+
 
 cdef extern from "stddef.h":
     # Trailing and leading zeros to trim the span mask
@@ -38,7 +38,7 @@ cdef _get_adj_spans(DTYPE_t[:, :] posns_arr,
 
 
 cdef _span_freqs(DTYPE_t[:, :] posns_arr,
-                 DTYPE_t[:] phrase_freqs,
+                 double[:] phrase_freqs,
                  DTYPE_t slop,
                  DTYPE_t key_mask,
                  DTYPE_t header_mask,
@@ -51,28 +51,25 @@ cdef _span_freqs(DTYPE_t[:, :] posns_arr,
     cdef DTYPE_t adj = 0
     cdef DTYPE_t set_idx = 0
     cdef DTYPE_t curr_msb = 0
-    cdef DTYPE_t posn = 0    
+    cdef DTYPE_t posn = 0
     cdef DTYPE_t payload_mask = ~header_mask
-    cdef DTYPE_t popcount_arr = np.empty(posns_arr.shape[0], dtype=np.uint64)
-    cdef DTYPE_t[:] which_terms = -np.ones(lsb_bits * 2, dtype=np.uint8)
+    cdef unsigned char[:] which_terms = -np.ones(lsb_bits * 2, dtype=np.uint8)
     # Assuming no overlaps.
     #
     # Collect the term where each position is set
     #
     #        term1: 010011010000        term1 & (term2 + 1)
-    #        term2: 000000000001 
-    #        term3: 000000000010 
+    #        term2: 000000000001
+    #        term3: 000000000010
     #
     # which_terms=  F0FF00F0FF21
-    # (really which_terms [last_term] [this_term])
+    # (really which_terms [last_posns] [this_posns])
     #
     # Scan the which_terms to find spans within slop
     # Remove them, increment the phrase_freqs for the doc, then continue
-   
     # It may seem we can scan which_terms, but we can just get the minimum spans
     #
     # which_terms=  F0FF00F0FF21
-    # (really which_terms [last_term] [this_term])
     #
     # Then diffs:
     # which_terms=  F0FF00F0FF21
@@ -82,7 +79,7 @@ cdef _span_freqs(DTYPE_t[:, :] posns_arr,
     # which_terms = F12F00F0FF21
     #       dist    011230101223
     #      coll?        *      *
-    # This one is tricky because we should NOT collect the first time we encounter all 
+    # This one is tricky because we should NOT collect the first time we encounter all
     # terms, but rather the min span in between
     #
     # which_terms = F2110120FF21
@@ -95,7 +92,7 @@ cdef _span_freqs(DTYPE_t[:, :] posns_arr,
     #                  ----
     #                   ---
     #                      -----
-    # 
+    #
     #  We have to track all active spans
     #   when popcount terms_enc = num_terms
     #      ... we collect the span
@@ -103,17 +100,17 @@ cdef _span_freqs(DTYPE_t[:, :] posns_arr,
     #      remove the existing span
     #
     #   span score is the current span slop
-    # 
+    #
     #  Now we have spans
     #
     # which_terms = F2110120FF21
     #                   ---
     #                      -----
     #
-    # 
-    # 
+    #
+    #
     # Now we score the span to see if its < slop
-    #  
+    #
     # curr_posns are current bits analyzed for slop
     cdef np.uint64_t[:] curr_posns = np.empty(posns_arr.shape[0], dtype=np.uint64)
     for i in range(posns_arr.shape[1]):
@@ -129,29 +126,26 @@ cdef _span_freqs(DTYPE_t[:, :] posns_arr,
 
         # Gather and score min spans
         for posn in which_terms:
+            print(posn)
             if posn == 0xFF:
                 continue
-            dist
-
 
         # Shift the which_terms up by num_payload_bits
         for j in range(64 - lsb_bits):
             which_terms[j + lsb_bits] = which_terms[j]
-        
-
 
         # The min popcount is the upper bound of phrase freq
-        popcount_xored_min = 128
-        for j in range(posns_arr.shape[0]):
-            popcount_xored = __builtin_popcountll(posns_arr[j, i] ^ max_span_mask)
-            if popcount_xored < popcount_xored_min:
-                popcount_xored_min = popcount_xored
+        # popcount_xored_min = 128
+        # for j in range(posns_arr.shape[0]):
+        #     popcount_xored = __builtin_popcountll(posns_arr[j, i] ^ max_span_mask)
+        #     if popcount_xored < popcount_xored_min:
+        #         popcount_xored_min = popcount_xored
 
 
 def span_search(np.ndarray[DTYPE_t, ndim=2] posns_arr,
-                np.ndarray[DTYPE_t, ndim=1] phrase_freqs,
+                np.ndarray[double, ndim=1] phrase_freqs,
                 DTYPE_t slop,
                 DTYPE_t key_mask,
                 DTYPE_t header_mask,
                 DTYPE_t lsb_bits):
-    _span_search(posns_arr, phrase_freqs, slop, key_mask, header_mask, lsb_bits)
+    _span_freqs(posns_arr, phrase_freqs, slop, key_mask, header_mask, lsb_bits)
