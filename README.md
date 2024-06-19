@@ -7,13 +7,14 @@ SearchArray turns Pandas string columns into a term index. It alows efficient BM
 Think Lucene, but as a Pandas column.
 
 ```python
-In[2]:  from searcharray import SearchArray
+from searcharray import SearchArray
+import pandas as pd
 
-In[3]:  df['title_indexed'] = SearchArray.index(df['title'])
-        np.sort(df['title_indexed'].array.score('Cat'))
+df['title_indexed'] = SearchArray.index(df['title'])
+np.sort(df['title_indexed'].array.score('Cat'))
 
-Out[3]: array([ 0.        ,  0.        ,  0.        , ..., 15.84568033,
-                15.84568033, 15.84568033])
+> BM25 scores:
+> array([ 0.        ,  0.        ,  0.        , ..., 15.84568033, 15.84568033, 15.84568033])
 ```
 
 ## Docs | Guide
