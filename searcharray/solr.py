@@ -178,7 +178,8 @@ def _edismax_field_centric(frame: pd.DataFrame,
 def pf_phase(searchable: Dict[str, SearchArray],
              search_terms: Dict[str, List[str]],
              phrase_fields: Dict[str, float],
-             similarity: Dict[str, Similarity]
+             similarity: Dict[str, Similarity],
+             ps: int
              ) -> Tuple[Union[np.ndarray, List], str]:
     phrase_scores = []
     explain = ""
@@ -201,7 +202,8 @@ def pf_phase(searchable: Dict[str, SearchArray],
 def pf2_phase(searchable: Dict[str, SearchArray],
               search_terms: Dict[str, List[str]],
               bigram_fields: Dict[str, float],
-              similarity: Dict[str, Similarity]) -> Tuple[Union[np.ndarray, List], str]:
+              similarity: Dict[str, Similarity],
+              ps2: int) -> Tuple[Union[np.ndarray, List], str]:
     bigram_scores = []
     explain = ""
     for field, boost in bigram_fields.items():
@@ -225,7 +227,8 @@ def pf2_phase(searchable: Dict[str, SearchArray],
 def pf3_phase(searchable: Dict[str, SearchArray],
               search_terms: Dict[str, List[str]],
               trigram_fields: Dict[str, float],
-              similarity: Dict[str, Similarity]) -> Tuple[Union[np.ndarray, List], str]:
+              similarity: Dict[str, Similarity],
+              ps3: int) -> Tuple[Union[np.ndarray, List], str]:
     trigram_scores = []
     explain = ""
     for field, boost in trigram_fields.items():
@@ -252,6 +255,9 @@ def edismax(frame: pd.DataFrame,
             pf: Optional[List[str]] = None,
             pf2: Optional[List[str]] = None,
             pf3: Optional[List[str]] = None,
+            ps2: int = 0,
+            ps3: int = 0,
+            ps: int = 0,
             tie: float = 0.0,
             q_op: str = "OR",
             similarity: Union[Similarity, Dict[str, Similarity]] = default_bm25) -> Tuple[np.ndarray, str]:
@@ -322,13 +328,13 @@ def edismax(frame: pd.DataFrame,
     searchable = {field:
                   cast(SearchArray, frame[field].array)[qf_scores > 0]
                   for field in query_fields}
-    phrase_scores, pf_explain = pf_phase(searchable, search_terms, phrase_fields, similarity)
+    phrase_scores, pf_explain = pf_phase(searchable, search_terms, phrase_fields, similarity, ps)
     explain += pf_explain
 
-    bigram_scores, pf2_explain = pf2_phase(searchable, search_terms, bigram_fields, similarity)
+    bigram_scores, pf2_explain = pf2_phase(searchable, search_terms, bigram_fields, similarity, ps2)
     explain += pf2_explain
 
-    trigram_scores, pf3_explain = pf3_phase(searchable, search_terms, trigram_fields, similarity)
+    trigram_scores, pf3_explain = pf3_phase(searchable, search_terms, trigram_fields, similarity, ps3)
     explain += pf3_explain
 
     if len(phrase_scores) > 0:

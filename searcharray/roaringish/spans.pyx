@@ -47,15 +47,8 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                  DTYPE_t lsb_bits):
     """Get unscored spans, within 64 bits."""
 
-    cdef DTYPE_t i = 0
-    cdef DTYPE_t j = 0
-    cdef DTYPE_t k = 0
-    cdef DTYPE_t adj = 0
     cdef DTYPE_t set_idx = 0
-    cdef DTYPE_t curr_msb = 0
-    cdef DTYPE_t posn = 0
     cdef DTYPE_t payload_mask = ~header_mask
-    cdef unsigned char[:] which_terms = -np.ones(lsb_bits * 2, dtype=np.uint8)
     # Assuming no overlaps.
     #
     # Collect the term where each position is set
@@ -121,7 +114,6 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
     cdef np.uint64_t next_active_beg = 0
     cdef np.uint64_t curr_term_mask = 0
     cdef np.uint64_t num_terms = len(lengths) - 1
-    cdef np.uint64_t all_terms_mask = (1 << num_terms) - 1
     cdef np.uint64_t term_ord = 0
     cdef np.uint64_t curr_key = 0
     cdef np.uint64_t last_key = 0
