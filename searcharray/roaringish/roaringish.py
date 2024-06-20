@@ -71,6 +71,7 @@ class RoaringishEncoder:
         assert self.key_bits.dtype == np.uint64
         # key bits MSB of 64 bits
         self.key_mask = n_msb_mask(key_bits)
+        self.header_bits = key_bits + self.payload_msb_bits
         self.payload_msb_mask = n_msb_mask(np.uint64(self.payload_msb_bits + key_bits)) & ~self.key_mask
         assert self.payload_msb_bits.dtype == np.uint64, f"MSB bits dtype was {self.payload_msb_bits.dtype}"
         assert self.payload_msb_mask.dtype == np.uint64, f"MSB mask dtype was {self.payload_msb_mask.dtype}"
@@ -244,10 +245,19 @@ class RoaringishEncoder:
     def slice(self,
               encoded: np.ndarray,
               keys: Optional[np.ndarray] = None,
+              header: Optional[np.ndarray] = None,
               max_payload: Optional[int] = None,
               min_payload: Optional[int] = None) -> np.ndarray:
         """Get list of encoded that have values in keys."""
         # encoded_keys = encoded.view(np.uint64) >> (_64 - self.key_bits)
+        if header is not None:
+            if keys is not None:
+                raise ValueError("Can't specify both keys and header")
+            encoded_header = self.header(encoded)
+            idx_docs, idx_enc = intersect(header.view(np.uint64),
+                                          encoded_header.view(np.uint64),
+                                          drop_duplicates=False)
+            encoded = encoded[idx_enc]
         if keys is not None:
             encoded_keys = self.keys(encoded)
             idx_docs, idx_enc = intersect(keys.view(np.uint64),

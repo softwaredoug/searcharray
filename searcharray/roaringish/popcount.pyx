@@ -21,6 +21,9 @@ cdef extern from "stddef.h":
     # and portability, though it's not directly used here.
     int __builtin_popcountll(unsigned long long x)
 
+    int __builtin_ctzll(unsigned long long x)
+    int __builtin_clzll(unsigned long long x)
+
 
 # Include mach performance timer
 # cdef extern from "mach/mach_time.h":
@@ -40,6 +43,32 @@ cdef popcount64_arr(DTYPE_t[:] arr):
     return result
 
 
+cdef ctz_arr(DTYPE_t[:] arr):
+    cdef np.uint64_t[:] result = np.empty(arr.shape[0], dtype=np.uint64)
+    # cdef int i = 0
+    cdef DTYPE_t* result_ptr = &result[0]
+    cdef DTYPE_t* arr_ptr = &arr[0]
+
+    for _ in range(arr.shape[0]):
+        result_ptr[0] = __builtin_ctzll(arr_ptr[0])
+        result_ptr += 1
+        arr_ptr += 1
+    return result
+
+
+cdef clz_arr(DTYPE_t[:] arr):
+    cdef np.uint64_t[:] result = np.empty(arr.shape[0], dtype=np.uint64)
+    # cdef int i = 0
+    cdef DTYPE_t* result_ptr = &result[0]
+    cdef DTYPE_t* arr_ptr = &arr[0]
+
+    for _ in range(arr.shape[0]):
+        result_ptr[0] = __builtin_clzll(arr_ptr[0])
+        result_ptr += 1
+        arr_ptr += 1
+    return result
+
+
 cdef popcount64_arr_naive(DTYPE_t[:] arr):
     cdef np.uint64_t[:] result = np.empty(arr.shape[0], dtype=np.uint64)
     cdef int i = 0
@@ -50,6 +79,7 @@ cdef popcount64_arr_naive(DTYPE_t[:] arr):
 
 
 def popcount64(np.ndarray[DTYPE_t, ndim=1] arr):
+    """Count the number of set bits in a 64-bit integer."""
     return np.array(popcount64_arr(arr))
 
 
