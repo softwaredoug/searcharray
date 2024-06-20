@@ -37,7 +37,8 @@ cdef _get_adj_spans(DTYPE_t[:, :] posns_arr,
     pass
 
 
-cdef _span_freqs(DTYPE_t[:, :] posns_arr,
+cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
+                 DTYPE_t[:] lengths,
                  double[:] phrase_freqs,
                  DTYPE_t slop,
                  DTYPE_t key_mask,
@@ -113,97 +114,101 @@ cdef _span_freqs(DTYPE_t[:, :] posns_arr,
     # Now we score the span to see if its < slop
     #
     # curr_posns are current bits analyzed for slop
-    cdef np.uint64_t[:] curr_posns = np.empty(posns_arr.shape[0], dtype=np.uint64)
+    cdef np.uint64_t[:] curr_idx = np.zeros(64, dtype=np.uint64)
     cdef np.uint64_t[:] active_spans_queue = np.empty(64, dtype=np.uint64)
     cdef np.int64_t[:] span_beg = np.empty(64, dtype=np.int64)
     cdef np.int64_t[:] span_end = np.empty(64, dtype=np.int64)
     cdef np.uint64_t next_active_beg = 0
     cdef np.uint64_t curr_term_mask = 0
-    cdef np.uint64_t num_terms = posns_arr.shape[0]
+    cdef np.uint64_t num_terms = len(lengths)
     cdef np.uint64_t all_terms_mask = (1 << num_terms) - 1
     cdef np.uint64_t term_ord = 0
     cdef np.uint64_t curr_key = 0
     cdef np.uint64_t last_key = 0
     cdef np.uint64_t payload_base = 0
     last_set_idx = 0
-    for i in range(posns_arr.shape[1]):
-        curr_key = posns_arr[0, i] >> (64 - key_bits)
+    while curr_idx[0] < lengths[1]:
         print(f"curr_key: {curr_key}")
-
-        if curr_key != last_key:
-            print(f"Collecting spans for {last_key}")
         
-            # Make new active span queue
-            new_active_span_queue = np.empty(64, dtype=np.uint64)
-            new_span_beg = np.empty(64, dtype=np.int64)
-            new_span_end = np.empty(64, dtype=np.int64)
-
-            # Count phrase freqs
-            for span_idx in range(next_active_beg):
-                popcount = __builtin_popcountll(active_spans_queue[span_idx])
-                if popcount != num_terms:
-                    continue
-                print(f"Collecting span {span_idx} | popcount {popcount} -- begin: {span_beg[span_idx]}, end: {span_end[span_idx]}")
-                phrase_freqs[last_key] += 1
-            print(f"Phrase freqs: {phrase_freqs[last_key]}")
-
-            # Reset
-            next_active_beg = 0
-            active_spans_queue = new_active_span_queue
-            span_beg = new_span_beg
-            span_end = new_span_end
-
+        # Read each term up to the next  doc
+        last_key = -1
         for term_ord in range(num_terms):
-            # Each msb
-            term = posns_arr[term_ord, i] & payload_mask
-            if not term:
+            curr_key = (posns[curr_idx[term_ord]] & key_mask >> (64 - key_bits))
+            while curr_idx[term_ord] < lengths[term_ord+1]:
+                last_key = curr_key
+                term = posns[curr_idx[term_ord]] & payload_mask
+
+                print("Starting loop")
+                while term != 0:
+                    # Consume into span
+                    set_idx = __builtin_ctzll(term)
+                    print(term_ord, term, set_idx)
+                    # Clear LSB
+                    term = (term & (term - 1))
+                    print("Cleared", term_ord, term, set_idx)
+                    # Start a span
+                    curr_term_mask = 0x1 << term_ord
+                    active_spans_queue[next_active_beg] = curr_term_mask
+                    if term_ord == 0:
+                        span_beg[next_active_beg] = payload_base + set_idx
+
+                    # Remove spans that are too long
+                    for span_idx in range(next_active_beg):
+                        # Continue active spans
+                        popcount = __builtin_popcountll(active_spans_queue[span_idx])
+                        if popcount == num_terms:
+                            continue
+                        active_spans_queue[span_idx] |= curr_term_mask
+                        span_end[span_idx] = payload_base + set_idx
+                        if abs(span_end[span_idx] - span_beg[span_idx]) > num_terms + slop:
+                            print(f"Removing span {span_idx} | popcount {popcount} -- begin: {span_beg[span_idx]}, end: {span_end[span_idx]}, slop: {slop}")
+                            span_beg[span_idx] = 0
+                            span_end[span_idx] = 0
+                            active_spans_queue[span_idx] = 0
+                        else:
+                            print(f" Keeping span {span_idx} | popcount {popcount} -- begin: {span_beg[span_idx]}, end: {span_end[span_idx]}, slop: {slop}")
+
+                    if next_active_beg > 64: 
+                        break
+                    next_active_beg += 1
+                    last_set_idx = set_idx
+                print("Next posn in term")
+                curr_idx[term_ord] += 1
+                curr_key = posns[curr_idx[term_ord]] & key_mask
+                if curr_key != last_key or next_active_beg > 64:
+                    break
+
+        # All terms consumed for doc
+        print(f"Collecting spans for {last_key}")
+
+        # Make new active span queue
+        new_active_span_queue = np.empty(64, dtype=np.uint64)
+        new_span_beg = np.empty(64, dtype=np.int64)
+        new_span_end = np.empty(64, dtype=np.int64)
+
+        # Count phrase freqs
+        for span_idx in range(next_active_beg):
+            popcount = __builtin_popcountll(active_spans_queue[span_idx])
+            if popcount != num_terms:
                 continue
-            set_idx = __builtin_ctzll(term & payload_mask)
-            # Clear LSB 
-            posns_arr[term_ord, i] = (term & -term)
-            # Start a span
-            curr_term_mask = 0x1 << term_ord
-            active_spans_queue[next_active_beg] = curr_term_mask
-            if term_ord == 0:
-                span_beg[next_active_beg] = payload_base + set_idx
-            for span_idx in range(next_active_beg):
-                # Continue active spans
-                popcount = __builtin_popcountll(active_spans_queue[span_idx])
-                if popcount == num_terms:
-                    continue
-                active_spans_queue[span_idx] |= curr_term_mask
-                span_end[span_idx] = payload_base + set_idx
-                if abs(span_end[span_idx] - span_beg[span_idx]) > num_terms + slop:
-                    print(f"Removing span {span_idx} | popcount {popcount} -- begin: {span_beg[span_idx]}, end: {span_end[span_idx]}, slop: {slop}")
-                    span_beg[span_idx] = 0
-                    span_end[span_idx] = 0
-                    active_spans_queue[span_idx] = 0
-                else:
-                    print(f" Keeping span {span_idx} | popcount {popcount} -- begin: {span_beg[span_idx]}, end: {span_end[span_idx]}, slop: {slop}")
+            print(f"Collecting span {span_idx} | popcount {popcount} -- begin: {span_beg[span_idx]}, end: {span_end[span_idx]}")
+            phrase_freqs[last_key] += 1
+        print(f"Phrase freqs: {phrase_freqs[last_key]}")
 
-            next_active_beg += 1
-            last_set_idx = set_idx
-
-        payload_base += lsb_bits
-        last_key = curr_key
-    # Make new active span queue
-    # Count phrase freqs
-    print(f"Collecting spans for {curr_key} (DONE)")
-    for span_idx in range(next_active_beg):
-        if __builtin_popcountll(active_spans_queue[span_idx]) != num_terms:
-            print(f"Skipping span {span_idx} -- begin: {span_beg[span_idx]}, end: {span_end[span_idx]}")
-            continue
-        print(f"Collecting span {span_idx} -- begin: {span_beg[span_idx]}, end: {span_end[span_idx]}")
-        phrase_freqs[curr_key] += 1
-    print(f"Phrase freqs: {phrase_freqs[curr_key]}")
+        # Reset
+        next_active_beg = 0
+        active_spans_queue = new_active_span_queue
+        span_beg = new_span_beg
+        span_end = new_span_end
 
 
 
-def span_search(np.ndarray[DTYPE_t, ndim=2] posns_arr,
+def span_search(np.ndarray[DTYPE_t, ndim=1] posns,
+                np.ndarray[DTYPE_t, ndim=1] lengths,
                 np.ndarray[double, ndim=1] phrase_freqs,
                 DTYPE_t slop,
                 DTYPE_t key_mask,
                 DTYPE_t header_mask,
                 DTYPE_t key_bits,
                 DTYPE_t lsb_bits):
-    _span_freqs(posns_arr, phrase_freqs, slop, key_mask, header_mask, key_bits, lsb_bits)
+    _span_freqs(posns, lengths, phrase_freqs, slop, key_mask, header_mask, key_bits, lsb_bits)

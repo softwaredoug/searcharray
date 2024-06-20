@@ -71,6 +71,7 @@ class RoaringishEncoder:
         assert self.key_bits.dtype == np.uint64
         # key bits MSB of 64 bits
         self.key_mask = n_msb_mask(key_bits)
+        self.header_bits = key_bits + self.payload_msb_bits
         self.payload_msb_mask = n_msb_mask(np.uint64(self.payload_msb_bits + key_bits)) & ~self.key_mask
         assert self.payload_msb_bits.dtype == np.uint64, f"MSB bits dtype was {self.payload_msb_bits.dtype}"
         assert self.payload_msb_mask.dtype == np.uint64, f"MSB mask dtype was {self.payload_msb_mask.dtype}"
