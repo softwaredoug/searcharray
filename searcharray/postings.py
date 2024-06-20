@@ -658,6 +658,8 @@ class SearchArray(ExtensionArray):
                      slop=0,
                      min_posn: Optional[int] = None,
                      max_posn: Optional[int] = None) -> np.ndarray:
+        if slop > 0:
+            logger.warning("!! Slop is experimental and may be slow, crash, or inaccurate etc")
         try:
             # Decide how/if we need to filter doc ids
             term_ids = [self.term_dict.get_term_id(token) for token in tokens]
