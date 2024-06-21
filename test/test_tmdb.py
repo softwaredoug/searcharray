@@ -224,9 +224,8 @@ def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
 @pytest.mark.parametrize("phrase,expected_matches", tmdb_phrase_matches)
 def test_slop_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
     prof = Profiler(benchmark)
-    scores = prof.run(tmdb_data['title_tokens'].array.score, phrase, default_bm25, 3)
+    scores = prof.run(tmdb_data['overview_tokens'].array.score, phrase, default_bm25, 3)
     tmdb_data['score'] = scores
-    import pdb; pdb.set_trace()
     assert len(scores) == len(tmdb_data)
 
 

@@ -8,6 +8,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Any, Optional
 from searcharray import SearchArray
+from searcharray.similarity import default_bm25
 from searcharray.solr import edismax
 from searcharray.utils.sort import SetOfResults
 from test_utils import Profiler, profile_enabled
@@ -181,6 +182,16 @@ def test_msmarco100k_phrase(phrase_search, msmarco100k, benchmark):
     print(f"STARTING {phrase_search}")
     print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     profiler.run(msmarco100k['body_ws'].array.score, phrase_search)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "next generation star trek"])
+def test_msmarco100k_slop(phrase_search, msmarco100k, benchmark):
+    profiler = Profiler(benchmark)
+    phrase_search = phrase_search.split()
+    print(f"STARTING {phrase_search}")
+    print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+    profiler.run(msmarco100k['body_ws'].array.score, phrase_search, default_bm25, 5)
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
