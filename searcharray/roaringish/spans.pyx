@@ -37,18 +37,6 @@ cdef _get_adj_spans(DTYPE_t[:, :] posns_arr,
     pass
 
 
-#
-#   term 1   *   *
-#   term 2      *    *
-#   term 3   *   *
-#   term 4   *   *
-#
-#   Just get rid of any spans length 0? <- this doesn't work in the above scenario
-#
-#   Not just enough to see every term, but every term in a unique posn
-# So also track a posn mask?
-
-
 cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                  DTYPE_t[:] lengths,
                  double[:] phrase_freqs,
@@ -61,64 +49,6 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
 
     cdef DTYPE_t set_idx = 0
     cdef DTYPE_t payload_mask = ~header_mask
-    # Assuming no overlaps.
-    #
-    # Collect the term where each position is set
-    #
-    #        term1: 010011010000        term1 & (term2 + 1)
-    #        term2: 000000000001
-    #        term3: 000000000010
-    #
-    # which_terms=  F0FF00F0FF21
-    # (really which_terms [last_posns] [this_posns])
-    #
-    # Scan the which_terms to find spans within slop
-    # Remove them, increment the phrase_freqs for the doc, then continue
-    # It may seem we can scan which_terms, but we can just get the minimum spans
-    #
-    # which_terms=  F0FF00F0FF21
-    #
-    # Then diffs:
-    # which_terms=  F0FF00F0FF21
-    #       dist    001201201245
-    #      coll?               *       <- when to collect, every prev seen unique num
-    #
-    # which_terms = F12F00F0FF21
-    #       dist    011230101223
-    #      coll?        *      *
-    # This one is tricky because we should NOT collect the first time we encounter all
-    # terms, but rather the min span in between
-    #
-    # which_terms = F2110120FF21
-    #       dist    0234500
-    #      coll?          *     *
-    #
-    # which_terms = F2110120FF21
-    #       spans    ----             1 (posn_first_term, posn_last_term, terms_enc, span_score)
-    #                 -----           2 (posn_first_term, posn_last_term, terms_enc, span_score)
-    #                  ----
-    #                   ---
-    #                      -----
-    #
-    #  We have to track all active spans
-    #   when popcount terms_enc = num_terms
-    #      ... we collect the span
-    #   if overlaps and size smaller than existing collected span
-    #      remove the existing span
-    #
-    #   span score is the current span slop
-    #
-    #  Now we have spans
-    #
-    # which_terms = F2110120FF21
-    #                   ---
-    #                      -----
-    #
-    #
-    #
-    # Now we score the span to see if its < slop
-    #
-    # curr_posns are current bits analyzed for slop
     cdef np.uint64_t[:] curr_idx = np.zeros(64, dtype=np.uint64)
     cdef np.uint64_t[:] active_spans_queue = np.zeros(64, dtype=np.uint64)
     cdef np.uint64_t[:] active_spans_posns = np.zeros(64, dtype=np.uint64)
@@ -178,7 +108,8 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                                 continue
                             span_end[span_idx] = set_idx
                         # If all terms visited, see if we should remove
-                        if num_terms_visited_now == num_terms and abs(span_end[span_idx] - span_beg[span_idx]) > num_terms + slop:
+                        if (num_terms_visited_now == num_terms) \
+                           and abs(span_end[span_idx] - span_beg[span_idx]) > num_terms + slop:
                             span_beg[span_idx] = 0
                             span_end[span_idx] = 0
                             active_spans_queue[span_idx] = 0

@@ -74,7 +74,7 @@ In the year 10,191, the world is at war for control of the desert planet Dune—
 
 @w_scenarios(scenarios)
 def test_phrase_slop(phrase, doc, slop, match):
-    sa = SearchArray.index([doc, " empty ", doc + " " + doc, " empty"] * 4)
+    sa = SearchArray.index([doc, " empty ", doc + " " + doc, " empty"] * 100)
     phrase_toks = sa.tokenizer(phrase)
     start = perf_counter()
     scores = sa.score(phrase_toks, slop=slop)
