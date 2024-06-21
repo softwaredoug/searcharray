@@ -37,6 +37,17 @@ scenarios = {
         "slop": 3,
         "match": True
     },
+    "same_term": {
+        "phrase": "the the the",
+        "doc": """
+            A series of hideous murders is taking place, and Inspector Capell and
+            cop-turned-novelist Lonergan are investigating.
+            The murders are found to be the work of an out-of-control experiment in genetic engineering.
+            The two men must descend into the city's sewer systems to destroy the horrific miscreation.
+            It won't be hard to find, as it's already looking for its next victims...""",
+        "slop": 3,
+        "match": True
+    },
     "slop_5": {
         "phrase": "spice found substance",
         "doc": """
@@ -69,6 +80,7 @@ def test_phrase_slop(phrase, doc, slop, match):
     scores = sa.score(phrase_toks, slop=slop)
     print("Elapsed time:", perf_counter() - start)
     for match_slop in range(slop, max(slop, 10)):
+        scores = sa.score(phrase_toks, slop=match_slop)
         if match:
             assert np.all(scores[::2] > 0)
         else:

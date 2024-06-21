@@ -7,6 +7,7 @@ import numpy as np
 import sys
 from searcharray.postings import SearchArray
 from searcharray.solr import edismax
+from searcharray.similarity import default_bm25
 from test_utils import Profiler, profile_enabled, naive_find_term
 
 
@@ -198,6 +199,7 @@ def test_tmdb_expected_edismax_and_query(query, tmdb_data):
 
 tmdb_phrase_matches = [
     (["Star", "Wars"], ['11', '330459', '76180']),
+    (["the", "the"], ['11', '330459', '76180']),
     (["Black", "Mirror:"], ['374430']),
     (["this", "doesnt", "match", "anything"], []),
     (["teeeeerms", "dooooont", "exiiiiist"], []),
@@ -214,9 +216,18 @@ def test_phrase_match_tmdb_matches(phrase, expected_matches, tmdb_data, benchmar
 @pytest.mark.parametrize("phrase,expected_matches", tmdb_phrase_matches)
 def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
     prof = Profiler(benchmark)
-    mask = prof.run(tmdb_data['title_tokens'].array.score, phrase)
-    matches = tmdb_data[mask].index.sort_values()
-    assert (matches == expected_matches).all()
+    scores = prof.run(tmdb_data['title_tokens'].array.score, phrase)
+    assert len(scores) == len(tmdb_data)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("phrase,expected_matches", tmdb_phrase_matches)
+def test_slop_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
+    prof = Profiler(benchmark)
+    scores = prof.run(tmdb_data['title_tokens'].array.score, phrase, default_bm25, 3)
+    tmdb_data['score'] = scores
+    import pdb; pdb.set_trace()
+    assert len(scores) == len(tmdb_data)
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
