@@ -137,6 +137,8 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
         curr_idx[i] = lengths[i]
         print(f"Term {i} -- {curr_idx[i]}")
 
+    print(f"SEARCHING num_terms {num_terms} | {lengths[0]}")
+
     while curr_idx[0] < lengths[1]:
         # Read each term up to the next  doc
         last_key = -1
@@ -145,6 +147,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
         for term_ord in range(num_terms):
             curr_key = ((posns[curr_idx[term_ord]] & key_mask) >> (64 - key_bits))
             print(f"Term {term_ord} -- {curr_key} | {curr_idx[term_ord]} -- lengths {lengths[term_ord+1]}")
+            payload_base = 0
             while curr_idx[term_ord] < lengths[term_ord+1]:
                 last_key = curr_key
                 term = posns[curr_idx[term_ord]] & payload_mask
@@ -154,12 +157,13 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                 while term != 0:
                     # Consume into span
                     set_idx = __builtin_ctzll(term)
+                    print(f"Term {term_ord} -- set_idx:{set_idx}+payload_base:{payload_base} | {term:0b}")
                     # Clear LSB
                     term = (term & (term - 1))
                     # Start a span
                     curr_term_mask = 0x1 << term_ord
                     active_spans_queue[next_active_beg] = curr_term_mask
-                    active_spans_posns[next_active_beg] = 1 << set_idx
+                    active_spans_posns[next_active_beg] = 1 << ((set_idx + payload_base) % 64)
                     print(" New span")
                     print(f" {next_active_beg} -- added {set_idx} | {active_spans_posns[next_active_beg]:0b}")
                     if term_ord == 0:
@@ -180,10 +184,18 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                         num_terms_visited_now = __builtin_popcountll(active_spans_queue[span_idx])
                         if num_terms_visited_now > num_terms_visited:
                             # Add position for new unique term
-                            active_spans_posns[span_idx] |= (1 << set_idx)
+                            num_unique_posns = __builtin_popcountll(active_spans_posns[span_idx])
+                            active_spans_posns[span_idx] |= 1 << ((set_idx + payload_base) % 64)
+                            new_unique_posns = __builtin_popcountll(active_spans_posns[span_idx])
+                            if num_unique_posns == new_unique_posns:
+                                # Clear curr_term_mask and cancel this position, we've seen it before
+                                active_spans_queue[span_idx] &= ~curr_term_mask
+                                continue
                             span_end[span_idx] = set_idx
-                            print(f" {span_idx} -- set_idx {set_idx} | {active_spans_posns[span_idx]:0b}")
+                            print(f" {span_idx} -- new posn set_idx:{set_idx}+payload_base:{payload_base}")
+                            print(f" {span_idx} -- {active_spans_posns[span_idx]:0b}")
                             print(f" {span_idx} -- beg {span_beg[span_idx]} | end {span_end[span_idx]}")
+                        # If all terms visited, see if we should remove
                         if num_terms_visited_now == num_terms and abs(span_end[span_idx] - span_beg[span_idx]) > num_terms + slop:
                             print(f" {span_idx} -- removing {span_beg[span_idx]}-{span_end[span_idx]}")
                             print(f" {span_idx} -- slop: {slop} num_terms: {num_terms}")
@@ -198,7 +210,9 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                     last_set_idx = set_idx
                 curr_idx[term_ord] += 1
                 curr_key = (posns[curr_idx[term_ord]] & key_mask) >> (64 - key_bits)
+                payload_base += lsb_bits
                 if curr_key != last_key or next_active_beg > 64:
+                    payload_base = 0
                     print(f"Term {term_ord} -- Key change {curr_key} != {last_key} | {next_active_beg}")
                     break
 
