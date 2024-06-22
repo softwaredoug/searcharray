@@ -56,12 +56,16 @@ cdef np.int64_t _span_width(ActiveSpans* spans, DTYPE_t span_idx):
     return abs(spans.end[span_idx] - spans.beg[span_idx])
 
 
-cdef _consume_lsb(DTYPE_t* term, DTYPE_t* set_idx, DTYPE_t payload_base):
-    set_idx[0] = __builtin_ctzll(term[0])
+cdef DTYPE_t _consume_lsb(DTYPE_t* term):
+    """Get lowest set bit, clear it, and return the position it occured in."""
+    lsb = __builtin_ctzll(term[0])
     # Clear LSB
     term[0] = (term[0] & (term[0] - 1))
-    return 1 << ((set_idx[0] + payload_base) % 64)
+    return lsb
 
+
+cdef DTYPE_t _posn_mask(DTYPE_t set_idx, DTYPE_t payload_base):
+    return 1 << ((set_idx + payload_base) % 64)
 
 cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                  DTYPE_t[:] lengths,
@@ -80,6 +84,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
 
     cdef np.uint64_t[:] curr_idx = np.zeros(64, dtype=np.uint64)
     cdef np.uint64_t curr_term_mask = 0
+    cdef np.uint64_t posn_mask = 0
     cdef np.uint64_t num_terms = len(lengths) - 1
     cdef np.uint64_t term_ord = 0
     cdef np.uint64_t curr_key = 0
@@ -99,16 +104,15 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
             while curr_idx[term_ord] < lengths[term_ord+1]:
                 last_key = curr_key
                 term = posns[curr_idx[term_ord]] & payload_mask
+                curr_term_mask = 0x1 << term_ord
 
                 while term != 0:
                     # Consume into span
-                    set_idx = __builtin_ctzll(term)
-                    # Clear LSB
-                    term = (term & (term - 1))
-                    # Start a span
-                    curr_term_mask = 0x1 << term_ord
+                    set_idx = _consume_lsb(&term)
+                    posn_mask = _posn_mask(set_idx, payload_base)
+
                     spans.terms[spans.cursor] = curr_term_mask
-                    spans.posns[spans.cursor] = 1 << ((set_idx + payload_base) % 64)
+                    spans.posns[spans.cursor] = posn_mask
                     if term_ord == 0:
                         spans.beg[spans.cursor] = set_idx
 
@@ -124,7 +128,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                         if num_terms_visited_now > num_terms_visited:
                             # Add position for new unique term
                             num_unique_posns = __builtin_popcountll(spans.posns[span_idx])
-                            spans.posns[span_idx] |= 1 << ((set_idx + payload_base) % 64)
+                            spans.posns[span_idx] |= posn_mask
                             new_unique_posns = __builtin_popcountll(spans.posns[span_idx])
                             if num_unique_posns == new_unique_posns:
                                 # Clear curr_term_mask and cancel this position, we've seen it before
