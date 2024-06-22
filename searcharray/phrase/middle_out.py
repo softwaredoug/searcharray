@@ -78,6 +78,8 @@ def _compute_phrase_freqs_left_to_right(encoded_posns: List[np.ndarray],
     if len(encoded_posns) < 2:
         raise ValueError("phrase must have at least two terms")
 
+    print("Computing phrase freqs left to right")
+
     # Trim long phrases by searching the rarest terms first
     if trim and len(encoded_posns) > 3:
         encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
@@ -89,6 +91,11 @@ def _compute_phrase_freqs_left_to_right(encoded_posns: List[np.ndarray],
         phrase_freqs[mask] = 0
         phrase_freqs, conts = bigram_freqs(lhs, rhs, phrase_freqs,
                                            cont=Continuation.RHS)
+        bigram_idx = np.argwhere(phrase_freqs > 0)
+        # print(f"Bigram with phrase freqs test {49664 in bigram_idx}")
+        # if 49664 in bigram_idx:
+        #     sus_conts = conts[1][np.argwhere(encoder.keys(conts[1]) == 49664)]
+
         assert conts[1] is not None
         lhs = conts[1]
         mask &= (phrase_freqs > 0)
@@ -99,6 +106,14 @@ def _compute_phrase_freqs_left_to_right(encoded_posns: List[np.ndarray],
     return phrase_freqs
 
 
+def get_sus(label, encoded, idx):
+    sus_conts = encoded[np.argwhere(encoder.keys(encoded) == idx)]
+    sus_msb = encoder.payload_msb(sus_conts)
+    sus_lsb = encoder.payload_lsb(sus_conts)
+    sus_lsb_str = [f"{msb}|{x:018b}" for (msb, x) in zip(sus_msb, sus_lsb.flatten())]
+    print(label, sus_lsb_str)
+
+
 def _compute_phrase_freqs_right_to_left(encoded_posns: List[np.ndarray],
                                         phrase_freqs: np.ndarray,
                                         max_doc_id: np.uint64 = _0,
@@ -106,6 +121,8 @@ def _compute_phrase_freqs_right_to_left(encoded_posns: List[np.ndarray],
     """Compute phrase freqs from a set of encoded positions."""
     if len(encoded_posns) < 2:
         raise ValueError("phrase must have at least two terms")
+
+    print("Computing phrase freqs right to left")
 
     # Trim long phrases by searching the rarest terms first
     if trim and len(encoded_posns) > 3:
@@ -116,8 +133,25 @@ def _compute_phrase_freqs_right_to_left(encoded_posns: List[np.ndarray],
     for lhs in encoded_posns[-2::-1]:
         # Only count the count of the last bigram (ignoring the ones where priors did not match)
         phrase_freqs[mask] = 0
+        print("***")
+        print("lhs->rhs")
+        get_sus("lhs", lhs, 2057)
+        get_sus("rhs", rhs, 2057)
         phrase_freqs, conts = bigram_freqs(lhs, rhs, phrase_freqs,
                                            cont=Continuation.LHS)
+
+        # 000001000000000000 (lhs)
+        # 000010000000000000 (rhs)
+
+        # 000000000000010000
+        # 000000000000100000
+
+        bigram_idx = np.argwhere(phrase_freqs > 0)
+        print(f"Bigram with phrase freqs test {2057 in bigram_idx}")
+        get_sus("conts[0]", conts[0], 2057)
+        # 010000000000000000
+        # 100001000000000000
+        print("***")
         assert conts[0] is not None
         rhs = conts[0]
         mask &= (phrase_freqs > 0)
@@ -408,6 +442,8 @@ class PosnBitArray:
                                             min_payload=min_posn,
                                             max_payload=max_posn) for term_id in term_ids]
 
+        print("***")
+        print(f"Computing phrase freqs for {term_ids}")
         if slop == 0:
             return compute_phrase_freqs(enc_term_posns, phrase_freqs, max_doc_id=np.uint64(self.max_doc_id))
         else:

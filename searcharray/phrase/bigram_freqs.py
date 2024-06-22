@@ -177,16 +177,29 @@ def _adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
         if cont in [Continuation.RHS, Continuation.BOTH]:
             rhs_next = rhs_adj[matches]
             assert rhs_next is not None
-            rhs_next = encoder.header(rhs_adj) | _1
-        elif cont in [Continuation.LHS, Continuation.BOTH]:
+            rhs_next = encoder.header(rhs_next) | _1
+        if cont in [Continuation.LHS, Continuation.BOTH]:
             rhs_next = rhs_adj[matches]
+            get_sus(" rhs_next", rhs_next, 2057)
             assert rhs_next is not None
             rhs_next |= _1
-            rhs_next = encoder.header(rhs_adj) | _1
+            get_sus(" rhs_next", rhs_next, 2057)
+            rhs_next = encoder.header(rhs_next) | _1
             lhs_next = lhs_adj[matches]
-            lhs_next = encoder.header(lhs_adj) | _upper_bit
+            get_sus(" lhs_next", lhs_next, 2057)
+            lhs_next = encoder.header(lhs_next) | _upper_bit
+            get_sus(" lhs_next", lhs_next, 2057)
             rhs_next = None
     return phrase_freqs, (lhs_next, rhs_next)
+
+
+def get_sus(label, encoded, idx):
+    sus_conts = encoded[np.argwhere(encoder.keys(encoded) == idx)]
+    sus_msb = encoder.payload_msb(sus_conts)
+    sus_lsb = encoder.payload_lsb(sus_conts)
+    sus_lsb_str = [f"{msb}|{x:018b}" for (msb, x) in zip(sus_msb, sus_lsb.flatten())]
+    print(label, sus_lsb_str)
+
 
 
 def _set_adjbit_at_header(next_inner: np.ndarray, next_adj: np.ndarray,
@@ -199,6 +212,12 @@ def _set_adjbit_at_header(next_inner: np.ndarray, next_adj: np.ndarray,
 
     same_header_inner, same_header_adj = intersect(next_inner, next_adj,
                                                    mask=encoder.header_mask)
+    print()
+    print()
+    get_sus("next_inner", next_inner, 2057)
+    get_sus("next_adj", next_adj, 2057)
+    print()
+    print()
     # Set _1 on intersection
     ignore_mask = np.ones(len(next_adj), dtype=bool)
     ignore_mask[same_header_adj] = False
@@ -208,7 +227,13 @@ def _set_adjbit_at_header(next_inner: np.ndarray, next_adj: np.ndarray,
     if len(same_header_adj) > 0 and cont == Continuation.LHS:
         next_inner[same_header_inner] |= _upper_bit
         next_adj = next_adj[ignore_mask]
-    return merge(next_inner, next_adj)
+    merged = merge(next_inner, next_adj)
+    print()
+    print()
+    get_sus("merged", merged, 2057)
+    print()
+    print()
+    return merged
 
 
 def bigram_freqs(lhs: np.ndarray,

@@ -46,7 +46,6 @@ cdef ActiveSpans _new_active_spans():
 
 
 cdef void _clear_span(ActiveSpans* spans, DTYPE_t span_idx):
-    print(f"Clearing span {span_idx} -- {spans.terms[span_idx]} {spans.posns[span_idx]} {spans.beg[span_idx]} {spans.end[span_idx]}")
     spans.terms[span_idx] = 0
     spans.posns[span_idx] = 0
     spans.beg[span_idx] = 0
@@ -101,8 +100,6 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                 last_key = curr_key
                 term = posns[curr_idx[term_ord]] & payload_mask
 
-                print(f"Term ord:{term_ord}|{num_terms} -- term:{term:b} | {curr_idx[term_ord]} {lengths[term_ord+1]} | doc {curr_key}")
-
                 while term != 0:
                     # Consume into span
                     set_idx = __builtin_ctzll(term)
@@ -110,7 +107,6 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                     term = (term & (term - 1))
                     # Start a span
                     curr_term_mask = 0x1 << term_ord
-                    print(f"Consuming term {term_ord} -- set_at:{set_idx} mask:{curr_term_mask:b}")
                     spans.terms[spans.cursor] = curr_term_mask
                     spans.posns[spans.cursor] = 1 << ((set_idx + payload_base) % 64)
                     if term_ord == 0:
@@ -119,7 +115,6 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                     # Remove spans that are too long
                     for span_idx in range(spans.cursor):
                         # Continue active spans
-                        print(f"Checking span {span_idx} -- term:{spans.terms[span_idx]:b} posn:{spans.posns[span_idx]:b}|{spans.beg[span_idx]}-{spans.end[span_idx]}")
                         num_terms_visited = __builtin_popcountll(spans.terms[span_idx])
                         num_posns_visited = __builtin_popcountll(spans.posns[span_idx])
                         if num_terms_visited < num_terms and num_posns_visited == num_terms:
@@ -139,18 +134,15 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                         # If all terms visited, see if we should remove
                         if (num_terms_visited_now == num_terms) \
                            and _span_width(&spans, span_idx) > num_terms + slop:
-                            print("Clearing span")
                             _clear_span(&spans, span_idx)
-                            assert spans.terms[span_idx] == 0
-                            assert spans.posns[span_idx] == 0
 
                     if spans.cursor > 64:
                         break
                     spans.cursor += 1
                     last_set_idx = set_idx
                 curr_idx[term_ord] += 1
-                curr_key = (posns[curr_idx[term_ord]] & key_mask) >> (64 - key_bits)
-                assert curr_key < phrase_freqs.shape[0], f"curr_key:{curr_key} phrase_freqs.shape[0]:{phrase_freqs.shape[0]}"
+                if curr_idx[term_ord] < lengths[term_ord+1]:
+                    curr_key = (posns[curr_idx[term_ord]] & key_mask) >> (64 - key_bits)
                 payload_base += lsb_bits
                 if curr_key != last_key or spans.cursor > 64:
                     payload_base = 0
@@ -164,11 +156,11 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
             num_posns_visited = __builtin_popcountll(spans.posns[span_idx])
             if num_terms_visited < num_terms or num_posns_visited < num_terms:
                 continue
+            assert last_key < phrase_freqs.shape[0]
             phrase_freqs[last_key] += 1
 
         # Reset
         spans = _new_active_spans()
-        assert spans.cursor == 0
 
 
 def span_search(np.ndarray[DTYPE_t, ndim=1] posns,
