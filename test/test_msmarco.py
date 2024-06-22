@@ -11,7 +11,7 @@ from searcharray import SearchArray
 from searcharray.similarity import default_bm25
 from searcharray.solr import edismax
 from searcharray.utils.sort import SetOfResults
-from test_utils import Profiler, profile_enabled
+from test_utils import Profiler, profile_enabled, stress_test_enabled
 from tokenizers import ws_tokenizer
 from msmarco_utils import msmarco1m_raw_path, msmarco100k_raw_path, msmarco_all_raw_path, csv_col_iter
 
@@ -191,15 +191,10 @@ def test_msmarco100k_slop(phrase_search, msmarco100k, benchmark):
     phrase_search = phrase_search.split()
     print(f"STARTING {phrase_search}")
     print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
-    phrase_scores = msmarco100k['body_ws'].array.score(phrase_search)
-    phrase_scores_idx = np.argwhere(phrase_scores > 0).flatten()
-    # Every bigram should be a subset of phrase_scores
-    for i in range(len(phrase_search) - 1):
-        bigram_scores = profiler.run(msmarco100k['body_ws'].array.score, phrase_search[i:i + 2])
-        bigram_scores_idx = np.argwhere(bigram_scores > 0).flatten()
-        assert np.all(np.isin(phrase_scores_idx, bigram_scores_idx)), f"Bigram {phrase_search[i:i + 2]} not subset of {phrase_search}"
+    profiler.run(msmarco100k['body_ws'].array.score, phrase_search, default_bm25, slop=5)
 
 
+@pytest.mark.skipif(not stress_test_enabled, reason="Stress test disabled")
 @pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "next generation star trek"])
 def test_msmarco100k_phrase_stress(phrase_search, msmarco100k):
     phrase_search = phrase_search.split()

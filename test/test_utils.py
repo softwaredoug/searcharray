@@ -62,3 +62,4 @@ else:
 
 
 profile_enabled = '--benchmark-only' in sys.argv or '--benchmark-disable' in sys.argv
+stress_test_enabled = '--searcharray-stress-test' in sys.argv

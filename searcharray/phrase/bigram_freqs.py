@@ -179,11 +179,8 @@ def _adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
             assert rhs_next is not None
             rhs_next = encoder.header(rhs_next) | _1
         if cont in [Continuation.LHS, Continuation.BOTH]:
-            rhs_next = rhs_adj[matches]
-            assert rhs_next is not None
-            rhs_next |= _1
-            rhs_next = encoder.header(rhs_next) | _1
             lhs_next = lhs_adj[matches]
+            assert lhs_next is not None
             lhs_next = encoder.header(lhs_next) | _upper_bit
             rhs_next = None
     return phrase_freqs, (lhs_next, rhs_next)
@@ -208,8 +205,7 @@ def _set_adjbit_at_header(next_inner: np.ndarray, next_adj: np.ndarray,
     if len(same_header_adj) > 0 and cont == Continuation.LHS:
         next_inner[same_header_inner] |= _upper_bit
         next_adj = next_adj[ignore_mask]
-    merged = merge(next_inner, next_adj)
-    return merged
+    return merge(next_inner, next_adj)
 
 
 def bigram_freqs(lhs: np.ndarray,

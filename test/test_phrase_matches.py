@@ -187,6 +187,14 @@ scenarios = {
 }
 
 
+def assert_phrase_in_bigram_matches(docs, phrase, matches):
+    phrase_scores_idx = np.argwhere(matches > 0).flatten()
+    for bigram in zip(phrase[:-1], phrase[1:]):
+        bigram_score = docs.termfreqs(list(bigram))
+        bigram_scores_idx = np.argwhere(bigram_score > 0).flatten()
+        assert np.all(np.isin(phrase_scores_idx, bigram_scores_idx)), f"Bigram {bigram} not subset of {phrase}"
+
+
 @w_scenarios(scenarios)
 def test_phrase_api(docs, phrase, expected):
     docs = docs()
@@ -197,6 +205,7 @@ def test_phrase_api(docs, phrase, expected):
     assert (term_freqs == expected).all()
     assert (matches == expected_matches).all()
     assert (docs == docs_before).all()
+    assert_phrase_in_bigram_matches(docs, phrase, matches)
 
 
 @w_scenarios(scenarios)
@@ -224,6 +233,7 @@ def test_phrase_different_posns(posn_offset, phrase):
     expected = [1, 0]
     phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
+    assert_phrase_in_bigram_matches(docs, phrase, phrase_matches)
 
 
 @pytest.mark.parametrize("posn_offset", range(100))
@@ -289,6 +299,7 @@ def test_phrase_scattered_posns_sliced_frequent_long(posn_offset):
     expected = [2 if " ".join(phrase) in doc else 0 for doc in idx]
     phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
+    assert_phrase_in_bigram_matches(docs, phrase, phrase_matches)
 
 
 @pytest.mark.parametrize("posn_offset", range(100))
@@ -300,6 +311,7 @@ def test_phrase_scattered_posns3(posn_offset):
     expected = [2, 0]
     phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
+    assert_phrase_in_bigram_matches(docs, phrase, phrase_matches)
 
 
 def test_phrase_too_many_posns():
@@ -312,9 +324,11 @@ def test_phrase_too_many_posns_with_truncate():
     big_str = "foo bar baz " + " ".join(["dummy"] * MAX_POSN) + " blah blah blah"
     arr = SearchArray.index([big_str, "not match"], truncate=True)
     assert len(arr) == 2
-    phrase_matches = arr.termfreqs(["foo", "bar", "baz"])
+    phrase = ["foo", "bar", "baz"]
+    phrase_matches = arr.termfreqs(phrase)
     expected = [1, 0]
     assert (expected == phrase_matches).all()
+    assert_phrase_in_bigram_matches(arr, phrase, phrase_matches)
 
 
 def test_positions():
