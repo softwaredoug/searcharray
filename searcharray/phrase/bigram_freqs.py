@@ -5,7 +5,7 @@ from searcharray.roaringish import RoaringishEncoder
 import logging
 from enum import Enum
 
-from searcharray.roaringish import intersect, popcount64, merge, popcount_reduce_at
+from searcharray.roaringish import intersect, popcount64, merge, popcount_reduce_at, key_sum_over
 
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,8 @@ def _inner_bigram_same_term(lhs_int: np.ndarray, rhs_int: np.ndarray,
     adj_count = encoder.payload_lsb(overlap)
     adjacents = popcount64(adj_count).view(np.int64)
 
-    phrase_freqs[lhs_doc_ids] += _adj_to_phrase_freq(overlap, adjacents)
+    adjusted = _adj_to_phrase_freq(overlap, adjacents).astype(np.uint64)
+    key_sum_over(lhs_doc_ids, adjusted, phrase_freqs)
     # Continue with ?? ?? foo foo
     # term_int without lsbs
     term_int_msbs = lhs_int & ~encoder.payload_lsb_mask
@@ -90,12 +91,13 @@ def _inner_bigram_same_term(lhs_int: np.ndarray, rhs_int: np.ndarray,
     lhs_cont = None
     # rhs_cont = term_int_msbs | encoder.payload_lsb(rhs_shift)
     rhs_cont = encoder.payload_lsb(rhs_shift & rhs_int) | term_int_msbs
-
     lhs_cont = term_int_msbs | encoder.payload_lsb(lhs_int & (lhs_int >> _1))
+
     if cont not in [Continuation.RHS, Continuation.BOTH]:
         rhs_cont = None
     if cont not in [Continuation.LHS, Continuation.BOTH]:
         lhs_cont = None
+
     return phrase_freqs, (lhs_cont, rhs_cont)
 
 

@@ -192,7 +192,8 @@ def assert_phrase_in_bigram_matches(docs, phrase, matches):
     for bigram in zip(phrase[:-1], phrase[1:]):
         bigram_score = docs.termfreqs(list(bigram))
         bigram_scores_idx = np.argwhere(bigram_score > 0).flatten()
-        assert np.all(np.isin(phrase_scores_idx, bigram_scores_idx)), f"Bigram {bigram} not subset of {phrase}"
+        missing = list(set(phrase_scores_idx) - set(bigram_scores_idx))
+        assert np.all(np.isin(phrase_scores_idx, bigram_scores_idx)), f"Bigram {bigram} not subset of {phrase} -- mssing: {missing[0:10]}..."
 
 
 @w_scenarios(scenarios)
@@ -231,6 +232,39 @@ def test_phrase_different_posns(posn_offset, phrase):
                              "not match"])
     phrase = phrase.split()
     expected = [1, 0]
+    phrase_matches = docs.termfreqs(phrase)
+    assert (expected == phrase_matches).all()
+    assert_phrase_in_bigram_matches(docs, phrase, phrase_matches)
+
+
+@pytest.mark.parametrize("phrase", ["foo bar baz", "foo bar",
+                                    "foo foo foo", "foo foo bar",
+                                    "foo bar bar",
+                                    "foo bar bar baz buz foo bar",
+                                    "foo bar bar baz buz foo foo",
+                                    "foo foo", "foo foo bar", "foo bar bar"])
+@pytest.mark.parametrize("posn_offset", range(100))
+def test_phrase_different_posns_many_docs_first(posn_offset, phrase):
+    docs = SearchArray.index(["not match"] * 100 + [" ".join(["dummy"] * posn_offset) + " " + phrase])
+    phrase = phrase.split()
+    expected = [0] * 100 + [1]
+    phrase_matches = docs.termfreqs(phrase)
+    assert (expected == phrase_matches).all()
+    assert_phrase_in_bigram_matches(docs, phrase, phrase_matches)
+
+
+@pytest.mark.parametrize("phrase", ["foo bar baz", "foo bar",
+                                    "foo foo foo", "foo foo bar",
+                                    "foo bar bar",
+                                    "foo bar bar baz buz foo bar",
+                                    "foo bar bar baz buz foo foo",
+                                    "foo foo", "foo foo bar", "foo bar bar"])
+@pytest.mark.parametrize("posn_offset", range(100))
+def test_phrase_different_posns_every_other_doc(posn_offset, phrase):
+    docs = SearchArray.index((["not match"] + [" ".join(["dummy"] * posn_offset) + " " + phrase]) * 100)
+    docs.termfreqs(["bar", "bar"])
+    phrase = phrase.split()
+    expected = ([0] + [1]) * 100
     phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
     assert_phrase_in_bigram_matches(docs, phrase, phrase_matches)

@@ -107,6 +107,19 @@ def popcount_reduce_at(np.ndarray[DTYPE_t, ndim=1] ids,
     return np.array(_popcount_reduce_at(ids, payload, output))
 
 
+cdef _key_sum_over(DTYPE_t[:] ids, DTYPE_t[:] count, double[:] output):
+    cdef DTYPE_t i = 0
+    for i in range(ids.shape[0]):
+        output[ids[i]] += count[i]
+
+
+def key_sum_over(np.ndarray[DTYPE_t, ndim=1] ids,
+                 np.ndarray[DTYPE_t, ndim=1] count,
+                 np.ndarray[np.float64_t, ndim=1] output):
+    """Write the last value of the payload at the indices in ids to the output array."""
+    _key_sum_over(ids, count, output)
+
+
 # Popcount reduce key-value pair
 # for words 0xKKKKKKKK...KKKKVVVV...VVVV
 # Returning two parallel arrays:
