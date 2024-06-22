@@ -30,3 +30,9 @@ def popcount64_reduce(arr: NDArray[np.uint64],
                       value_mask: np.uint64) -> Tuple[NDArray[np.uint64],
                                                       NDArray[np.uint64]]:
     ...
+
+
+def key_sum_over(ids: NDArray[np.uint64],
+                 count: NDArray[np.uint64],
+                 output: NDArray[np.uint64]) -> NDArray[np.uint64]:
+    ...
