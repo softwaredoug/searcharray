@@ -76,8 +76,10 @@ cdef DTYPE_t _num_posns(ActiveSpans* spans, DTYPE_t span_idx):
     return __builtin_popcountll(spans.posns[span_idx])
 
 
-cdef bint _do_spans_overlap(ActiveSpans* spans, DTYPE_t span_idx_lhs, DTYPE_t span_idx_rhs):
-    return (spans.beg[span_idx_lhs] <= spans.end[span_idx_rhs]) and (spans.end[span_idx_lhs] >= spans.beg[span_idx_rhs])
+cdef bint _do_spans_overlap(ActiveSpans* spans_lhs, DTYPE_t span_idx_lhs,
+                            ActiveSpans* spans_rhs, DTYPE_t span_idx_rhs):
+    return ((spans_lhs.beg[span_idx_lhs] <= spans_rhs.end[span_idx_rhs])
+            and (spans_lhs.end[span_idx_lhs] >= spans_rhs.beg[span_idx_rhs]))
 
 
 cdef bint _is_span_complete(ActiveSpans* spans, DTYPE_t span_idx, DTYPE_t num_terms):
@@ -85,6 +87,37 @@ cdef bint _is_span_complete(ActiveSpans* spans, DTYPE_t span_idx, DTYPE_t num_te
     cdef DTYPE_t num_posns_visited = _num_posns(spans, span_idx)
     return (num_terms_visited == num_terms) or (num_posns_visited == num_terms)
 
+
+cdef ActiveSpans _collect_spans(ActiveSpans* spans, DTYPE_t num_terms):
+    """Sort so shortest spans are first."""
+    # TODO - if spans were a heap, this might be faster
+    cdef span_idx = 0
+    cdef coll_span_idx = 0
+    cdef bint overlaps = False
+    cdef ActiveSpans collected_spans = _new_active_spans()
+    for span_idx in range(spans[0].cursor):
+        if _is_span_complete(spans, span_idx, num_terms):
+            new_width = abs(spans[0].end[span_idx] - spans[0].beg[span_idx])
+            overlaps = False
+            for coll_span_idx in range(collected_spans.cursor):
+                if _do_spans_overlap(spans, span_idx,
+                                     &collected_spans, coll_span_idx):
+                    coll_width = abs(collected_spans.end[coll_span_idx] - collected_spans.beg[coll_span_idx])
+                    if new_width < coll_width:
+                        # Replace
+                        collected_spans.terms[coll_span_idx] = spans[0].terms[span_idx]
+                        collected_spans.posns[coll_span_idx] = spans[0].posns[span_idx]
+                        collected_spans.beg[coll_span_idx] = spans[0].beg[span_idx]
+                        collected_spans.end[coll_span_idx] = spans[0].end[span_idx]
+                        overlaps = True
+                        break
+            if not overlaps:
+                collected_spans.terms[collected_spans.cursor] = spans[0].terms[span_idx]
+                collected_spans.posns[collected_spans.cursor] = spans[0].posns[span_idx]
+                collected_spans.beg[collected_spans.cursor] = spans[0].beg[span_idx]
+                collected_spans.end[collected_spans.cursor] = spans[0].end[span_idx]
+                collected_spans.cursor += 1
+    return collected_spans
 
 
 cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
@@ -110,6 +143,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
     cdef np.uint64_t curr_key = 0
     cdef np.uint64_t last_key = 0
     cdef np.uint64_t payload_base = 0
+    cdef ActiveSpans collected_spans
     last_set_idx = 0
 
     for i in range(num_terms):
@@ -172,18 +206,8 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                     break
 
         # All terms consumed for doc
-
-        # Count phrase freqs
-        for span_idx in range(spans.cursor):
-            if not _is_span_complete(&spans, span_idx, num_terms):
-                continue
-            for other_span_idx in range(spans.cursor):
-                if other_span_idx == span_idx or not _is_span_complete(&spans, other_span_idx, num_terms):
-                    continue
-                if _do_spans_overlap(&spans, span_idx, other_span_idx):
-                    break
-            assert last_key < phrase_freqs.shape[0]
-            phrase_freqs[last_key] += 1
+        collected_spans = _collect_spans(&spans, num_terms)
+        phrase_freqs[last_key] += collected_spans.cursor
 
         # Reset
         spans = _new_active_spans()

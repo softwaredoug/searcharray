@@ -196,6 +196,16 @@ def assert_phrase_in_bigram_matches(docs, phrase, matches):
         assert np.all(np.isin(phrase_scores_idx, bigram_scores_idx)), f"Bigram {bigram} not subset of {phrase} -- mssing: {missing[0:10]}..."
 
 
+def assert_higher_slop_matches(docs, phrase, matches):
+    phrase_scores_idx = np.argwhere(matches > 0).flatten()
+    for slop in range(1, 10):
+        scores = docs.termfreqs(phrase, slop=slop)
+        scores_idx = np.argwhere(scores > 0).flatten()
+        missing = list(set(phrase_scores_idx) - set(scores_idx))
+        assert np.all(np.isin(phrase_scores_idx, scores_idx)), f"Slop {slop} not subset of {phrase} -- missing: {missing[0:10]}..."
+        assert np.all(scores >= matches), f"Slop {slop} freq not gt or eq to exact phrase"
+
+
 @w_scenarios(scenarios)
 def test_phrase_api(docs, phrase, expected):
     docs = docs()
@@ -207,6 +217,7 @@ def test_phrase_api(docs, phrase, expected):
     assert (matches == expected_matches).all()
     assert (docs == docs_before).all()
     assert_phrase_in_bigram_matches(docs, phrase, matches)
+    assert_higher_slop_matches(docs, phrase, matches)
 
 
 @w_scenarios(scenarios)
@@ -235,6 +246,7 @@ def test_phrase_different_posns(posn_offset, phrase):
     phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
     assert_phrase_in_bigram_matches(docs, phrase, phrase_matches)
+    assert_higher_slop_matches(docs, phrase, phrase_matches)
 
 
 @pytest.mark.parametrize("phrase", ["foo bar baz", "foo bar",
@@ -251,6 +263,7 @@ def test_phrase_different_posns_many_docs_first(posn_offset, phrase):
     phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
     assert_phrase_in_bigram_matches(docs, phrase, phrase_matches)
+    assert_higher_slop_matches(docs, phrase, phrase_matches)
 
 
 @pytest.mark.parametrize("phrase", ["foo bar baz", "foo bar",
@@ -268,6 +281,7 @@ def test_phrase_different_posns_every_other_doc(posn_offset, phrase):
     phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
     assert_phrase_in_bigram_matches(docs, phrase, phrase_matches)
+    assert_higher_slop_matches(docs, phrase, phrase_matches)
 
 
 @pytest.mark.parametrize("posn_offset", range(100))
@@ -334,6 +348,7 @@ def test_phrase_scattered_posns_sliced_frequent_long(posn_offset):
     phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
     assert_phrase_in_bigram_matches(docs, phrase, phrase_matches)
+    assert_higher_slop_matches(docs, phrase, phrase_matches)
 
 
 @pytest.mark.parametrize("posn_offset", range(100))
@@ -346,6 +361,7 @@ def test_phrase_scattered_posns3(posn_offset):
     phrase_matches = docs.termfreqs(phrase)
     assert (expected == phrase_matches).all()
     assert_phrase_in_bigram_matches(docs, phrase, phrase_matches)
+    assert_higher_slop_matches(docs, phrase, phrase_matches)
 
 
 def test_phrase_too_many_posns():
@@ -363,6 +379,7 @@ def test_phrase_too_many_posns_with_truncate():
     expected = [1, 0]
     assert (expected == phrase_matches).all()
     assert_phrase_in_bigram_matches(arr, phrase, phrase_matches)
+    assert_higher_slop_matches(arr, phrase, phrase_matches)
 
 
 def test_positions():
