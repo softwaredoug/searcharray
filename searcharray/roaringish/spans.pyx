@@ -88,7 +88,11 @@ cdef bint _is_span_complete(ActiveSpans* spans, DTYPE_t span_idx, DTYPE_t num_te
     return (num_terms_visited == num_terms) or (num_posns_visited == num_terms)
 
 
-cdef void print_span(ActiveSpans* spans, DTYPE_t span_idx):
+cdef bint _is_span_unsalvagable(ActiveSpans* spans, DTYPE_t span_idx, DTYPE_t max_width):
+    return (spans[0].beg[span_idx] < spans[0].end[span_idx]) and (_span_width(spans, span_idx) > max_width)
+
+
+cdef void _print_span(ActiveSpans* spans, DTYPE_t span_idx):
     cdef np.uint64_t terms = spans[0].terms[span_idx]
     cdef np.uint64_t posns = spans[0].posns[span_idx]
     print(f"{span_idx}: term:{terms:b} posns:{posns:b} beg-end:{spans[0].beg[span_idx]}-{spans[0].end[span_idx]}")
@@ -110,7 +114,7 @@ cdef ActiveSpans _compact_spans(ActiveSpans* spans, DTYPE_t max_width):
     return new_spans
 
 
-cdef ActiveSpans _collect_spans(ActiveSpans* spans, DTYPE_t num_terms):
+cdef ActiveSpans _collect_spans(ActiveSpans* spans, DTYPE_t num_terms, DTYPE_t max_width):
     """Sort so shortest spans are first."""
     # TODO - if spans were a heap, this might be faster
     cdef span_idx = 0
@@ -118,7 +122,7 @@ cdef ActiveSpans _collect_spans(ActiveSpans* spans, DTYPE_t num_terms):
     cdef bint overlaps = False
     cdef ActiveSpans collected_spans = _new_active_spans()
     for span_idx in range(spans[0].cursor):
-        if _is_span_complete(spans, span_idx, num_terms):
+        if _is_span_complete(spans, span_idx, num_terms) and _span_width(spans, span_idx) < max_width:
             new_width = abs(spans[0].end[span_idx] - spans[0].beg[span_idx])
             overlaps = False
             for coll_span_idx in range(collected_spans.cursor):
@@ -167,6 +171,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
     cdef np.uint64_t curr_key = 0
     cdef np.uint64_t last_key = 0
     cdef np.uint64_t payload_base = 0
+    cdef np.uint64_t max_span_width = num_terms + slop
     cdef ActiveSpans collected_spans
     last_set_idx = 0
 
@@ -192,11 +197,10 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
 
                     spans.terms[spans.cursor] = curr_term_mask
                     spans.posns[spans.cursor] = posn_mask
-                    if term_ord == 0:
-                        spans.beg[spans.cursor] = set_idx + payload_base
-                        spans.end[spans.cursor] = set_idx + payload_base
+                    spans.beg[spans.cursor] = set_idx + payload_base
+                    spans.end[spans.cursor] = set_idx + payload_base
 
-                    # Remove spans that are too long
+                    # Update existing spans
                     for span_idx in range(spans.cursor):
                         # Continue active spans
                         num_terms_visited = _num_terms(&spans, span_idx)
@@ -205,15 +209,22 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                             continue
                         spans.terms[span_idx] |= curr_term_mask
                         num_terms_visited_now = _num_terms(&spans, span_idx)
+                        # New term
                         if num_terms_visited_now > num_terms_visited:
                             # Add position for new unique term
                             spans.posns[span_idx] |= posn_mask
                             new_unique_posns = _num_posns(&spans, span_idx)
-                            if num_posns_visited == new_unique_posns:
+                            if (num_posns_visited == new_unique_posns) or \
+                               abs((set_idx + payload_base) - spans.beg[span_idx]) > max_span_width:
                                 # Clear curr_term_mask and cancel this position, we've seen it before
                                 spans.terms[span_idx] &= ~curr_term_mask
                                 continue
                             spans.end[span_idx] = set_idx + payload_base
+                            span_width = _span_width(&spans, span_idx)
+                            if span_width > max_span_width:
+                                continue
+                            if _is_span_unsalvagable(&spans, span_idx, max_span_width):
+                                _clear_span(&spans, span_idx)
 
                     if spans.cursor >= 128:
                         break
@@ -223,7 +234,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                 if curr_idx[term_ord] < lengths[term_ord+1]:
                     curr_key = (posns[curr_idx[term_ord]] & key_mask) >> (64 - key_bits)
                 if spans.cursor >= 128:
-                    spans = _compact_spans(&spans, num_terms + slop)
+                    spans = _compact_spans(&spans, max_span_width)
                     if spans.cursor >= 128:
                         # Give up
                         # Read until key change
@@ -237,7 +248,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                     break
 
         # All terms consumed for doc
-        collected_spans = _collect_spans(&spans, num_terms)
+        collected_spans = _collect_spans(&spans, num_terms, max_span_width)
         phrase_freqs[last_key] += collected_spans.cursor
 
         # Reset
