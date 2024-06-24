@@ -46,14 +46,14 @@ cdef ActiveSpans _new_active_spans():
 
 
 cdef void _clear_span(ActiveSpans* spans, DTYPE_t span_idx):
-    spans.terms[span_idx] = 0
-    spans.posns[span_idx] = 0
-    spans.beg[span_idx] = 0
-    spans.end[span_idx] = 0
+    spans[0].terms[span_idx] = 0
+    spans[0].posns[span_idx] = 0
+    spans[0].beg[span_idx] = 0
+    spans[0].end[span_idx] = 0
 
 
 cdef np.int64_t _span_width(ActiveSpans* spans, DTYPE_t span_idx):
-    return abs(spans.end[span_idx] - spans.beg[span_idx])
+    return abs(spans[0].end[span_idx] - spans[0].beg[span_idx])
 
 
 cdef DTYPE_t _consume_lsb(DTYPE_t* term):
@@ -69,11 +69,11 @@ cdef DTYPE_t _posn_mask(DTYPE_t set_idx, DTYPE_t payload_base):
 
 
 cdef DTYPE_t _num_terms(ActiveSpans* spans, DTYPE_t span_idx):
-    return __builtin_popcountll(spans.terms[span_idx])
+    return __builtin_popcountll(spans[0].terms[span_idx])
 
 
 cdef DTYPE_t _num_posns(ActiveSpans* spans, DTYPE_t span_idx):
-    return __builtin_popcountll(spans.posns[span_idx])
+    return __builtin_popcountll(spans[0].posns[span_idx])
 
 
 cdef bint _do_spans_overlap(ActiveSpans* spans_lhs, DTYPE_t span_idx_lhs,
@@ -96,20 +96,20 @@ cdef ActiveSpans _compact_spans(ActiveSpans* spans, DTYPE_t max_width):
     """Copy only active spans into new spans."""
     cdef ActiveSpans new_spans = _new_active_spans()
     cdef span_idx = 0
+    # print("COMPACTING")
     for span_idx in range(spans[0].cursor):
         if _span_width(spans, span_idx) > max_width:
-            print("Cancel span:")
-            print_span(spans, span_idx)
+            # print("Cancel span:")
             continue
         if _num_terms(spans, span_idx) > 0:
             new_spans.terms[new_spans.cursor] = spans[0].terms[span_idx]
             new_spans.posns[new_spans.cursor] = spans[0].posns[span_idx]
             new_spans.beg[new_spans.cursor] = spans[0].beg[span_idx]
             new_spans.end[new_spans.cursor] = spans[0].end[span_idx]
-            print("Keeping:")
-            print_span(spans, span_idx)
+            # print("Keeping:")
+            # print_span(spans, span_idx)
             new_spans.cursor += 1
-    print(f"Compacted to {new_spans.cursor}")
+    # print(f"Compacted to {new_spans.cursor}")
     return new_spans
 
 
@@ -192,7 +192,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                 last_key = curr_key
                 term = posns[curr_idx[term_ord]]
                 payload_base = ((term & payload_msb_mask) >> lsb_bits) * lsb_bits
-                print(f"payload_base: {payload_base}")
+                print(f"payload_base: {payload_base} | {key_mask:0x} | {payload_msb_mask:0x} | {lsb_bits}")
                 term &= payload_mask
                 curr_term_mask = 0x1 << term_ord
 
@@ -207,7 +207,6 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                     if term_ord == 0:
                         spans.beg[spans.cursor] = set_idx + payload_base
                         spans.end[spans.cursor] = set_idx + payload_base
-                        print("new span")
                         print_span(&spans, spans.cursor)
 
                     # Remove spans that are too long
@@ -217,7 +216,6 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                         num_posns_visited = _num_posns(&spans, span_idx)
                         if num_terms_visited < num_terms and num_posns_visited == num_terms:
                             continue
-                        # print(f"Checking span {span_idx} of beg: {spans.beg[span_idx]} end: {spans.end[span_idx]} -- width {_span_width(&spans, span_idx)}")
                         spans.terms[span_idx] |= curr_term_mask
                         num_terms_visited_now = _num_terms(&spans, span_idx)
                         if num_terms_visited_now > num_terms_visited:
@@ -238,16 +236,16 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                             # print(f"Clearing span {span_idx} of width {_span_width(&spans, span_idx)}")
                             _clear_span(&spans, span_idx)
 
-                    if spans.cursor > 128:
+                    if spans.cursor >= 128:
                         break
                     spans.cursor += 1
                     last_set_idx = set_idx
                 curr_idx[term_ord] += 1
                 if curr_idx[term_ord] < lengths[term_ord+1]:
                     curr_key = (posns[curr_idx[term_ord]] & key_mask) >> (64 - key_bits)
-                if spans.cursor > 128:
+                if spans.cursor >= 128:
                     spans = _compact_spans(&spans, num_terms + slop)
-                    if spans.cursor > 128:
+                    if spans.cursor >= 128:
                         # Give up
                         # Read until key change
                         for i in range(curr_idx[term_ord], lengths[term_ord+1]):
