@@ -89,27 +89,24 @@ cdef bint _is_span_complete(ActiveSpans* spans, DTYPE_t span_idx, DTYPE_t num_te
 
 
 cdef void print_span(ActiveSpans* spans, DTYPE_t span_idx):
-    print(f"{span_idx}: term:{spans[0].terms[span_idx]:b} posns:{spans[0].posns[span_idx]:b} beg-end:{spans[0].beg[span_idx]}-{spans[0].end[span_idx]}")
+    cdef np.uint64_t terms = spans[0].terms[span_idx]
+    cdef np.uint64_t posns = spans[0].posns[span_idx]
+    print(f"{span_idx}: term:{terms:b} posns:{posns:b} beg-end:{spans[0].beg[span_idx]}-{spans[0].end[span_idx]}")
 
 
 cdef ActiveSpans _compact_spans(ActiveSpans* spans, DTYPE_t max_width):
     """Copy only active spans into new spans."""
     cdef ActiveSpans new_spans = _new_active_spans()
     cdef span_idx = 0
-    # print("COMPACTING")
     for span_idx in range(spans[0].cursor):
         if _span_width(spans, span_idx) > max_width:
-            # print("Cancel span:")
             continue
         if _num_terms(spans, span_idx) > 0:
             new_spans.terms[new_spans.cursor] = spans[0].terms[span_idx]
             new_spans.posns[new_spans.cursor] = spans[0].posns[span_idx]
             new_spans.beg[new_spans.cursor] = spans[0].beg[span_idx]
             new_spans.end[new_spans.cursor] = spans[0].end[span_idx]
-            # print("Keeping:")
-            # print_span(spans, span_idx)
             new_spans.cursor += 1
-    # print(f"Compacted to {new_spans.cursor}")
     return new_spans
 
 
@@ -142,8 +139,6 @@ cdef ActiveSpans _collect_spans(ActiveSpans* spans, DTYPE_t num_terms):
                 collected_spans.beg[collected_spans.cursor] = spans[0].beg[span_idx]
                 collected_spans.end[collected_spans.cursor] = spans[0].end[span_idx]
                 collected_spans.cursor += 1
-    for span_idx in range(collected_spans.cursor):
-        print(f"Span {span_idx} start: {collected_spans.beg[span_idx]} end: {collected_spans.end[span_idx]}")
     return collected_spans
 
 
@@ -178,28 +173,21 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
     for i in range(num_terms):
         curr_idx[i] = lengths[i]
 
-    print(f"Num terms: {num_terms}")
-    print(f"Num docs: {lengths[i+1] for i in range(num_terms)}")
-
     while curr_idx[0] < lengths[1]:
         # Read each term up to the next  doc
         for term_ord in range(num_terms):
             curr_key = ((posns[curr_idx[term_ord]] & key_mask) >> (64 - key_bits))
-            print("****")
-            print(f"Term {term_ord} key: {curr_key}")
             payload_base = 0
             while curr_idx[term_ord] < lengths[term_ord+1]:
                 last_key = curr_key
                 term = posns[curr_idx[term_ord]]
                 payload_base = ((term & payload_msb_mask) >> lsb_bits) * lsb_bits
-                print(f"payload_base: {payload_base} | {key_mask:0x} | {payload_msb_mask:0x} | {lsb_bits}")
                 term &= payload_mask
                 curr_term_mask = 0x1 << term_ord
 
                 # Consume every position into every possible span
                 while term != 0:
                     set_idx = _consume_lsb(&term)
-                    # print(f"Term found at: {set_idx} + {payload_base}")
                     posn_mask = _posn_mask(set_idx, payload_base)
 
                     spans.terms[spans.cursor] = curr_term_mask
@@ -207,7 +195,6 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                     if term_ord == 0:
                         spans.beg[spans.cursor] = set_idx + payload_base
                         spans.end[spans.cursor] = set_idx + payload_base
-                        print_span(&spans, spans.cursor)
 
                     # Remove spans that are too long
                     for span_idx in range(spans.cursor):
@@ -226,15 +213,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                                 # Clear curr_term_mask and cancel this position, we've seen it before
                                 spans.terms[span_idx] &= ~curr_term_mask
                                 continue
-                            # print(f"Set end for span {spans.cursor} to {set_idx} + {payload_base}")
                             spans.end[span_idx] = set_idx + payload_base
-                            print(f"Updated span -- {set_idx + payload_base}")
-                            print_span(&spans, span_idx)
-                        # If all terms visited, see if we should remove
-                        if (num_terms_visited_now == num_terms) \
-                           and _span_width(&spans, span_idx) > num_terms + slop:
-                            # print(f"Clearing span {span_idx} of width {_span_width(&spans, span_idx)}")
-                            _clear_span(&spans, span_idx)
 
                     if spans.cursor >= 128:
                         break
@@ -255,17 +234,13 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                                 curr_idx[term_ord] = i
                                 break
                 if curr_key != last_key:
-                    print(f"Done scanning term {curr_key} != {last_key} or spans.cursor {spans.cursor}")
-                    print(f"Curr idx {curr_idx[term_ord]}")
                     break
 
         # All terms consumed for doc
-        print(f"Collect for {last_key} with {spans.cursor} spans")
         collected_spans = _collect_spans(&spans, num_terms)
         phrase_freqs[last_key] += collected_spans.cursor
 
         # Reset
-        print("Resetting spans")
         spans = _new_active_spans()
 
 
