@@ -108,6 +108,7 @@ def _intersect_all(posns_encoded: List[np.ndarray]):
     all_headers = merge(to_rhs, to_lhs, drop_duplicates=True)
     all_headers = merge(last_lhs_headers, all_headers, drop_duplicates=True)
     all_headers = merge(last_rhs_headers, all_headers, drop_duplicates=True)
+    all_headers = all_headers & encoder.header_mask
     # Get active MSBs now
     # Merge all the rest to grab them
 
@@ -169,7 +170,7 @@ def span_search(posns_encoded: List[np.ndarray],
                 phrase_freqs: np.ndarray,
                 slop: int) -> np.ndarray:
     """Find span matches up to PAYLOAD_LSB bits span distance."""
-    # Find inner span candidates
+    # Find posns to check for span candidates
     posns, lengths = _intersect_all(posns_encoded)
 
     # Populate phrase freqs with matches of slop

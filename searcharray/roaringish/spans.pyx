@@ -153,6 +153,9 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
     for i in range(num_terms):
         curr_idx[i] = lengths[i]
 
+    print(f"Num terms: {num_terms}")
+    print(f"Num docs: {lengths[i+1] for i in range(num_terms)}")
+
     while curr_idx[0] < lengths[1]:
         # Read each term up to the next  doc
         last_key = -1
