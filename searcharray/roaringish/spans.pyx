@@ -117,6 +117,8 @@ cdef ActiveSpans _collect_spans(ActiveSpans* spans, DTYPE_t num_terms):
                 collected_spans.beg[collected_spans.cursor] = spans[0].beg[span_idx]
                 collected_spans.end[collected_spans.cursor] = spans[0].end[span_idx]
                 collected_spans.cursor += 1
+    for span_idx in range(collected_spans.cursor):
+        print(f"Span {span_idx} start: {collected_spans.beg[span_idx]} end: {collected_spans.end[span_idx]}")
     return collected_spans
 
 
@@ -132,6 +134,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
 
     cdef DTYPE_t set_idx = 0
     cdef DTYPE_t payload_mask = ~header_mask
+    cdef DTYPE_t payload_msb_mask = header_mask & ~key_mask
 
     cdef ActiveSpans spans = _new_active_spans()
 
@@ -140,6 +143,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
     cdef np.uint64_t posn_mask = 0
     cdef np.uint64_t num_terms = len(lengths) - 1
     cdef np.uint64_t term_ord = 0
+    cdef np.uint64_t term = 0
     cdef np.uint64_t curr_key = 0
     cdef np.uint64_t last_key = 0
     cdef np.uint64_t payload_base = 0
@@ -157,18 +161,22 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
             payload_base = 0
             while curr_idx[term_ord] < lengths[term_ord+1]:
                 last_key = curr_key
-                term = posns[curr_idx[term_ord]] & payload_mask
+                print(f"Term {term_ord} key: {curr_key}")
+                term = posns[curr_idx[term_ord]]
+                payload_base = ((term & payload_msb_mask) >> lsb_bits) * lsb_bits
+                term &= payload_mask
                 curr_term_mask = 0x1 << term_ord
 
                 # Consume every position into every possible span
                 while term != 0:
                     set_idx = _consume_lsb(&term)
+                    print(f"Term found at: {set_idx} + {payload_base}")
                     posn_mask = _posn_mask(set_idx, payload_base)
 
                     spans.terms[spans.cursor] = curr_term_mask
                     spans.posns[spans.cursor] = posn_mask
                     if term_ord == 0:
-                        spans.beg[spans.cursor] = set_idx
+                        spans.beg[spans.cursor] = set_idx + payload_base
 
                     # Remove spans that are too long
                     for span_idx in range(spans.cursor):
@@ -187,10 +195,11 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                                 # Clear curr_term_mask and cancel this position, we've seen it before
                                 spans.terms[span_idx] &= ~curr_term_mask
                                 continue
-                            spans.end[span_idx] = set_idx
+                            spans.end[span_idx] = set_idx + payload_base
                         # If all terms visited, see if we should remove
                         if (num_terms_visited_now == num_terms) \
                            and _span_width(&spans, span_idx) > num_terms + slop:
+                            print(f"Clearing span {span_idx} of width {_span_width(&spans, span_idx)}")
                             _clear_span(&spans, span_idx)
 
                     if spans.cursor > 64:
@@ -200,7 +209,6 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                 curr_idx[term_ord] += 1
                 if curr_idx[term_ord] < lengths[term_ord+1]:
                     curr_key = (posns[curr_idx[term_ord]] & key_mask) >> (64 - key_bits)
-                payload_base += lsb_bits
                 if curr_key != last_key or spans.cursor > 64:
                     payload_base = 0
                     break
