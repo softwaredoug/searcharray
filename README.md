@@ -11,7 +11,7 @@ from searcharray import SearchArray
 import pandas as pd
 
 df['title_indexed'] = SearchArray.index(df['title'])
-np.sort(df['title_indexed'].array.score('Cat'))
+np.sort(df['title_indexed'].array.score(['cat', 'in', 'the', 'hat']))   # Search w/ phrase
 
 > BM25 scores:
 > array([ 0.        ,  0.        ,  0.        , ..., 15.84568033, 15.84568033, 15.84568033])
@@ -21,13 +21,23 @@ np.sort(df['title_indexed'].array.score('Cat'))
 
 SearchArray is documented in these notebooks:
 
-[SearchArray Guide](https://colab.research.google.com/drive/1gmgVz53fDPTJakUHb6Mttevqry7gKHLM) | [SearchArray Offline Experiment](https://colab.research.google.com/drive/1w_Ajn5rHzcISKhdCuPhhVFav3zrvKWn1)
+[SearchArray Guide](https://colab.research.google.com/drive/1gmgVz53fDPTJakUHb6Mttevqry7gKHLM) | [SearchArray Offline Experiment](https://colab.research.google.com/drive/1w_Ajn5rHzcISKhdCuPhhVFav3zrvKWn1) | [About internals](https://softwaredoug.com/blog/2024/01/21/search-array-phrase-algorithm)
 
 ## Installation
 
 ```
 pip install searcharray
 ```
+
+## Features
+
+* Search w/ terms by passing a string
+* Search w/ a phrase by passing a list[str]
+* Search w/ a [phrase w/ edit-distance](https://lucene.apache.org/core/9_6_0/core/org/apache/lucene/search/PhraseQuery.html) by passing slop=N.
+* Access raw stats arrays in termfreqs / docfreqs methods on the array
+* Tokenize any pandas series, list of strings, by using your own tokenizer of str -> list[str] (`def tokenize(value: str) -> List[str]`)
+* Accepts any python function to compute similarity. Here's [one similarity]([https://github.com/softwaredoug/searcharray/blob/main/searcharray/similarity.py](https://github.com/softwaredoug/searcharray/blob/main/searcharray/similarity.py#L103))
+* Scores the entire dataframe, allowing combination w/ other ranking attributes (recency, 
 
 ## Motivation
 
