@@ -38,7 +38,7 @@ pip install searcharray
 * Tokenize any pandas series, list of strings, by using your own tokenizer of str -> list[str] (`def tokenize(value: str) -> List[str]`)
 * Accepts any python function to compute similarity. Here's [one similarity](https://github.com/softwaredoug/searcharray/blob/main/searcharray/similarity.py#L103)
 * Scores the entire dataframe, allowing combination w/ other ranking attributes (recency, popularity, etc) or scores from other fields (ie boolean queries)
-* Implement's Solr's [edismax query parser](https://github.com/softwaredoug/searcharray/blob/main/searcharray/solr.py)
+* Implement's Solr's [edismax query parser](https://github.com/softwaredoug/searcharray/blob/main/searcharray/solr.py) for efficient prototyping
 
 ## Motivation
 
