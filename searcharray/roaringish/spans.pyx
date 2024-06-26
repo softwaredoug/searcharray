@@ -64,8 +64,8 @@ cdef DTYPE_t _consume_lsb(DTYPE_t* term):
     return lsb
 
 
-cdef DTYPE_t _posn_mask(DTYPE_t set_idx, DTYPE_t payload_base):
-    return 1 << ((set_idx + payload_base) % 64)
+cdef DTYPE_t _posn_mask(np.int64_t curr_posn):
+    return 1 << (curr_posn % 64)
 
 
 cdef DTYPE_t _num_terms(ActiveSpans* spans, DTYPE_t span_idx):
@@ -156,7 +156,8 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                  DTYPE_t lsb_bits):
     """Get unscored spans, within 64 bits."""
 
-    cdef DTYPE_t set_idx = 0
+    cdef np.int64_t set_idx = 0
+    cdef np.int64_t curr_posn = 0
     cdef DTYPE_t payload_mask = ~header_mask
     cdef DTYPE_t payload_msb_mask = header_mask & ~key_mask
 
@@ -193,15 +194,17 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                 # Consume every position into every possible span
                 while term != 0:
                     set_idx = _consume_lsb(&term)
-                    posn_mask = _posn_mask(set_idx, payload_base)
+                    curr_posn = set_idx + payload_base
+                    posn_mask = _posn_mask(curr_posn)
 
                     spans.terms[spans.cursor] = curr_term_mask
                     spans.posns[spans.cursor] = posn_mask
-                    spans.beg[spans.cursor] = set_idx + payload_base
-                    spans.end[spans.cursor] = set_idx + payload_base
+                    spans.beg[spans.cursor] = curr_posn
+                    spans.end[spans.cursor] = curr_posn
 
                     # Update existing spans
-                    for span_idx in range(spans.cursor):
+                    end = spans.cursor
+                    for span_idx in range(end):
                         # Continue active spans
                         num_terms_visited = _num_terms(&spans, span_idx)
                         num_posns_visited = _num_posns(&spans, span_idx)
@@ -213,18 +216,20 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                         if num_terms_visited_now > num_terms_visited:
                             # Add position for new unique term
                             spans.posns[span_idx] |= posn_mask
+
                             new_unique_posns = _num_posns(&spans, span_idx)
-                            if (num_posns_visited == new_unique_posns) or \
-                               abs((set_idx + payload_base) - spans.beg[span_idx]) > max_span_width:
+                            proposed_width = abs(curr_posn - spans.beg[span_idx])
+                            if (num_posns_visited == new_unique_posns) or proposed_width > max_span_width:
                                 # Clear curr_term_mask and cancel this position, we've seen it before
                                 spans.terms[span_idx] &= ~curr_term_mask
                                 continue
-                            spans.end[span_idx] = set_idx + payload_base
+
+                            spans.end[span_idx] = curr_posn
                             span_width = _span_width(&spans, span_idx)
                             if span_width > max_span_width:
                                 continue
-                            if _is_span_unsalvagable(&spans, span_idx, max_span_width):
-                                _clear_span(&spans, span_idx)
+                            if spans.cursor >= 128:
+                                break
 
                     if spans.cursor >= 128:
                         break
