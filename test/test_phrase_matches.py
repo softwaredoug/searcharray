@@ -219,11 +219,7 @@ def assert_higher_slop_matches(docs, phrase, matches):
             missing = list(set(last_scores_idx) - set(scores_idx))
             assert np.all(np.isin(scores_idx, last_scores_idx)), f"Slop {slop} not subset of {slop - 1} slop -- missing: {missing[0:10]}..."
             where_lt = np.argwhere(scores < last_scores).flatten()
-            try:
-                assert len(where_lt) == 0, f"Expected {slop} >= {slop - 1} slop -- {scores[where_lt[0:10]]} < {last_scores[where_lt[0:10]]}"
-            except AssertionError as e:
-                print(f"Expected {slop} >= {slop - 1} slop -- {scores[where_lt[0:10]]} < {last_scores[where_lt[0:10]]}")
-                warnings.warn(str(e))
+            assert len(where_lt) == 0, f"Expected {slop} >= {slop - 1} slop -- {scores[where_lt[0:10]]} < {last_scores[where_lt[0:10]]}"
 
 
 @w_scenarios(scenarios)
