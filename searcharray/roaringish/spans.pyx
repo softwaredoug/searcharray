@@ -195,9 +195,6 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                 curr_term_mask = 0x1 << term_ord
                 sum_popcount[term_ord] += __builtin_popcountll(posns[curr_idx[term_ord]] & payload_mask)
 
-                print("***")
-                print(f"Term {term_ord} {curr_key} {term:b} {payload_base} slop:{slop} max_span_width:{max_span_width}")
-
                 # Consume every position into every possible span
                 while term != 0:
                     set_idx = _consume_lsb(&term)
@@ -208,11 +205,8 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                     spans.posns[spans.cursor] = posn_mask
                     spans.beg[spans.cursor] = curr_posn
                     spans.end[spans.cursor] = curr_posn
-                    print(f"ADDING AT {spans.cursor} {curr_posn}")
-                    _print_span(&spans, spans.cursor)
 
                     # Update existing spans
-                    print("UPDATING")
                     end = spans.cursor
                     spans.cursor += 1
                     for span_idx in range(end):
@@ -229,32 +223,22 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                             spans.posns[span_idx] |= posn_mask
 
                             new_unique_posns = _num_posns(&spans, span_idx)
-                            print(f"{span_idx}: set_idx + payload_base {set_idx + payload_base} spans.beg[span_idx] {spans.beg[span_idx]}")
                             proposed_width = abs(curr_posn - spans.beg[span_idx])
                             if (num_posns_visited == new_unique_posns) or proposed_width > max_span_width:
                                 # Clear curr_term_mask and cancel this position, we've seen it before
-                                print(f"{span_idx}: Canceling posn -- {proposed_width} {max_span_width} | num_posns_visited:{num_posns_visited} new_unique_posns:{new_unique_posns}")
-                                _print_span(&spans, span_idx)
                                 spans.terms[span_idx] &= ~curr_term_mask
                                 continue
                             if spans.cursor < 512:
-                                print(f"DUPLICATED at end!")
                                 spans.terms[spans.cursor] = spans.terms[span_idx]
                                 spans.posns[spans.cursor] = (spans.posns[span_idx] & ~posn_mask)
                                 spans.beg[spans.cursor] = spans.beg[span_idx]
                                 spans.end[spans.cursor] = spans.end[span_idx]
-                                _print_span(&spans, spans.cursor)
                                 spans.cursor += 1
                                 full = False
                             else:
-                                print("FULL")
                                 full = True
 
-                            print(f"{span_idx}:  Before update {curr_posn}")
-                            _print_span(&spans, span_idx)
                             spans.end[span_idx] = curr_posn
-                            print(f"{span_idx}: Updated span w/ posn {curr_posn}")
-                            _print_span(&spans, span_idx)
                             span_width = _span_width(&spans, span_idx)
                             if span_width > max_span_width:
                                 continue
@@ -284,13 +268,11 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
             for term_ord in range(num_terms):
                 if min_popcount == 0 or sum_popcount[term_ord] < min_popcount:
                     min_popcount = sum_popcount[term_ord]
-            print(f"Fallback to min popcount {min_popcount}")
             phrase_freqs[last_key] += min_popcount
         else:
             # All terms consumed for doc
             collected_spans = _collect_spans(&spans, num_terms, max_span_width)
             phrase_freqs[last_key] += collected_spans.cursor
-            print(f"Doc {last_key} {collected_spans.cursor}")
 
         # Reset
         spans = _new_active_spans()
