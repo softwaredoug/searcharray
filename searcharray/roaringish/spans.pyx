@@ -28,19 +28,19 @@ cdef _count_spans_of_slop(DTYPE_t[:] posns, DTYPE_t slop):
 
 
 cdef struct ActiveSpans:
-    DTYPE_t[128] terms
-    DTYPE_t[128] posns
-    np.int64_t[128] beg
-    np.int64_t[128] end
+    DTYPE_t[512] terms
+    DTYPE_t[512] posns
+    np.int64_t[512] beg
+    np.int64_t[512] end
     np.uint64_t cursor
 
 
 cdef ActiveSpans _new_active_spans():
     cdef ActiveSpans active_spans
-    active_spans.terms = np.zeros(128, dtype=np.uint64)
-    active_spans.posns = np.zeros(128, dtype=np.uint64)
-    active_spans.beg = np.zeros(128, dtype=np.int64)
-    active_spans.end = np.zeros(128, dtype=np.int64)
+    active_spans.terms = np.zeros(512, dtype=np.uint64)
+    active_spans.posns = np.zeros(512, dtype=np.uint64)
+    active_spans.beg = np.zeros(512, dtype=np.int64)
+    active_spans.end = np.zeros(512, dtype=np.int64)
     active_spans.cursor = 0
     return active_spans
 
@@ -164,6 +164,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
     cdef ActiveSpans spans = _new_active_spans()
 
     cdef np.uint64_t[:] curr_idx = np.zeros(64, dtype=np.uint64)
+    cdef np.uint64_t[:] sum_popcount = np.zeros(64, dtype=np.uint64)
     cdef np.uint64_t curr_term_mask = 0
     cdef np.uint64_t posn_mask = 0
     cdef np.uint64_t num_terms = len(lengths) - 1
@@ -175,6 +176,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
     cdef np.uint64_t max_span_width = num_terms + slop
     cdef ActiveSpans collected_spans
     last_set_idx = 0
+    cdef bint full = False
 
     for i in range(num_terms):
         curr_idx[i] = lengths[i]
@@ -183,6 +185,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
         # Read each term up to the next  doc
         for term_ord in range(num_terms):
             curr_key = ((posns[curr_idx[term_ord]] & key_mask) >> (64 - key_bits))
+            sum_popcount[term_ord] = 0
             payload_base = 0
             while curr_idx[term_ord] < lengths[term_ord+1]:
                 last_key = curr_key
@@ -190,6 +193,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                 payload_base = ((term & payload_msb_mask) >> lsb_bits) * lsb_bits
                 term &= payload_mask
                 curr_term_mask = 0x1 << term_ord
+                sum_popcount[term_ord] += __builtin_popcountll(posns[curr_idx[term_ord]] & payload_mask)
 
                 print("***")
                 print(f"Term {term_ord} {curr_key} {term:b} {payload_base} slop:{slop} max_span_width:{max_span_width}")
@@ -233,7 +237,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                                 _print_span(&spans, span_idx)
                                 spans.terms[span_idx] &= ~curr_term_mask
                                 continue
-                            if spans.cursor < 128:
+                            if spans.cursor < 512:
                                 print(f"DUPLICATED at end!")
                                 spans.terms[spans.cursor] = spans.terms[span_idx]
                                 spans.posns[spans.cursor] = (spans.posns[span_idx] & ~posn_mask)
@@ -241,9 +245,10 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                                 spans.end[spans.cursor] = spans.end[span_idx]
                                 _print_span(&spans, spans.cursor)
                                 spans.cursor += 1
+                                full = False
                             else:
-                                assert False, "FULL!"
-                                print("FULL!")
+                                print("FULL")
+                                full = True
 
                             print(f"{span_idx}:  Before update {curr_posn}")
                             _print_span(&spans, span_idx)
@@ -254,15 +259,15 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                             if span_width > max_span_width:
                                 continue
 
-                    if spans.cursor >= 128:
+                    if spans.cursor >= 512:
                         break
                     last_set_idx = set_idx
                 curr_idx[term_ord] += 1
                 if curr_idx[term_ord] < lengths[term_ord+1]:
                     curr_key = (posns[curr_idx[term_ord]] & key_mask) >> (64 - key_bits)
-                if spans.cursor >= 128:
+                if spans.cursor >= 512:
                     spans = _compact_spans(&spans, max_span_width)
-                    if spans.cursor >= 128:
+                    if spans.cursor >= 512:
                         # Give up
                         # Read until key change
                         for i in range(curr_idx[term_ord], lengths[term_ord+1]):
@@ -274,13 +279,22 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                 if curr_key != last_key:
                     break
 
-        # All terms consumed for doc
-        collected_spans = _collect_spans(&spans, num_terms, max_span_width)
-        phrase_freqs[last_key] += collected_spans.cursor
-        print(f"Doc {last_key} {collected_spans.cursor}")
+        if full:
+            min_popcount = 0
+            for term_ord in range(num_terms):
+                if min_popcount == 0 or sum_popcount[term_ord] < min_popcount:
+                    min_popcount = sum_popcount[term_ord]
+            print(f"Fallback to min popcount {min_popcount}")
+            phrase_freqs[last_key] += min_popcount
+        else:
+            # All terms consumed for doc
+            collected_spans = _collect_spans(&spans, num_terms, max_span_width)
+            phrase_freqs[last_key] += collected_spans.cursor
+            print(f"Doc {last_key} {collected_spans.cursor}")
 
         # Reset
         spans = _new_active_spans()
+        full = False
 
 
 def span_search(np.ndarray[DTYPE_t, ndim=1] posns,
