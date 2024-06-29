@@ -3,7 +3,6 @@ from test_utils import w_scenarios
 import pytest
 from searcharray.phrase.middle_out import MAX_POSN
 import numpy as np
-import warnings
 
 
 def random_strings(num_strings, min_length, max_length):
