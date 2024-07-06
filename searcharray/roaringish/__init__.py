@@ -5,4 +5,3 @@ from searcharray.roaringish.intersect import intersect, adjacent # noqa
 from searcharray.roaringish.unique import unique  # noqa
 from searcharray.roaringish.merge import merge  # noqa
 from searcharray.roaringish.spans import span_search  # noqa
-from searcharray.roaringish.memmap_arrays import MemoryMappedArrays  # noqa
