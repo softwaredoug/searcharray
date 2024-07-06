@@ -6,6 +6,10 @@ import cProfile
 import sys
 
 
+def data_dir():
+    return 'data/'
+
+
 def w_scenarios(scenarios: Dict[str, Dict[str, Any]]):
     """Decorate for parametrizing tests that names the scenarios and params."""
     return pytest.mark.parametrize(

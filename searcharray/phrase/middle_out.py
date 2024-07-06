@@ -8,7 +8,7 @@ https://colab.research.google.com/drive/10tIEkdlCE_1J_CcgEcV0jkLfBc-0H4am?authus
 import numpy as np
 from copy import deepcopy
 from typing import List, Tuple, Dict, Union, cast, Optional
-from searcharray.roaringish import RoaringishEncoder, convert_keys, merge
+from searcharray.roaringish import RoaringishEncoder, convert_keys, merge, MemoryMappedArrays
 from searcharray.phrase.bigram_freqs import bigram_freqs, Continuation
 from searcharray.phrase.spans import span_search
 import numbers
@@ -299,6 +299,9 @@ class PosnBitArray:
         self.max_doc_id = max_doc_id
         self.docfreq_cache : Dict[int, np.uint64] = {}
         self.termfreq_cache : Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
+
+    def memmap(self, data_dir):
+        self.encoded_term_posns = MemoryMappedArrays(data_dir, self.encoded_term_posns)
 
     def warm(self):
         """Warm tf / df cache of most common terms."""

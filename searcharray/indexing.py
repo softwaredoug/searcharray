@@ -2,7 +2,7 @@ import numpy as np
 import math
 import gc
 import sys
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from itertools import islice
 from searcharray.phrase.middle_out import MAX_POSN, PosnBitArrayFromFlatBuilder, PosnBitArrayBuilder, PosnBitArrayAlreadyEncBuilder
@@ -180,6 +180,7 @@ def _process_batches(term_doc, batch_size,
 
 
 def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000,
+                               data_dir: Optional[str] = None,
                                truncate=False, workers=4):
     """Build index directly from tokenizing docs (array of string)."""
     term_dict = TermDict()
@@ -226,6 +227,10 @@ def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000,
 
     term_doc_built = RowViewableMatrix(term_doc.build())
     logger.info("Indexing from tokenization complete")
+    assert bit_posns is not None
+    if data_dir is not None:
+        logger.info(f"Memmapping bit positions to {data_dir}")
+        bit_posns.memmap(data_dir)
     return term_doc_built, bit_posns, term_dict, avg_doc_length, np.array(doc_lens)
 
 

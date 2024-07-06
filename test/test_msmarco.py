@@ -44,6 +44,30 @@ def msmarco1m_raw():
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
+def msmarco100k_memmap():
+    msmarco100k_raw = pd.read_pickle(msmarco100k_raw_path())
+    msmarco_path = 'data/msmarco100k_memmap.pkl'
+    msmarco100k_path = pathlib.Path(msmarco_path)
+
+    if not msmarco100k_path.exists():
+        msmarco = msmarco100k_raw
+        print("Indexing 100k docs...")
+        msmarco['title'].fillna('', inplace=True)
+        msmarco['body'].fillna('', inplace=True)
+        print(" Index Title")
+        msmarco["title_ws"] = SearchArray.index(msmarco["title"], tokenizer=ws_punc_tokenizer, data_dir='data/')
+        print(" Index Body")
+        msmarco["body_ws"] = SearchArray.index(msmarco["body"], tokenizer=ws_punc_tokenizer, data_dir='data/')
+        print(" Done!... Saving")
+
+        msmarco.to_pickle(msmarco_path)
+        return msmarco
+    else:
+        return pd.read_pickle(msmarco_path)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.fixture(scope="session")
 def msmarco100k():
     msmarco100k_raw = pd.read_pickle(msmarco100k_raw_path())
     msmarco_path = 'data/msmarco100k.pkl'
@@ -180,7 +204,7 @@ def test_msmarco100k_phrase(phrase_search, msmarco100k, benchmark):
     profiler = Profiler(benchmark)
     phrase_search = phrase_search.split()
     print(f"STARTING {phrase_search}")
-    print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+    # print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     profiler.run(msmarco100k['body_ws'].array.score, phrase_search)
 
 
@@ -191,7 +215,7 @@ def test_msmarco100k_slop(phrase_search, msmarco100k, benchmark):
     phrase_search = phrase_search.split()
     print(f"STARTING {phrase_search}")
     print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
-    profiler.run(msmarco100k['body_ws'].array.score, phrase_search, default_bm25, slop=5)
+    profiler.run(msmarco100k['body_ws'].array.score, phrase_search, default_bm25, 5)
 
 
 @pytest.mark.skipif(not stress_test_enabled, reason="Stress test disabled")
@@ -222,6 +246,7 @@ def test_msmarco1m_phrase(phrase_search, msmarco1m, benchmark):
     phrase_search = phrase_search.split()
     print(f"STARTING {phrase_search}")
     print(f"Memory Usage (BODY): {msmarco1m['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+    print(msmarco1m['body_ws'].array.memory_report())
     profiler.run(msmarco1m['body_ws'].array.score, phrase_search)
 
 

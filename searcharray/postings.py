@@ -30,6 +30,29 @@ logger.addHandler(handler)
 logger.setLevel(logging.ERROR)
 
 
+def bytes_to_human_readable(num_bytes):
+    """
+    Convert a number of bytes into a human-readable format (KB, MB, GB, etc.)
+
+    :param num_bytes: Number of bytes to be converted
+    :type num_bytes: int or float
+    :return: Human-readable string
+    :rtype: str
+    """
+    # Define the suffixes for byte conversion
+    suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
+
+    if num_bytes == 0:
+        return "0B"
+
+    i = 0
+    while num_bytes >= 1024 and i < len(suffixes) - 1:
+        num_bytes /= 1024.
+        i += 1
+
+    return f"{num_bytes:.2f} {suffixes[i]}"
+
+
 class Terms:
     """An indexed search doc - a single bag of tokenized words and positions."""
 
@@ -229,6 +252,7 @@ class SearchArray(ExtensionArray):
               batch_size=100000,
               avoid_copies=True,
               workers=4,
+              data_dir: Optional[str] = None,
               autowarm=True) -> 'SearchArray':
         """Index an array of strings into SearchArray using tokenizer.
 
@@ -257,6 +281,7 @@ class SearchArray(ExtensionArray):
         term_mat, posns, term_dict, avg_doc_length, doc_lens =\
             build_index_from_tokenizer(array, tokenizer, batch_size=batch_size,
                                        truncate=truncate,
+                                       data_dir=data_dir,
                                        workers=workers)
 
         if autowarm:
@@ -539,7 +564,7 @@ class SearchArray(ExtensionArray):
         else:
             raise TypeError("Expected a string or list of strings for phrases")
 
-    def memory_report(self):
+    def memory_report(self, N=1000):
         """Return a string with memory usage information."""
         term_mat_bytes = self.term_mat.nbytes
         posns_bytes = self.posns.nbytes
@@ -547,31 +572,31 @@ class SearchArray(ExtensionArray):
         num_terms = len(self.term_dict)
         top_10_terms_size = []
 
-        for i in range(10):
+        for i in range(N):
             term_len = len(self.posns.encoded_term_posns[i])
             term = self.term_dict.get_term(i)
-            top_10_terms_size.append((term, term_len))
+            term_bytes = term_len * 8
+            top_10_terms_size.append((term, term_bytes))
 
-        return f"""
+        top_10_terms_size = sorted(top_10_terms_size, key=lambda x: x[1], reverse=True)
+
+        report = f"""
         SearchArray Memory Report
         -------------------------
         Number of Terms: {num_terms}
         -------------------------
-        Term Matrix:     {term_mat_bytes}
-        Positions:       {posns_bytes}
-        Term Dictionary: {term_dict_bytes}
-        --------------------------
-        Term 0: {top_10_terms_size[0]}
-        Term 1: {top_10_terms_size[1]}
-        Term 2: {top_10_terms_size[2]}
-        Term 3: {top_10_terms_size[3]}
-        Term 4: {top_10_terms_size[4]}
-        Term 5: {top_10_terms_size[5]}
-        Term 6: {top_10_terms_size[6]}
-        Term 7: {top_10_terms_size[7]}
-        Term 8: {top_10_terms_size[8]}
-        Term 9: {top_10_terms_size[9]}
+        Term Matrix:     {bytes_to_human_readable(term_mat_bytes)}
+        Positions:       {bytes_to_human_readable(posns_bytes)}
+        Term Dictionary: {bytes_to_human_readable(term_dict_bytes)}
+
         """
+
+        cum_sum = 0
+        for i in range(N):
+            term, term_bytes = top_10_terms_size[i]
+            cum_sum += term_bytes
+            report += f"        Term {i}: {term} - {bytes_to_human_readable(term_bytes)} - Cumulative: {bytes_to_human_readable(cum_sum)}\n"
+        return report
 
     # ***********************************************************
     # Search API
