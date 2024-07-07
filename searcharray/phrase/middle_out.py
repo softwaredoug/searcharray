@@ -196,7 +196,7 @@ class PosnBitArrayBuilder:
         self.max_doc_id = max(self.max_doc_id, doc_id)
 
     def build(self, check=False):
-        encoded_term_posns = {}
+        encoded_term_posns = ArrayDict()
         for term_id, posns in self.term_posns.items():
             if len(posns) == 0:
                 posns = np.asarray([], dtype=np.uint32).flatten()
@@ -293,7 +293,7 @@ class FilteredPosns(abc.Mapping):
 
 class PosnBitArray:
 
-    def __init__(self, encoded_term_posns, max_doc_id: int):
+    def __init__(self, encoded_term_posns: Union[ArrayDict, FilteredPosns], max_doc_id: int):
         self.encoded_term_posns = encoded_term_posns
         self.max_doc_id = max_doc_id
         self.docfreq_cache : Dict[int, np.uint64] = {}
