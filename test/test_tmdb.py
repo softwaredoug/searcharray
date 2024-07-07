@@ -245,7 +245,8 @@ def test_unique(tmdb_data, benchmark):
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 def test_index_benchmark(benchmark, tmdb_pd_data):
     prof = Profiler(benchmark)
-    results = prof.run(SearchArray.index, tmdb_pd_data['overview'], autowarm=False)
+    results = prof.run(SearchArray.index, tmdb_pd_data['overview'],
+                       autowarm=False, workers=1)
     assert len(results) == len(tmdb_pd_data)
 
 

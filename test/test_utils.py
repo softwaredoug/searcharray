@@ -44,7 +44,7 @@ class CProfileProfiler:
 
     def run(self, func, *args, **kwargs):
         if self.warmup:
-            func(*args, *kwargs)
+            func(*args, **kwargs)
         rval = self.cprofiler.runcall(func, *args, **kwargs)
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         self.cprofiler.dump_stats(f".benchmarks/{self.name}_{timestamp}.prof")

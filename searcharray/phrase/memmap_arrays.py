@@ -48,6 +48,25 @@ class ArrayDict:
         arr.metadata = metadata
         return arr
 
+    @staticmethod
+    def concat(lhs: 'ArrayDict', rhs: 'ArrayDict', sort=True):
+        metadata = {}
+        offset = 0
+        for key, value in lhs.metadata.items():
+            metadata[key] = {'offset': offset, 'length': value['length']}
+            offset += value['length']
+        for key, value in rhs.metadata.items():
+            metadata[key] = {'offset': offset, 'length': value['length']}
+            offset += value['length']
+        data = np.concatenate((lhs.data, rhs.data))
+        if sort:
+            keys = sorted(metadata.keys())
+            metadata = {key: metadata[key] for key in keys}
+        arr = ArrayDict()
+        arr.data = data
+        arr.metadata = metadata
+        return arr
+
     def __getitem__(self, key):
         key = int(key)
         if key in self.metadata:
@@ -98,6 +117,7 @@ class ArrayDict:
             value['offset'] = offset
             offset += value['length']
         self.data = new_data
+
 
 
 class MemoryMappedArrays:

@@ -335,15 +335,7 @@ class PosnBitArray:
         Assumes other's doc ids are not overlapping with self's doc ids.
         """
         # Shared terms
-        shared_terms = set(self.encoded_term_posns.keys()).intersection(set(other.encoded_term_posns.keys()))
-        for term_id in shared_terms:
-            # Append then sort
-            self.encoded_term_posns[term_id] = np.concatenate([self.encoded_term_posns[term_id], other.encoded_term_posns[term_id]])
-            self.encoded_term_posns[term_id].sort()
-
-        only_other_terms = set(other.encoded_term_posns.keys()).difference(set(self.encoded_term_posns.keys()))
-        for term_id in only_other_terms:
-            self.encoded_term_posns[term_id] = other.encoded_term_posns[term_id]
+        self.encoded_term_posns = ArrayDict.concat(self.encoded_term_posns, other.encoded_term_posns)
         self.max_doc_id = max(self.max_doc_id, other.max_doc_id)
         self.clear_cache()
 

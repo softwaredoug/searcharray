@@ -61,7 +61,8 @@ def convert_size(size_bytes):
     return "%s %s" % (s, size_name[i])
 
 
-def _gather_tokens(array, tokenizer, term_dict, term_doc, start_doc_id=0, trunc_posn=None):
+def _gather_tokens(array, tokenizer,
+                   term_dict, term_doc, start_doc_id=0, trunc_posn=None):
     all_terms = []
     all_docs = []
     all_posns = []
@@ -139,6 +140,7 @@ def _tokenize_batch(array, tokenizer, term_dict, batch_size, batch_beg, truncate
     if np.any(doc_lens > MAX_POSN):
         raise ValueError(f"Document length exceeds maximum of {MAX_POSN}")
 
+    logger.info("Batch tokenization complete")
     return batch_beg, term_doc, bit_posns, doc_lens
 
 
@@ -178,6 +180,7 @@ def _process_batches(term_doc, batch_size,
             logger.error(f"Batch {batch_beg} failed to tokenize")
             raise e
 
+    logger.info(f"(main thread) Processing {len(batch_results)} batch results")
     for result in batch_results:
         assert result is not None
         batch_beg, batch_term_doc, batch_bit_posns, batch_doc_lens = result
@@ -185,7 +188,9 @@ def _process_batches(term_doc, batch_size,
         if bit_posns is None:
             bit_posns = batch_bit_posns
         else:
+            logger.info("(main thread) Concatenating bit positions")
             bit_posns.concat(batch_bit_posns)
+            logger.info("(main thread) Concatenated bit positions... Done")
 
         doc_lens.append(batch_doc_lens)
     return bit_posns
@@ -200,7 +205,7 @@ def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000,
     doc_lens: List[np.ndarray] = []
     bit_posns = None
 
-    logger.info("Indexing begins")
+    logger.info(f"Indexing begins w/ {workers} workers")
     futures = []
     last_batch_beg_processed = 0
 

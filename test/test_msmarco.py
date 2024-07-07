@@ -157,6 +157,7 @@ def msmarco_all():
         df['title_idx'] = SearchArray.index(title_iter, truncate=True, tokenizer=ws_tokenizer, data_dir='data/')
         # Save to pickle
         df.to_pickle(msmarco_path_str)
+        return df
     else:
         print("Loading idxed pkl docs...")
         msmarco = pd.read_pickle(msmarco_path_str)
@@ -279,7 +280,7 @@ def test_msmarco_all_phrase(phrase_search, msmarco_all, benchmark):
     profiler = Profiler(benchmark)
     phrase_search = phrase_search.split()
     print(f"STARTING {phrase_search}")
-    profiler.run(msmarco_all['body_ws'].array.score, phrase_search)
+    profiler.run(msmarco_all['body_idx'].array.score, phrase_search)
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
