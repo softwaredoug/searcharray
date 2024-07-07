@@ -36,13 +36,13 @@ class ArrayDict:
     @staticmethod
     def from_array_with_boundaries(data: np.ndarray,
                                    ids: np.ndarray,
-                                   boundaries):
+                                   boundaries: np.ndarray):
         metadata = {}
         for idx, (beg, end) in enumerate(zip(boundaries[:-1], boundaries[1:])):
-            offset = beg
-            length = end - beg
+            offset = int(beg)
+            length = int(end - beg)
             actual_id = ids[idx]
-            metadata[actual_id] = {'offset': offset, 'length': length}
+            metadata[int(actual_id)] = {'offset': offset, 'length': length}
         arr = ArrayDict()
         arr.data = data
         arr.metadata = metadata
@@ -109,17 +109,18 @@ class MemoryMappedArrays:
         self.fp = None
         self.metadata_file = root_filename + '.metadata.json'
         if arrays is not None:
-            self._initialize_file(arrays)
+            self.arrays = arrays
+            self._initialize_file()
             self._save_metadata()
         else:
             self._load_metadata()
             self._load_fp()
 
-    def _initialize_file(self, arrays_dict):
+    def _initialize_file(self):
         """Memmap underlying array in ArrayDict."""
         self.metadata = {}
         with open(self.filename, 'wb') as f:
-            self.array.data.astype(self.dtype).tofile(f)
+            self.arrays.data.tofile(f)
 
     def _save_metadata(self):
         with open(self.metadata_file, 'w') as f:
