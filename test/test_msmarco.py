@@ -90,8 +90,6 @@ def msmarco_memmap():
         return pd.read_pickle(msmarco_path)
 
 
-
-
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
 def msmarco100k():
@@ -232,7 +230,6 @@ def test_msmarco100k_phrase(phrase_search, msmarco100k, benchmark):
     print(f"STARTING {phrase_search}")
     # print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     profiler.run(msmarco100k['body_ws'].array.score, phrase_search)
-    import pdb; pdb.set_trace()
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
@@ -243,7 +240,6 @@ def test_msmarco100k_phrase_memmap(phrase_search, msmarco100k_memmap, benchmark)
     print(f"STARTING {phrase_search}")
     # print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     profiler.run(msmarco100k_memmap['body_ws'].array.score, phrase_search)
-    import pdb; pdb.set_trace()
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
