@@ -68,6 +68,32 @@ def msmarco100k_memmap():
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.fixture(scope="session")
+def msmarco_memmap():
+    msmarco100k_raw = pd.read_pickle(msmarco100k_raw_path())
+    msmarco_path = 'data/msmarco100k_memmap.pkl'
+    msmarco100k_path = pathlib.Path(msmarco_path)
+
+    if not msmarco100k_path.exists():
+        msmarco = msmarco100k_raw
+        print("Indexing 100k docs...")
+        msmarco['title'].fillna('', inplace=True)
+        msmarco['body'].fillna('', inplace=True)
+        print(" Index Title")
+        msmarco["title_ws"] = SearchArray.index(msmarco["title"], tokenizer=ws_punc_tokenizer, data_dir='data/')
+        print(" Index Body")
+        msmarco["body_ws"] = SearchArray.index(msmarco["body"], tokenizer=ws_punc_tokenizer, data_dir='data/')
+        print(" Done!... Saving")
+
+        msmarco.to_pickle(msmarco_path)
+        return msmarco
+    else:
+        return pd.read_pickle(msmarco_path)
+
+
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.fixture(scope="session")
 def msmarco100k():
     msmarco100k_raw = pd.read_pickle(msmarco100k_raw_path())
     msmarco_path = 'data/msmarco100k.pkl'
@@ -128,9 +154,9 @@ def msmarco_all():
         df = pd.DataFrame()
         print("Indexing body")
         df['body_idx'] = SearchArray.index(body_iter, truncate=True, tokenizer=ws_tokenizer,
-                                           workers=2)
+                                           workers=2, data_dir='data/')
         print("Indexing title")
-        df['title_idx'] = SearchArray.index(title_iter, truncate=True, tokenizer=ws_tokenizer)
+        df['title_idx'] = SearchArray.index(title_iter, truncate=True, tokenizer=ws_tokenizer, data_dir='data/')
         # Save to pickle
         df.to_pickle(msmarco_path_str)
     else:
@@ -206,6 +232,18 @@ def test_msmarco100k_phrase(phrase_search, msmarco100k, benchmark):
     print(f"STARTING {phrase_search}")
     # print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
     profiler.run(msmarco100k['body_ws'].array.score, phrase_search)
+    import pdb; pdb.set_trace()
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what"])
+def test_msmarco100k_phrase_memmap(phrase_search, msmarco100k_memmap, benchmark):
+    profiler = Profiler(benchmark)
+    phrase_search = phrase_search.split()
+    print(f"STARTING {phrase_search}")
+    # print(f"Memory Usage (BODY): {msmarco100k['body_ws'].array.memory_usage() / 1024 ** 2:.2f} MB")
+    profiler.run(msmarco100k_memmap['body_ws'].array.score, phrase_search)
+    import pdb; pdb.set_trace()
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
@@ -237,6 +275,15 @@ def test_msmarco100k_phrase_stress(phrase_search, msmarco100k):
             print(f"Missing: {missing[0:10]}...")
             print(f"Sample text at {missing[0]} : {msmarco100k['body'].iloc[missing[0]]}")
             raise e
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "the purpose"])
+def test_msmarco_all_phrase(phrase_search, msmarco_all, benchmark):
+    profiler = Profiler(benchmark)
+    phrase_search = phrase_search.split()
+    print(f"STARTING {phrase_search}")
+    profiler.run(msmarco_all['body_ws'].array.score, phrase_search)
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")

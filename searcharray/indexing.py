@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import gc
+import os
 import sys
 from typing import Iterable, List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,6 +22,17 @@ logger.addHandler(handler)
 
 # Set to stdout for debugging
 # logging.basicConfig(level=logging.DEBUG)
+
+
+def home_directory():
+    return os.path.expanduser("~")
+
+
+def searcharray_home():
+    searcharray_dir = os.path.join(home_directory(), ".searcharray")
+    # Ensure exists
+    os.makedirs(searcharray_dir, exist_ok=True)
+    return searcharray_dir
 
 
 def _compute_doc_lens(posns: np.ndarray, doc_ids: np.ndarray, num_docs: int) -> np.ndarray:
@@ -228,6 +240,8 @@ def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000,
     term_doc_built = RowViewableMatrix(term_doc.build())
     logger.info("Indexing from tokenization complete")
     assert bit_posns is not None
+    # if data_dir is None:
+    #     data_dir = searcharray_home()
     if data_dir is not None:
         logger.info(f"Memmapping bit positions to {data_dir}")
         bit_posns.memmap(data_dir)

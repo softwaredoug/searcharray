@@ -9,7 +9,7 @@ import numpy as np
 from copy import deepcopy
 from typing import List, Tuple, Dict, Union, cast, Optional
 from searcharray.roaringish import RoaringishEncoder, convert_keys, merge
-from searcharray.phrase.memmap_arrays import MemoryMappedArrays  # noqa
+from searcharray.phrase.memmap_arrays import MemoryMappedArrays, ArrayDict
 from searcharray.phrase.bigram_freqs import bigram_freqs, Continuation
 from searcharray.phrase.spans import span_search
 import numbers
@@ -172,11 +172,9 @@ class PosnBitArrayFromFlatBuilder:
                                                       payload=self.flat_array[2].view(np.uint64))
         term_ids = self.flat_array[0][term_boundaries[:-1]]
 
-        encoded_term_posns = {}
-        for into_terms, (beg_idx, end_idx) in enumerate(zip(enc_term_boundaries[:-1], enc_term_boundaries[1:])):
-            sliced = encoded[beg_idx:end_idx]
-            encoded_term_posns[term_ids[into_terms]] = sliced
-
+        encoded_term_posns = ArrayDict.from_array_with_boundaries(encoded,
+                                                                  boundaries=enc_term_boundaries,
+                                                                  ids=term_ids)
         largest_doc_id_with_term = np.max(self.flat_array[1])
         assert self.max_doc_id >= largest_doc_id_with_term
         return PosnBitArray(encoded_term_posns, self.max_doc_id)
