@@ -36,6 +36,7 @@ pip install searcharray
 * Search w/ a [phrase w/ edit-distance](https://lucene.apache.org/core/9_6_0/core/org/apache/lucene/search/PhraseQuery.html) by passing slop=N.
 * Access raw stats arrays in termfreqs / docfreqs methods on the array
 * Bring your own tokenizer. Pass any (`def tokenize(value: str) -> List[str]`) when indexing.
+* Memory map by passing `data_dir` to index for memory mapped index
 * Accepts any python function to compute similarity. Here's [one similarity](https://github.com/softwaredoug/searcharray/blob/main/searcharray/similarity.py#L103)
 * Scores the entire dataframe, allowing combination w/ other ranking attributes (recency, popularity, etc) or scores from other fields (ie boolean queries)
 * Implement's Solr's [edismax query parser](https://github.com/softwaredoug/searcharray/blob/main/searcharray/solr.py) for efficient prototyping
