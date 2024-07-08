@@ -1,5 +1,4 @@
 import numpy as np
-import json
 import os
 from typing import Optional, List
 
@@ -119,7 +118,6 @@ class ArrayDict:
         self.data = new_data
 
 
-
 class MemoryMappedArrays:
     def __init__(self,
                  data_dir: str,
@@ -127,35 +125,20 @@ class MemoryMappedArrays:
         root_filename = create_filename(data_dir)
         self.filename = root_filename + '.dat'
         self.fp = None
-        self.metadata_file = root_filename + '.metadata.json'
         if arrays is not None:
             self.arrays = arrays
             self._initialize_file()
-            self._save_metadata()
         else:
-            self._load_metadata()
-            self._load_fp()
+            self._load_arrays()
 
     def _initialize_file(self):
         """Memmap underlying array in ArrayDict."""
-        self.metadata = {}
         with open(self.filename, 'wb') as f:
             self.arrays.data.tofile(f)
 
-    def _save_metadata(self):
-        with open(self.metadata_file, 'w') as f:
-            json.dump(self.arrays.metadata, f)
-
-    def _load_metadata(self):
-        try:
-            with open(self.metadata_file, 'r') as f:
-                self.metadata = json.load(f)
-        except FileNotFoundError:
-            pass
-
-    def _load_fp(self):
-        if self.fp is None:
-            self.fp = np.memmap(self.filename, dtype=self.dtype, mode='r+', shape=(self.fp.size,))
+    def _load_arrays(self):
+        """Memmap underlying array in ArrayDict from self.filename."""
+        self.arrays.data = np.memmap(self.filename, dtype=self.arrays.dtype, mode='r+')
 
     def __getitem__(self, key):
         # Use metadatat to get the offset and length of the array
@@ -170,7 +153,6 @@ class MemoryMappedArrays:
     def __delitem__(self, key):
         length = self.arrays[key].size
         del self.arrays[key]
-        self._save_metadata()
         self.fp = np.memmap(self.filename, dtype=self.dtype, mode='r+', shape=(self.fp.size - length,))
 
     def __len__(self):
@@ -187,3 +169,16 @@ class MemoryMappedArrays:
 
     def keys(self):
         return self.arrays.keys()
+
+    def __getstate__(self):
+        """Return arrays without the numpy array."""
+        # Create arrays without data
+        arrays = ArrayDict()
+        arrays.metadata = self.arrays.metadata
+        return {'arrays': arrays,
+                'filename': self.filename}
+
+    def __setstate__(self, state):
+        self.filename = state['filename']
+        self.arrays = state['arrays']
+        self._load_arrays()

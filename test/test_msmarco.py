@@ -146,6 +146,35 @@ def msmarco_all():
     msmarco_path_str = 'data/msmarco_all.pkl'
     msmarco_path = pathlib.Path(msmarco_path_str)
 
+    # 43 / 13
+
+    if not msmarco_path.exists():
+        body_iter = csv_col_iter(3)
+        title_iter = csv_col_iter(2)
+        df = pd.DataFrame()
+        print("Indexing body")
+        df['body_idx'] = SearchArray.index(body_iter, truncate=True, tokenizer=ws_tokenizer,
+                                           workers=2)
+        print("Indexing title")
+        df['title_idx'] = SearchArray.index(title_iter, truncate=True, tokenizer=ws_tokenizer)
+        # Save to pickle
+        df.to_pickle(msmarco_path_str)
+        return df
+    else:
+        print("Loading idxed pkl docs...")
+        msmarco = pd.read_pickle(msmarco_path_str)
+        print(f"Loaded msmarco -- {len(msmarco)} -- {msmarco['body_idx'].array.memory_usage() / 1024 ** 2:.2f} MB | {msmarco['title_idx'].array.memory_usage() / 1024 ** 2:.2f} MB")
+        return msmarco
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.fixture(scope="session")
+def msmarco_all_memmap():
+    msmarco_path_str = 'data/msmarco_all_memmap.pkl'
+    msmarco_path = pathlib.Path(msmarco_path_str)
+
+    # 18 / 19
+
     if not msmarco_path.exists():
         body_iter = csv_col_iter(3)
         title_iter = csv_col_iter(2)
@@ -272,6 +301,15 @@ def test_msmarco100k_phrase_stress(phrase_search, msmarco100k):
             print(f"Missing: {missing[0:10]}...")
             print(f"Sample text at {missing[0]} : {msmarco100k['body'].iloc[missing[0]]}")
             raise e
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("phrase_search", ["what is", "what is the", "what is the purpose", "what is the purpose of", "what is the purpose of cats", "star trek", "star trek the next generation", "what what what", "the purpose"])
+def test_msmarco_all_phrase_memmap(phrase_search, msmarco_all_memmap, benchmark):
+    profiler = Profiler(benchmark)
+    phrase_search = phrase_search.split()
+    print(f"STARTING {phrase_search}")
+    profiler.run(msmarco_all_memmap['body_idx'].array.score, phrase_search)
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
