@@ -42,10 +42,13 @@ def tmdb_pd_data(tmdb_raw_data):
     return df
 
 
-@pytest.fixture(scope="module", params=["full", "ends_empty"])
+@pytest.fixture(scope="module", params=["full", "ends_empty", "memmap", "small_batch",
+                                        "smallbatch_memmap"])
 def tmdb_data(tmdb_pd_data, request):
     df = tmdb_pd_data
-    indexed = SearchArray.index(df['title'])
+    indexed = SearchArray.index(df['title'],
+                                batch_size=5000 if request.param in ["small_batch", "smallbatch_memmap"] else 100000,
+                                data_dir="/tmp/" if request.param == "memmap" else None)
     df['title_tokens'] = indexed
 
     # set last 3 overview strings to empty
@@ -53,7 +56,9 @@ def tmdb_data(tmdb_pd_data, request):
         df['overview'][-3:] = ''
         df['overview'][:3] = ''
 
-    indexed = SearchArray.index(df['overview'])
+    indexed = SearchArray.index(df['overview'],
+                                batch_size=5000 if request.param in ["small_batch", "smallbatch_memmap"] else 100000,
+                                data_dir="/tmp/" if request.param == "memmap" else None)
     df['overview_tokens'] = indexed
     return df
 
