@@ -1,6 +1,6 @@
 import numpy as np
 import os
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 
 def create_filename(data_dir: str):
@@ -49,21 +49,35 @@ class ArrayDict:
 
     @staticmethod
     def concat(lhs: 'ArrayDict', rhs: 'ArrayDict', sort=True):
-        metadata = {}
-        offset = 0
-        for key, value in lhs.metadata.items():
-            metadata[key] = {'offset': offset, 'length': value['length']}
-            offset += value['length']
-        for key, value in rhs.metadata.items():
-            metadata[key] = {'offset': offset, 'length': value['length']}
-            offset += value['length']
-        data = np.concatenate((lhs.data, rhs.data))
-        if sort:
-            keys = sorted(metadata.keys())
-            metadata = {key: metadata[key] for key in keys}
         arr = ArrayDict()
-        arr.data = data
+        metadata: Dict[int, Dict[str, int]] = {}
+        lst_of_arrays: List[np.ndarray] = []
+
+        curr_offset = 0
+        last_offset = 0
+
+        fetched_keys = set()
+        for key, value in lhs.items():
+            fetched_keys.add(key)
+            all_for_key = [value]
+            curr_offset += value.size
+            if key in rhs.metadata:
+                rhs_value = rhs[key]
+                all_for_key.append(rhs_value)
+                curr_offset += rhs_value.size
+            metadata[key] = {'offset': last_offset, 'length': curr_offset - last_offset}
+            last_offset = curr_offset
+            lst_of_arrays.append(np.concatenate(all_for_key))
+
+        for key, value in rhs.items():
+            if key not in fetched_keys:
+                curr_offset += value.size
+                lst_of_arrays.append(value)
+                metadata[key] = {'offset': last_offset, 'length': curr_offset}
+                last_offset = curr_offset
+
         arr.metadata = metadata
+        arr.data = np.concatenate(lst_of_arrays)
         return arr
 
     def __getitem__(self, key):

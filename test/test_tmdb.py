@@ -1,17 +1,47 @@
 import pytest
 import gzip
+import os
 from time import perf_counter
 import json
 import pandas as pd
 import numpy as np
 import sys
+import shutil
 from searcharray.postings import SearchArray
 from searcharray.solr import edismax
 from searcharray.similarity import default_bm25
 from test_utils import Profiler, profile_enabled, naive_find_term
 
 
+DATA_DIR = '/tmp/tmdb'
+
+
 should_profile = '--benchmark-disable' in sys.argv
+
+
+def clean_data_dir():
+    try:
+        shutil.rmtree(DATA_DIR)
+    except FileNotFoundError:
+        pass
+
+
+def ensure_data_dir_exists():
+    try:
+        shutil.rmtree(DATA_DIR)
+    except FileNotFoundError:
+        pass
+    try:
+        os.makedirs(DATA_DIR)
+    except FileExistsError:
+        pass
+
+
+@pytest.fixture(scope="session", autouse=True)
+def clean_up():
+    ensure_data_dir_exists()
+    yield
+    clean_data_dir()
 
 
 @pytest.fixture(scope="session")
@@ -48,7 +78,7 @@ def tmdb_data(tmdb_pd_data, request):
     df = tmdb_pd_data
     indexed = SearchArray.index(df['title'],
                                 batch_size=5000 if request.param in ["small_batch", "smallbatch_memmap"] else 100000,
-                                data_dir="/tmp/" if request.param == "memmap" else None)
+                                data_dir=DATA_DIR if request.param == "memmap" else None)
     df['title_tokens'] = indexed
 
     # set last 3 overview strings to empty
@@ -58,7 +88,7 @@ def tmdb_data(tmdb_pd_data, request):
 
     indexed = SearchArray.index(df['overview'],
                                 batch_size=5000 if request.param in ["small_batch", "smallbatch_memmap"] else 100000,
-                                data_dir="/tmp/" if request.param == "memmap" else None)
+                                data_dir=DATA_DIR if request.param == "memmap" else None)
     df['overview_tokens'] = indexed
     return df
 
