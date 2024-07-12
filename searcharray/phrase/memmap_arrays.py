@@ -73,10 +73,14 @@ class ArrayDict:
             if key not in fetched_keys:
                 curr_offset += value.size
                 lst_of_arrays.append(value)
-                metadata[key] = {'offset': last_offset, 'length': curr_offset}
+                metadata[key] = {'offset': last_offset, 'length': curr_offset - last_offset}
                 last_offset = curr_offset
 
         arr.metadata = metadata
+        for curr_arr in lst_of_arrays:
+            if sort:
+                curr_arr.sort()
+
         arr.data = np.concatenate(lst_of_arrays)
         return arr
 
