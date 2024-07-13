@@ -336,7 +336,11 @@ class PosnBitArray:
 
         Assumes other's doc ids are not overlapping with self's doc ids.
         """
-        # Shared terms
+        if self.encoded_term_posns == {}:
+            self.encoded_term_posns = other.encoded_term_posns
+            self.max_doc_id = other.max_doc_id
+            self.clear_cache()
+            return self
         self.encoded_term_posns = ArrayDict.concat(self.encoded_term_posns, other.encoded_term_posns)
         self.max_doc_id = max(self.max_doc_id, other.max_doc_id)
         self.clear_cache()
