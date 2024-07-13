@@ -46,7 +46,7 @@ def _compute_doc_lens(posns: np.ndarray, doc_ids: np.ndarray, num_docs: int) -> 
     non_empty_doc_ids = doc_ids[non_empty_idxs]
     non_empty_doc_lens = non_empty_doc_lens[non_empty_idxs]
     doc_lens[non_empty_doc_ids] = non_empty_doc_lens
-    if doc_ids[-1] not in non_empty_doc_ids:
+    if len(doc_ids) > 0 and doc_ids[-1] not in non_empty_doc_ids:
         doc_lens[doc_ids[-1]] = posns[-1] + 1
     return doc_lens
 

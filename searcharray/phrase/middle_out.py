@@ -170,6 +170,8 @@ class PosnBitArrayFromFlatBuilder:
         encoded, enc_term_boundaries = encoder.encode(keys=self.flat_array[1].view(np.uint64),
                                                       boundaries=term_boundaries[:-1],
                                                       payload=self.flat_array[2].view(np.uint64))
+        if len(encoded) == 0:
+            return PosnBitArray({}, self.max_doc_id)
         term_ids = self.flat_array[0][term_boundaries[:-1]]
 
         encoded_term_posns = ArrayDict.from_array_with_boundaries(encoded,

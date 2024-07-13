@@ -1,5 +1,6 @@
 """Test postings array search functionality."""
 import numpy as np
+import pandas as pd
 import pytest
 from searcharray.postings import SearchArray
 from searcharray.similarity import bm25_similarity
@@ -10,6 +11,16 @@ from test_utils import w_scenarios
 def data():
     """Return a fixture of your data here that returns an instance of your ExtensionArray."""
     return SearchArray.index(["foo bar bar baz", "data2", "data3 bar", "bunny funny wunny"] * 25)
+
+
+@pytest.fixture
+def all_empty_str():
+    return pd.DataFrame({"data": [""] * 100})
+
+
+def test_search_empty_str(all_empty_str):
+    data = SearchArray.index(all_empty_str["data"])
+    assert data.score("foo").sum() == 0
 
 
 def test_match(data):

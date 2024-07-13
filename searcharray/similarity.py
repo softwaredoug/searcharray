@@ -43,7 +43,10 @@ def compute_idf(num_docs, dfs):
 
 
 def compute_adj_doc_lens(doc_lens, avg_doc_lens, k1, b):
-    adj_doc_lens = doc_lens / avg_doc_lens
+    if avg_doc_lens == 0:
+        adj_doc_lens = np.zeros_like(doc_lens, dtype=np.float32)
+    else:
+        adj_doc_lens = doc_lens / avg_doc_lens
     adj_doc_lens *= b
     adj_doc_lens += 1 - b
     adj_doc_lens *= k1
