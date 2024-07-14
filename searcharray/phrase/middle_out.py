@@ -302,7 +302,8 @@ class PosnBitArray:
         self.termfreq_cache : Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
 
     def memmap(self, data_dir):
-        self.encoded_term_posns = MemoryMappedArrays(data_dir, self.encoded_term_posns)
+        if self.encoded_term_posns:
+            self.encoded_term_posns = MemoryMappedArrays(data_dir, self.encoded_term_posns)
 
     def warm(self):
         """Warm tf / df cache of most common terms."""

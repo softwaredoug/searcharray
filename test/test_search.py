@@ -1,10 +1,15 @@
 """Test postings array search functionality."""
 import numpy as np
 import pandas as pd
+import os
+import shutil
 import pytest
 from searcharray.postings import SearchArray
 from searcharray.similarity import bm25_similarity
 from test_utils import w_scenarios
+
+
+DATA_DIR = '/tmp/tmdb'
 
 
 @pytest.fixture
@@ -31,6 +36,20 @@ def test_search_phrase_empty_str_batch_size():
     data = SearchArray.index(data["data"],
                              batch_size=1000)
     assert data.score(["foo", "bar"]).sum() == 0
+
+
+def test_search_phrase_empty_str_batch_size_memmap():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    data = pd.DataFrame({"data": [""] * 10000})
+    data = SearchArray.index(data["data"],
+                             batch_size=1000,
+                             data_dir=DATA_DIR)
+    assert data.score(["foo", "bar"]).sum() == 0
+    pd.to_pickle(data, os.path.join(DATA_DIR, "data.pkl"))
+    reloaded = pd.read_pickle(os.path.join(DATA_DIR, "data.pkl"))
+    assert reloaded.score(["foo", "bar"]).sum() == 0
+
+    shutil.rmtree(DATA_DIR)
 
 
 def test_match(data):
