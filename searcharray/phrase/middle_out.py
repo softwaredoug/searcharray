@@ -292,12 +292,20 @@ class FilteredPosns(abc.Mapping):
     def __len__(self):
         return len(self.doc_ids)
 
+    def item_len(self, key):
+        if not self.base_item:
+            return 0
+        return self.base.item_len(key)
+
 
 class PosnBitArray:
 
-    def __init__(self, encoded_term_posns: Union[ArrayDict, FilteredPosns], max_doc_id: int):
+    def __init__(self, encoded_term_posns: Union[ArrayDict, FilteredPosns],
+                 max_doc_id: int,
+                 cache_at_len: int = 10):
         self.encoded_term_posns = encoded_term_posns
         self.max_doc_id = max_doc_id
+        self.cache_at_len = cache_at_len
         self.docfreq_cache : Dict[int, np.uint64] = {}
         self.termfreq_cache : Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
 
@@ -470,6 +478,8 @@ class PosnBitArray:
             term_posns = self.encoded_term_posns[term_id]
             doc_ids, term_freqs = self._computed_term_freqs(term_posns)
             if self._is_cached(term_id):
+                doc_ids = doc_ids[term_freqs > 0]
+                term_freqs = term_freqs[term_freqs > 0]
                 self.termfreq_cache[term_id] = (doc_ids, term_freqs)
             return doc_ids, term_freqs
 
@@ -480,8 +490,9 @@ class PosnBitArray:
         return self.docfreq_cache[term_id]
 
     def _maybe_cache_docfreq(self, term_id: int, docfreq: np.uint64):
-        if self.max_doc_id >= 99999 and docfreq > (self.max_doc_id // 100):
-            self.docfreq_cache[term_id] = docfreq
+        if self.encoded_term_posns:
+            if self.encoded_term_posns.item_len(term_id) > self.cache_at_len:
+                self.docfreq_cache[term_id] = docfreq
 
     def docfreq(self, term_id: int) -> np.uint64:
         try:

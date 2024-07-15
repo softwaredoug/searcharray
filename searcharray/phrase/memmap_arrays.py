@@ -93,6 +93,13 @@ class ArrayDict:
         else:
             raise KeyError(f'Key {key} not found.')
 
+    def item_len(self, key):
+        key = int(key)
+        if key in self.metadata:
+            return self.metadata[key]['length']
+        else:
+            raise KeyError(f'Key {key} not found.')
+
     def __setitem__(self, key, value):
         key = int(key)
         if value.dtype != self.dtype:

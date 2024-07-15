@@ -432,6 +432,10 @@ class SearchArray(ExtensionArray):
             counts = Counter(self[:])
         return pd.Series(counts)
 
+    def tf_cache_at(self, terms_len):
+        """Cache term frequencies at a given length."""
+        self.posns.cache_at_len = terms_len
+
     def __len__(self):
         len_rval = len(self.term_mat.rows)
         return len_rval
