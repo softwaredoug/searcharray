@@ -30,6 +30,22 @@ lucene_bm25_scenarios = {
         "num_docs": 8514,
         "expected": 3.8199246
     },
+    "rambo_tmdb": {
+        "term_freqs": 2,  # freq, occurrences of term within document
+        "doc_freqs": 7,   # n, number of documents containing term
+        "doc_lens": 44,   # "dl, length of field (approximate)
+        "avg_doc_len": 50.580456,  # avgdl, average length of field
+        "num_docs": 8514,    # N, total number of documents with field
+        "expected": 4.5636616
+    },
+    "the_tmdb": {
+        "term_freqs": 25,  # freq, occurrences of term within document
+        "doc_freqs": 7823,   # n, number of documents containing term
+        "doc_lens": 152,   # "dl, length of field (approximate)
+        "avg_doc_len": 119.18542,  # avgdl, average length of field
+        "num_docs": 8516,    # N, total number of documents with field
+        "expected": 0.08028283
+    }
 }
 
 
