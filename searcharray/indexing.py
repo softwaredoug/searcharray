@@ -1,6 +1,5 @@
 import numpy as np
 import math
-import gc
 import os
 import sys
 from typing import Iterable, List, Optional
@@ -92,8 +91,8 @@ def _gather_tokens(array, tokenizer,
 
     logger.info("Tokenization -- vstacking")
     terms_w_posns = np.vstack([all_terms, all_docs, all_posns])
-    del all_terms, all_docs, all_posns
-    gc.collect()
+    # del all_terms, all_docs, all_posns
+    # gc.collect()
     logger.info("Tokenization -- DONE")
     return terms_w_posns, term_doc
 
@@ -196,10 +195,46 @@ def _process_batches(term_doc, batch_size,
     return bit_posns
 
 
+def build_index_no_workers(array: Iterable, tokenizer, batch_size=10000,
+                           data_dir: Optional[str] = None,
+                           truncate=False):
+    term_dict = TermDict()
+    term_doc = SparseMatSetBuilder()
+    doc_lens: List[np.ndarray] = []
+    bit_posns = None
+
+    logger.info("Indexing begins w/ NO workers")
+    for batch_beg, batch in batch_iterator(array, batch_size):
+        batch_beg, batch_term_doc, batch_bit_posns, batch_doc_lens = _tokenize_batch(batch, tokenizer, term_dict, batch_size, batch_beg, truncate=truncate)
+        term_doc.concat(batch_term_doc)
+        if bit_posns is None:
+            bit_posns = batch_bit_posns
+        else:
+            bit_posns.concat(batch_bit_posns)
+        doc_lens.append(batch_doc_lens)
+
+    doc_lens = np.concatenate(doc_lens)
+
+    avg_doc_length = np.mean(doc_lens)
+
+    term_doc_built = RowViewableMatrix(term_doc.build())
+    logger.info("Indexing from tokenization complete")
+    assert bit_posns is not None
+    # if data_dir is None:
+    #     data_dir = searcharray_home()
+    if data_dir is not None:
+        logger.info(f"Memmapping bit positions to {data_dir}")
+        bit_posns.memmap(data_dir)
+    return term_doc_built, bit_posns, term_dict, avg_doc_length, np.array(doc_lens)
+
+
 def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000,
                                data_dir: Optional[str] = None,
                                truncate=False, workers=4):
     """Build index directly from tokenizing docs (array of string)."""
+    if workers == 1:
+        return build_index_no_workers(array, tokenizer, batch_size=batch_size,
+                                      data_dir=data_dir, truncate=truncate)
     term_dict = TermDict()
     term_doc = SparseMatSetBuilder()
     doc_lens: List[np.ndarray] = []

@@ -66,12 +66,14 @@ def tmdb_pd_data(tmdb_raw_data):
 
 
 @pytest.fixture(scope="session", params=["full", "ends_empty", "memmap", "small_batch",
-                                         "smallbatch_memmap"])
+                                         "smallbatch_memmap", "one_worker"])
 def tmdb_data(tmdb_pd_data, request):
     ensure_data_dir_exists()
     print(f"Rebuilding index with {request.param}")
     df = tmdb_pd_data
+    workers = 4 if request.param != "one_worker" else 1
     indexed = SearchArray.index(df['title'],
+                                workers=workers,
                                 batch_size=5000 if request.param in ["small_batch", "smallbatch_memmap"] else 100000,
                                 data_dir=DATA_DIR if request.param == "memmap" else None)
     df['title_tokens'] = indexed
@@ -309,7 +311,8 @@ def test_index_benchmark_warmed(benchmark, tmdb_pd_data):
 def test_index_benchmark_1k_random(benchmark, tmdb_pd_data):
     prof = Profiler(benchmark)
     thousand_random = np.random.choice(tmdb_pd_data['overview'], size=1000)
-    results = prof.run(SearchArray.index, thousand_random, autowarm=False)
+    results = prof.run(SearchArray.index, thousand_random, autowarm=False,
+                       workers=1)
     assert len(results) == 1000
 
 
