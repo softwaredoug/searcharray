@@ -130,26 +130,32 @@ cdef _popcount64_reduce(DTYPE_t[:] arr,
                         DTYPE_t value_mask):
     cdef float[:] popcounts = np.zeros(arr.shape[0], dtype=np.float32)
     cdef DTYPE_t[:] keys = np.empty(arr.shape[0], dtype=np.uint64)
-    # cdef int i = 0
     cdef float* popcounts_ptr = &popcounts[0]
     cdef DTYPE_t* keys_ptr = &keys[0]
     cdef DTYPE_t* arr_ptr = &arr[0]
-    cdef DTYPE_t last_key = 0xFFFFFFFFFFFFFFFF
+
+    cdef DTYPE_t last_key = arr_ptr[0] >> key_shift
+    keys_ptr[0] = last_key
 
     for _ in range(arr.shape[0]):
-        popcounts_ptr[0] += __builtin_popcountll(arr_ptr[0] & value_mask)
-        if arr_ptr[0] >> key_shift != last_key:
+        if (arr_ptr[0] >> key_shift) == last_key:
+            popcounts_ptr[0] += __builtin_popcountll(arr_ptr[0] & value_mask)
+        else:
             last_key = arr_ptr[0] >> key_shift
-            keys_ptr[0] = last_key
             popcounts_ptr += 1
             keys_ptr += 1
+            # Init next key
+            keys_ptr[0] = last_key
+            popcounts_ptr[0] = __builtin_popcountll(arr_ptr[0] & value_mask)
         arr_ptr += 1
-    return keys, popcounts, keys_ptr - &keys[0]
+    return keys, popcounts, (keys_ptr - &keys[0] + 1)
 
 
 def popcount64_reduce(arr,
                       key_shift,
                       value_mask):
     cdef DTYPE_t[:] arr_view = arr
+    if len(arr_view) == 0:
+        return np.array([]), np.array([])
     keys, popcounts, results_idx = _popcount64_reduce(arr_view, key_shift, value_mask)
     return np.array(keys[:results_idx]), np.array(popcounts[:results_idx])

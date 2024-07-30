@@ -12,6 +12,27 @@ from test_utils import w_scenarios
 DATA_DIR = '/tmp/tmdb'
 
 
+def ws_lowercase(text):
+    return text.lower().split()
+
+
+tf_scenarios = {
+    "base": {
+        "arr": SearchArray.index(["""bradford bradford""",
+                                  """bradford""",
+                                  """"William Bradford (Mayflower passenger) William Bradford (1590 â 1657) was a passenger on the Mayflower in 1620. He travelled to the New World to live in religious freedom. He became the second Governor of Plymouth Colony and served for over 30 years. Bradford kept a journal of the history of the early life in Plymouth Colony. It is called Of Plymouth Plantation."""] * 25, tokenizer=ws_lowercase),
+        "term": "bradford",
+        "expected": [2, 1, 3] * 25,
+    }
+}
+
+
+@w_scenarios(tf_scenarios)
+def test_term_freq(arr, term, expected):
+    tf = arr.termfreqs(term)
+    assert np.all(tf == expected)
+
+
 @pytest.fixture
 def data():
     """Return a fixture of your data here that returns an instance of your ExtensionArray."""
