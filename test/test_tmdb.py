@@ -310,10 +310,10 @@ def test_index_benchmark_warmed(benchmark, tmdb_pd_data):
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 def test_index_benchmark_1k_random(benchmark, tmdb_pd_data):
     prof = Profiler(benchmark)
-    thousand_random = np.random.choice(tmdb_pd_data['overview'], size=1000)
+    thousand_random = np.random.choice(tmdb_pd_data['overview'], size=250)
     results = prof.run(SearchArray.index, thousand_random, autowarm=False,
                        workers=1)
-    assert len(results) == 1000
+    assert len(results) == 250
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")

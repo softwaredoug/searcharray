@@ -295,11 +295,13 @@ class FilteredPosns(abc.Mapping):
 
 class PosnBitArray:
 
-    def __init__(self, encoded_term_posns: Union[ArrayDict, FilteredPosns], max_doc_id: int):
+    def __init__(self, encoded_term_posns: Union[ArrayDict, FilteredPosns], max_doc_id: int,
+                 cache_gt_than=25):
         self.encoded_term_posns = encoded_term_posns
         self.max_doc_id = max_doc_id
         self.docfreq_cache : Dict[int, np.uint64] = {}
         self.termfreq_cache : Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
+        self.cache_gt_than = cache_gt_than
 
     def memmap(self, data_dir):
         if self.encoded_term_posns:
@@ -480,7 +482,7 @@ class PosnBitArray:
         return self.docfreq_cache[term_id]
 
     def _maybe_cache_docfreq(self, term_id: int, docfreq: np.uint64):
-        if self.max_doc_id >= 99999 and docfreq > (self.max_doc_id // 100):
+        if len(self.encoded_term_posns[term_id]) > self.cache_gt_than:
             self.docfreq_cache[term_id] = docfreq
 
     def docfreq(self, term_id: int) -> np.uint64:

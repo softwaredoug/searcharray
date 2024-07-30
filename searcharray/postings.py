@@ -252,6 +252,7 @@ class SearchArray(ExtensionArray):
               batch_size=100000,
               avoid_copies=True,
               workers=4,
+              cache_gt_than=25,
               data_dir: Optional[str] = None,
               autowarm=True) -> 'SearchArray':
         """Index an array of strings into SearchArray using tokenizer.
@@ -282,6 +283,7 @@ class SearchArray(ExtensionArray):
             build_index_from_tokenizer(array, tokenizer, batch_size=batch_size,
                                        truncate=truncate,
                                        data_dir=data_dir,
+                                       cache_gt_than=cache_gt_than,
                                        workers=workers)
 
         if autowarm:

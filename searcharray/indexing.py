@@ -71,6 +71,7 @@ def _gather_tokens(array, tokenizer,
     for idx, doc in enumerate(array):
         doc_id = start_doc_id + idx
 
+        # Speedup - use predefined vocabulary
         terms = np.asarray([term_dict.add_term(token)
                             for token in tokenizer(doc)], dtype=np.uint32)[:trunc_posn]
         doc_ids = np.full(len(terms), doc_id, dtype=np.uint32)[:trunc_posn]
@@ -197,6 +198,7 @@ def _process_batches(term_doc, batch_size,
 
 def build_index_no_workers(array: Iterable, tokenizer, batch_size=10000,
                            data_dir: Optional[str] = None,
+                           cache_gt_than=25,
                            truncate=False):
     term_dict = TermDict()
     term_doc = SparseMatSetBuilder()
@@ -225,15 +227,18 @@ def build_index_no_workers(array: Iterable, tokenizer, batch_size=10000,
     if data_dir is not None:
         logger.info(f"Memmapping bit positions to {data_dir}")
         bit_posns.memmap(data_dir)
+    bit_posns.cache_gt_than = cache_gt_than
     return term_doc_built, bit_posns, term_dict, avg_doc_length, np.array(doc_lens)
 
 
 def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000,
                                data_dir: Optional[str] = None,
-                               truncate=False, workers=4):
+                               truncate=False, workers=4,
+                               cache_gt_than=25):
     """Build index directly from tokenizing docs (array of string)."""
     if workers == 1:
         return build_index_no_workers(array, tokenizer, batch_size=batch_size,
+                                      cache_gt_than=cache_gt_than,
                                       data_dir=data_dir, truncate=truncate)
     term_dict = TermDict()
     term_doc = SparseMatSetBuilder()
@@ -285,6 +290,7 @@ def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000,
     if data_dir is not None:
         logger.info(f"Memmapping bit positions to {data_dir}")
         bit_posns.memmap(data_dir)
+    bit_posns.cache_gt_than = cache_gt_than
     return term_doc_built, bit_posns, term_dict, avg_doc_length, np.array(doc_lens)
 
 
