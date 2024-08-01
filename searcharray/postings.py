@@ -609,7 +609,9 @@ class SearchArray(ExtensionArray):
                   max_posn: Optional[int] = None) -> np.ndarray:
         token = self._check_token_arg(token)
         if isinstance(token, list):
-            return self._phrase_freq(token, slop=slop, min_posn=min_posn, max_posn=max_posn)
+            tfs = self._phrase_freq(token, slop=slop, min_posn=min_posn, max_posn=max_posn)
+            assert tfs.dtype == np.float32
+            return tfs
 
         try:
             term_id = self.term_dict.get_term_id(token)

@@ -384,7 +384,7 @@ class PosnBitArray:
         return term_posns
 
     def empty_buffer(self):
-        return np.zeros(int(self.max_doc_id + 1), dtype=np.float64)
+        return np.zeros(int(self.max_doc_id + 1), dtype=np.float32)
 
     def phrase_freqs(self, term_ids: List[int],
                      slop: int = 0,

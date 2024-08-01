@@ -83,7 +83,7 @@ def popcount64(np.ndarray[DTYPE_t, ndim=1] arr):
     return np.array(popcount64_arr(arr))
 
 
-cdef _popcount_reduce_at(DTYPE_t[:] ids, DTYPE_t[:] payload, double[:] output):
+cdef _popcount_reduce_at(DTYPE_t[:] ids, DTYPE_t[:] payload, float[:] output):
     cdef DTYPE_t idx = 1
     cdef DTYPE_t popcount_sum = __builtin_popcountll(payload[0])
 
@@ -100,14 +100,14 @@ cdef _popcount_reduce_at(DTYPE_t[:] ids, DTYPE_t[:] payload, double[:] output):
 
 def popcount_reduce_at(np.ndarray[DTYPE_t, ndim=1] ids,
                        np.ndarray[DTYPE_t, ndim=1] payload,
-                       np.ndarray[np.float64_t, ndim=1] output):
+                       np.ndarray[np.float32_t, ndim=1] output):
     """Write the sum of popcount of the payload at the indices in ids to the output array."""
     if len(ids) != len(payload):
         raise ValueError("ids and payload must have the same length")
     return np.array(_popcount_reduce_at(ids, payload, output))
 
 
-cdef _key_sum_over(DTYPE_t[:] ids, DTYPE_t[:] count, double[:] output):
+cdef _key_sum_over(DTYPE_t[:] ids, DTYPE_t[:] count, float[:] output):
     cdef DTYPE_t i = 0
     for i in range(ids.shape[0]):
         output[ids[i]] += count[i]
@@ -115,7 +115,7 @@ cdef _key_sum_over(DTYPE_t[:] ids, DTYPE_t[:] count, double[:] output):
 
 def key_sum_over(np.ndarray[DTYPE_t, ndim=1] ids,
                  np.ndarray[DTYPE_t, ndim=1] count,
-                 np.ndarray[np.float64_t, ndim=1] output):
+                 np.ndarray[np.float32_t, ndim=1] output):
     """Write the last value of the payload at the indices in ids to the output array."""
     _key_sum_over(ids, count, output)
 
