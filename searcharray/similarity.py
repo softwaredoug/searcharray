@@ -1,6 +1,7 @@
 """Similarity functions given term stats."""
 from typing import Protocol, Dict, Any
 import numpy as np
+from searcharray.roaringish import bm25_score
 
 
 class ScoringContext:
@@ -46,10 +47,11 @@ def compute_adj_doc_lens(doc_lens, avg_doc_lens, k1, b):
     if avg_doc_lens == 0:
         adj_doc_lens = np.zeros_like(doc_lens, dtype=np.float32)
     else:
-        adj_doc_lens = doc_lens / avg_doc_lens
+        adj_doc_lens = np.divide(doc_lens, avg_doc_lens, dtype=np.float32)
     adj_doc_lens *= b
     adj_doc_lens += 1 - b
     adj_doc_lens *= k1
+    assert adj_doc_lens.dtype == np.float32
     # Divide tf in place for perf, but this means
     # we can't use the same term_freqs for different k1, b
     return adj_doc_lens
@@ -71,20 +73,17 @@ def bm25_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
         idf = compute_idf(context.num_docs, doc_freqs)
         try:
             adj_doc_lens = context.working["adj_doc_lens"]
-            term_freqs /= (term_freqs + adj_doc_lens)
-            term_freqs *= idf
+            bm25_score(term_freqs, adj_doc_lens, idf)
             return term_freqs
         except (KeyError, ValueError):
             try:
                 adj_doc_lens = compute_adj_doc_lens(context.doc_lens, context.avg_doc_lens, k1, b)
                 context.working["adj_doc_lens"] = adj_doc_lens
-                term_freqs /= (term_freqs + adj_doc_lens)
-                term_freqs *= idf
+                bm25_score(term_freqs, adj_doc_lens, idf)
                 return term_freqs
             except ValueError:
                 adj_doc_lens = compute_adj_doc_lens(doc_lens, avg_doc_lens, k1, b)
-                term_freqs /= (term_freqs + adj_doc_lens)
-                term_freqs *= idf
+                bm25_score(term_freqs, adj_doc_lens, idf)
                 return term_freqs
     return bm25
 

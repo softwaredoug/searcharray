@@ -135,18 +135,52 @@ cdef _popcount64_reduce(DTYPE_t[:] arr,
     cdef DTYPE_t* arr_ptr = &arr[0]
 
     cdef DTYPE_t last_key = arr_ptr[0] >> key_shift
+    cdef DTYPE_t key = last_key
     keys_ptr[0] = last_key
 
     for _ in range(arr.shape[0]):
-        if (arr_ptr[0] >> key_shift) == last_key:
+        key = arr_ptr[0] >> key_shift
+        if key == last_key:
             popcounts_ptr[0] += __builtin_popcountll(arr_ptr[0] & value_mask)
         else:
-            last_key = arr_ptr[0] >> key_shift
+            last_key = key
             popcounts_ptr += 1
             keys_ptr += 1
             # Init next key
             keys_ptr[0] = last_key
             popcounts_ptr[0] = __builtin_popcountll(arr_ptr[0] & value_mask)
+        arr_ptr += 1
+    return keys, popcounts, (keys_ptr - &keys[0] + 1)
+
+
+# Branchless version using lookup table instead of if...
+# Popcount reduce key-value pair
+# for words 0xKKKKKKKK...KKKKVVVV...VVVV
+# Returning two parallel arrays:
+#   - keys   - the keys
+#   - values - the popcount of the values with those keys
+cdef _popcount64_reduce_nobranch(DTYPE_t[:] arr,
+                                 DTYPE_t key_shift,
+                                 DTYPE_t value_mask):
+    cdef float[:] popcounts = np.zeros(arr.shape[0], dtype=np.float32)
+    cdef DTYPE_t[:] keys = np.empty(arr.shape[0], dtype=np.uint64)
+    cdef float* popcounts_ptr = &popcounts[0]
+    cdef DTYPE_t* keys_ptr = &keys[0]
+    cdef DTYPE_t* arr_ptr = &arr[0]
+
+    cdef DTYPE_t last_key = arr_ptr[0] >> key_shift
+    cdef DTYPE_t key = last_key
+    cdef bint new_key = False
+
+    keys_ptr[0] = last_key
+
+    for _ in range(arr.shape[0]):
+        key = arr_ptr[0] >> key_shift
+        popcounts_ptr += (key != last_key)
+        keys_ptr += (key != last_key)
+        popcounts_ptr[0] += __builtin_popcountll(arr_ptr[0] & value_mask)
+        keys_ptr[0] = key
+        last_key = key
         arr_ptr += 1
     return keys, popcounts, (keys_ptr - &keys[0] + 1)
 
@@ -159,3 +193,26 @@ def popcount64_reduce(arr,
         return np.array([]), np.array([])
     keys, popcounts, results_idx = _popcount64_reduce(arr_view, key_shift, value_mask)
     return np.array(keys[:results_idx]), np.array(popcounts[:results_idx])
+
+
+cdef _bm25_score(float* term_freqs,
+                 float* adj_doc_lens,
+                 double idf,
+                 DTYPE_t length):
+    """Modify termfreqs in place changing to BM25 score."""
+    for _ in range(length):
+        term_freqs[0] /= (term_freqs[0] + adj_doc_lens[0])
+        term_freqs[0] *= idf
+
+        term_freqs += 1
+        adj_doc_lens += 1
+
+
+def bm25_score(term_freqs, adj_doc_lens, idf):
+    cdef DTYPE_t length = term_freqs.shape[0]
+    cdef float[:] term_freqs_view = term_freqs
+    cdef float[:] adj_doc_lens_view = adj_doc_lens
+    _bm25_score(&term_freqs_view[0],
+                &adj_doc_lens_view[0],
+                idf,
+                length)
