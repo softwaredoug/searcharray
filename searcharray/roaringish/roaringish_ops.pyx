@@ -9,6 +9,13 @@
 cimport numpy as np
 import numpy as np
 
+
+# example.pyx
+cdef extern from "scatter_assign.h":
+    void scatter_naive(float *array,
+                       const unsigned long long *indices,
+                       const float *values, int n) nogil
+
 cimport searcharray.roaringish.snp_ops
 from searcharray.roaringish.snp_ops cimport DTYPE_t
 
@@ -47,25 +54,31 @@ def payload_slice(arr, payload_msb_mask,
     return np.array(sliced[:sliced_len])
 
 
-cdef _as_dense_array(DTYPE_t[:] indices,  # Its likely these indices are sorted, if that helps
-                     float[:] values,
-                     DTYPE_t size):
+cdef void _as_dense_array(DTYPE_t[:] indices,  # Its likely these indices are sorted, if that helps
+                          float[:] values,
+                          float[:] arr_out) nogil:
 
     cdef DTYPE_t* indices_ptr = &indices[0]
     cdef float* values_ptr = &values[0]
-    cdef float[:] arr = np.zeros(size, dtype=np.float32)
 
     while indices_ptr < &indices[indices.shape[0]]:
-        arr[indices_ptr[0]] = values_ptr[0]
+        arr_out[indices_ptr[0]] = values_ptr[0]
         indices_ptr += 1
         values_ptr += 1
 
-    return arr
-
 
 def as_dense(indices, values, size):
+    cdef float[:] arr_out = np.zeros(size, dtype=np.float32)
     cdef DTYPE_t[:] indices_view = indices
+    cdef DTYPE_t len_indices = indices.shape[0]
     cdef float[:] values_view = values
     if len(indices) != len(values):
         raise ValueError("indices and values must have the same length")
-    return np.array(_as_dense_array(indices_view, values_view, size))
+    # _as_dense_array(indices_view, values_view,
+    #                 arr_out)
+    with nogil:
+        scatter_naive(&arr_out[0],
+                      &indices_view[0],
+                      &values_view[0],
+                      len_indices)
+    return np.array(arr_out)

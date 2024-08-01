@@ -18,6 +18,8 @@ from searcharray.indexing import build_index_from_tokenizer, build_index_from_te
 from searcharray.term_dict import TermMissingError
 from searcharray.roaringish.roaringish_ops import as_dense
 
+from time import perf_counter
+
 logger = logging.getLogger(__name__)
 
 # When running in pytest
@@ -610,7 +612,6 @@ class SearchArray(ExtensionArray):
         token = self._check_token_arg(token)
         if isinstance(token, list):
             tfs = self._phrase_freq(token, slop=slop, min_posn=min_posn, max_posn=max_posn)
-            assert tfs.dtype == np.float32
             return tfs
 
         try:
@@ -630,7 +631,15 @@ class SearchArray(ExtensionArray):
                                                           doc_ids=None,
                                                           min_posn=min_posn,
                                                           max_posn=max_posn)
-                return as_dense(doc_ids, termfreqs, len(self))
+
+                def as_dense_for_profiling(doc_ids, termfreqs, length):
+                    start = perf_counter()
+                    rvalue = as_dense(doc_ids, termfreqs, length)
+                    print(f"TermId: {term_id}|{len(doc_ids)} took {perf_counter() - start} seconds")
+                    return rvalue
+                # This copy to a dense numpy array is the
+                # bottleneck for termfreqs
+                return as_dense_for_profiling(doc_ids, termfreqs, len(self))
         except TermMissingError:
             return np.zeros(len(self), dtype=np.float32)
 
