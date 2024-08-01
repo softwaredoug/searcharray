@@ -193,26 +193,3 @@ def popcount64_reduce(arr,
         return np.array([]), np.array([])
     keys, popcounts, results_idx = _popcount64_reduce(arr_view, key_shift, value_mask)
     return np.array(keys[:results_idx]), np.array(popcounts[:results_idx])
-
-
-cdef _bm25_score(float* term_freqs,
-                 float* adj_doc_lens,
-                 double idf,
-                 DTYPE_t length):
-    """Modify termfreqs in place changing to BM25 score."""
-    for _ in range(length):
-        term_freqs[0] /= (term_freqs[0] + adj_doc_lens[0])
-        term_freqs[0] *= idf
-
-        term_freqs += 1
-        adj_doc_lens += 1
-
-
-def bm25_score(term_freqs, adj_doc_lens, idf):
-    cdef DTYPE_t length = term_freqs.shape[0]
-    cdef float[:] term_freqs_view = term_freqs
-    cdef float[:] adj_doc_lens_view = adj_doc_lens
-    _bm25_score(&term_freqs_view[0],
-                &adj_doc_lens_view[0],
-                idf,
-                length)

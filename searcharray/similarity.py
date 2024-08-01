@@ -1,7 +1,7 @@
 """Similarity functions given term stats."""
 from typing import Protocol, Dict, Any
 import numpy as np
-from searcharray.roaringish import bm25_score
+from searcharray.bm25 import bm25_score
 
 
 class ScoringContext:
