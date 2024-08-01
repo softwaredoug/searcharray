@@ -32,6 +32,9 @@ clean: deps
 	@echo "Cleaning extensions..."
 	rm -rf searcharray/*.so
 	rm -rf searcharray/*.c
+	rm -rf searcharray/bm25/*.so
+	rm -rf searcharray/bm25/*.c
+	rm -rf searcharray/bm25/*.o
 	rm -rf searcharray/phrase/*.o
 	rm -rf searcharray/phrase/*.so
 	rm -rf searcharray/phrase/*.c

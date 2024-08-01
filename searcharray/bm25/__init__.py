@@ -1,4 +1,1 @@
-
-
-def bm25_score(term_freqs, adj_doc_lens, idf):
-    ...
+from searcharray.bm25.bm25 import bm25_score  # noqa

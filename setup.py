@@ -37,7 +37,7 @@ setup(
     # For a discussion on single-sourcing the version across setup.py and the
     # project code, see
     # https://packaging.python.org/guides/single-sourcing-package-version/
-    version="0.0.67",  # Required
+    version="0.0.68",  # Required
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
     # https://packaging.python.org/specifications/core-metadata/#summary
@@ -130,7 +130,9 @@ setup(
     include_dirs=[np.get_include()],
     ext_modules=cythonize([Extension("searcharray.roaringish.*",
                                      ["searcharray/roaringish/*.pyx"],
-                                     )]),
+                                     ),
+                          Extension("searcharray.bm25.*",
+                                    ["searcharray/bm25/*.pyx"])]),
 
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"
@@ -148,7 +150,8 @@ setup(
     # installed, specify them here.
     package_data={
         # Ensure the package name matches your package's actual name
-        'searcharray': ['roaringish/*.pyx', 'roaringish/*.pxd'],
+        'searcharray': ['roaringish/*.pyx', 'roaringish/*.pxd', 'roaringish/*.h',
+                        'bm25/*.pyx', 'bm25/*.pxd'],
     },
     # Entry points. The following would provide a command called `sample` which
     # executes the function `main` from this package when invoked:

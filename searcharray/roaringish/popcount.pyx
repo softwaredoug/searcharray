@@ -170,7 +170,6 @@ cdef _popcount64_reduce_nobranch(DTYPE_t[:] arr,
 
     cdef DTYPE_t last_key = arr_ptr[0] >> key_shift
     cdef DTYPE_t key = last_key
-    cdef bint new_key = False
 
     keys_ptr[0] = last_key
 
