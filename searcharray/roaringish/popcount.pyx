@@ -83,6 +83,41 @@ def popcount64(np.ndarray[DTYPE_t, ndim=1] arr):
     return np.array(popcount64_arr(arr))
 
 
+cdef DTYPE_t _popcount_reduce_at_sparse(DTYPE_t[:] ids, DTYPE_t[:] payload,
+                                        DTYPE_t[:] ids_out, float[:] values_out):
+    cdef DTYPE_t idx = 1
+    cdef DTYPE_t popcount_sum = __builtin_popcountll(payload[0])
+    cdef float*  values_out_ptr = &values_out[0]
+    cdef DTYPE_t* ids_out_ptr = &ids_out[0]
+
+    # We already have 0, now add new values
+    while idx < ids.shape[0]:
+        if ids[idx] != ids[idx - 1]:
+            values_out_ptr[0] = popcount_sum
+            ids_out_ptr[0] = ids[idx - 1]
+            popcount_sum = 0
+            values_out_ptr += 1
+            ids_out_ptr += 1
+        popcount_sum += __builtin_popcountll(payload[idx])
+        idx += 1
+    # Save final value
+    values_out_ptr[0] = popcount_sum
+    ids_out_ptr[0] = ids[idx - 1]
+    values_out_ptr += 1
+    ids_out_ptr += 1
+    # Return the number of elements
+    return values_out_ptr - &values_out[0]
+
+
+def popcount_reduce_at_sparse(np.ndarray[DTYPE_t, ndim=1] ids,
+                              np.ndarray[DTYPE_t, ndim=1] payload):
+    """Write the sum of popcount of the payload at the indices in ids to the output array."""
+    output_ids = np.empty(ids.shape[0], dtype=np.uint64)
+    output_values = np.empty(ids.shape[0], dtype=np.float32)
+    results_idx = _popcount_reduce_at_sparse(ids, payload, output_ids, output_values)
+    return np.array(output_ids[:results_idx]), np.array(output_values[:results_idx])
+
+
 cdef _popcount_reduce_at(DTYPE_t[:] ids, DTYPE_t[:] payload, float[:] output):
     cdef DTYPE_t idx = 1
     cdef DTYPE_t popcount_sum = __builtin_popcountll(payload[0])

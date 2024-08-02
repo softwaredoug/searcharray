@@ -6,9 +6,10 @@ https://colab.research.google.com/drive/10tIEkdlCE_1J_CcgEcV0jkLfBc-0H4am?authus
 
 """
 import numpy as np
+import pandas as pd
 from copy import deepcopy
 from typing import List, Tuple, Dict, Union, cast, Optional
-from searcharray.roaringish import RoaringishEncoder, convert_keys, merge
+from searcharray.roaringish import RoaringishEncoder, convert_keys, merge, intersect
 from searcharray.phrase.memmap_arrays import MemoryMappedArrays, ArrayDict
 from searcharray.phrase.bigram_freqs import bigram_freqs, Continuation
 from searcharray.phrase.spans import span_search
@@ -41,8 +42,7 @@ _neg1 = np.int64(-1)
 MAX_POSN = encoder.max_payload
 
 
-def trim_phrase_search(encoded_posns: List[np.ndarray],
-                       phrase_freqs: np.ndarray) -> List[np.ndarray]:
+def trim_phrase_search(encoded_posns: List[np.ndarray]) -> List[np.ndarray]:
     """Trim long phrases by searching the rarest terms first."""
 
     # Start with rarest term
@@ -72,16 +72,16 @@ def trim_phrase_search(encoded_posns: List[np.ndarray],
 
 
 def _compute_phrase_freqs_left_to_right(encoded_posns: List[np.ndarray],
-                                        phrase_freqs: np.ndarray,
+                                        phrase_freqs: pd.arrays.SparseArray,
                                         max_doc_id: np.uint64 = _0,
-                                        trim: bool = True) -> np.ndarray:
+                                        trim: bool = True) -> pd.arrays.SparseArray:
     """Compute phrase freqs from a set of encoded positions."""
     if len(encoded_posns) < 2:
         raise ValueError("phrase must have at least two terms")
 
     # Trim long phrases by searching the rarest terms first
     if trim and len(encoded_posns) > 3:
-        encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
+        encoded_posns = trim_phrase_search(encoded_posns)
     mask = np.ones(len(phrase_freqs), dtype=bool)
 
     lhs = encoded_posns[0]
@@ -99,9 +99,9 @@ def _compute_phrase_freqs_left_to_right(encoded_posns: List[np.ndarray],
 
 
 def _compute_phrase_freqs_right_to_left(encoded_posns: List[np.ndarray],
-                                        phrase_freqs: np.ndarray,
+                                        phrase_freqs: pd.arrays.SparseArray,
                                         max_doc_id: np.uint64 = _0,
-                                        trim: bool = True) -> np.ndarray:
+                                        trim: bool = True) -> pd.arrays.SparseArray:
     """Compute phrase freqs from a set of encoded positions."""
     if len(encoded_posns) < 2:
         raise ValueError("phrase must have at least two terms")
@@ -125,10 +125,22 @@ def _compute_phrase_freqs_right_to_left(encoded_posns: List[np.ndarray],
     return phrase_freqs
 
 
+def sparse_array_min(lhs: pd.arrays.SparseArray,
+                     rhs: pd.arrays.SparseArray,
+                     phrase_freqs: pd.arrays.SparseArray):
+    lhs_int, rhs_int = intersect(lhs.sp_index,
+                                 rhs.sp_index)
+    # Clear NOT lhs_int
+    values = np.minimum(lhs.sp_values[lhs_int],
+                        rhs.sp_values[rhs_int])
+    idx = pd.core.arrays.sparse.IntIndex(len(phrase_freqs), lhs_int)
+    return pd.core.arrays.SparseArray(values, sparse_index=idx)
+
+
 def compute_phrase_freqs(encoded_posns: List[np.ndarray],
-                         phrase_freqs: np.ndarray,
+                         phrase_freqs: pd.arrays.SparseArray,
                          max_doc_id: np.uint64 = _0,
-                         trim: bool = False) -> np.ndarray:
+                         trim: bool = False) -> pd.arrays.SparseArray:
     """Compute phrase freqs from a set of encoded positions."""
     shortest_len_index = min(enumerate(encoded_posns), key=lambda x: len(x[1]))[0]
     if shortest_len_index <= 1:
@@ -140,8 +152,7 @@ def compute_phrase_freqs(encoded_posns: List[np.ndarray],
         # We can take the min of both directions phrase freqs
         lhs = _compute_phrase_freqs_left_to_right(encoded_posns[:shortest_len_index], phrase_freqs, trim=trim, max_doc_id=max_doc_id)
         rhs = _compute_phrase_freqs_right_to_left(encoded_posns[shortest_len_index:], phrase_freqs, trim=trim, max_doc_id=max_doc_id)
-        phrase_freqs = np.minimum(lhs, rhs)
-        return phrase_freqs
+        return sparse_array_min(lhs, rhs, phrase_freqs)
 
 
 class PosnBitArrayFromFlatBuilder:
@@ -383,14 +394,15 @@ class PosnBitArray:
                                    keys=np.asarray([doc_id], dtype=np.uint64))
         return term_posns
 
-    def empty_buffer(self):
-        return np.zeros(int(self.max_doc_id + 1), dtype=np.float32)
+    def empty_buffer(self) -> pd.arrays.SparseArray:
+        idx = pd.core.arrays.sparse.IntIndex(0, [])
+        return pd.arrays.SparseArray([], sparse_index=idx, fill_value=0)
 
     def phrase_freqs(self, term_ids: List[int],
                      slop: int = 0,
                      doc_ids: Optional[np.ndarray] = None,
                      min_posn: Optional[int] = None,
-                     max_posn: Optional[int] = None) -> np.ndarray:
+                     max_posn: Optional[int] = None) -> pd.arrays.SparseArray:
         phrase_freqs = self.empty_buffer()
 
         if len(term_ids) < 2:

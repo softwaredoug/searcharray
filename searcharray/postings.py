@@ -699,6 +699,7 @@ class SearchArray(ExtensionArray):
                                                    slop=slop,
                                                    min_posn=min_posn,
                                                    max_posn=max_posn)
+            phrase_freqs = phrase_freqs.to_dense()
             if self.term_mat.subset:
                 return phrase_freqs[self.term_mat.rows]
             return phrase_freqs

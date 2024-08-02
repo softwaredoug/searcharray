@@ -4,8 +4,9 @@ from typing import Tuple, Optional
 from searcharray.roaringish import RoaringishEncoder
 import logging
 from enum import Enum
+import pandas as pd
 
-from searcharray.roaringish import intersect, popcount64, merge, popcount_reduce_at, key_sum_over
+from searcharray.roaringish import intersect, popcount64, merge, popcount_reduce_at_sparse
 
 
 logger = logging.getLogger(__name__)
@@ -64,8 +65,8 @@ def _adj_to_phrase_freq(overlap: np.ndarray, adjacents: np.ndarray) -> np.ndarra
 
 def _inner_bigram_same_term(lhs_int: np.ndarray, rhs_int: np.ndarray,
                             lhs_doc_ids: np.ndarray,
-                            phrase_freqs: np.ndarray,
-                            cont: Continuation = Continuation.RHS) -> Tuple[np.ndarray, Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
+                            phrase_freqs: pd.arrays.SparseArray,
+                            cont: Continuation = Continuation.RHS) -> Tuple[pd.arrays.SparseArray, Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
     """Count bigram matches when lhs / rhs are same term.
 
     Despite being the same term, its possible lhs_int != rhs_int due to lhs corresponding
@@ -83,7 +84,10 @@ def _inner_bigram_same_term(lhs_int: np.ndarray, rhs_int: np.ndarray,
     adjacents = popcount64(adj_count).view(np.int64)
 
     adjusted = _adj_to_phrase_freq(overlap, adjacents).astype(np.uint64)
-    key_sum_over(lhs_doc_ids, adjusted, phrase_freqs)
+    result = np.bincount(lhs_doc_ids, adjusted)
+    non_zero_indices = np.nonzero(result)[0]
+    summed_values = result[non_zero_indices]
+    phrase_freqs[np.unique(lhs_doc_ids)] += summed_values
     # Continue with ?? ?? foo foo
     # term_int without lsbs
     term_int_msbs = lhs_int & ~encoder.payload_lsb_mask
@@ -105,8 +109,8 @@ def _inner_bigram_freqs(lhs: np.ndarray,
                         rhs: np.ndarray,
                         lhs_int: np.ndarray,
                         rhs_int: np.ndarray,
-                        phrase_freqs: np.ndarray,
-                        cont: Continuation = Continuation.RHS) -> Tuple[np.ndarray, Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
+                        phrase_freqs: pd.arrays.SparseArray,
+                        cont: Continuation = Continuation.RHS) -> Tuple[pd.arrays.SparseArray, Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
     """Count bigram matches between two encoded arrays, within a 64 bit word with same MSBs.
 
     Parameters:
@@ -151,14 +155,15 @@ def _inner_bigram_freqs(lhs: np.ndarray,
         lhs_next = overlap_bits.copy()
         lhs_next |= (lhs_int & (encoder.key_mask | encoder.payload_msb_mask))
 
-    popcount_reduce_at(lhs_doc_ids, overlap_bits, phrase_freqs)
+    ids, output = popcount_reduce_at_sparse(lhs_doc_ids, overlap_bits)
+    phrase_freqs[ids] += output
     return phrase_freqs, (lhs_next, rhs_next)
 
 
 def _adjacent_bigram_freqs(lhs: np.ndarray, rhs: np.ndarray,
                            lhs_adj: np.ndarray, rhs_adj: np.ndarray,
-                           phrase_freqs: np.ndarray,
-                           cont: Continuation = Continuation.RHS) -> Tuple[np.ndarray, Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
+                           phrase_freqs: pd.arrays.SparseArray,
+                           cont: Continuation = Continuation.RHS) -> Tuple[pd.arrays.SparseArray, Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
     """Count bigram matches between two encoded arrays where they occur in adjacent 64 bit words.
 
     Returns:
@@ -212,8 +217,8 @@ def _set_adjbit_at_header(next_inner: np.ndarray, next_adj: np.ndarray,
 
 def bigram_freqs(lhs: np.ndarray,
                  rhs: np.ndarray,
-                 phrase_freqs: np.ndarray,
-                 cont: Continuation = Continuation.RHS) -> Tuple[np.ndarray, Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
+                 phrase_freqs: pd.arrays.SparseArray,
+                 cont: Continuation = Continuation.RHS) -> Tuple[pd.arrays.SparseArray, Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
     """Count bigram matches between two roaringish encoded posn arrays.
        Also return connection on right hand of the bigram
 

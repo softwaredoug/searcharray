@@ -4,6 +4,7 @@
 #  Chat GPT convo
 #   https://chat.openai.com/share/b97c61e6-95d0-40e7-a8cc-447dc1495314
 import numpy as np
+import pandas as pd
 from typing import List
 from searcharray.roaringish import intersect, adjacent, merge, span_search as r_span_search
 # from searcharary.roaringish import intersect_all
@@ -167,17 +168,21 @@ def _intersect_all(posns_encoded: List[np.ndarray]):
 #     Can we shrink the mask?
 #     If any hase leading or trailing 0s in mask, then shrink
 def span_search(posns_encoded: List[np.ndarray],
-                phrase_freqs: np.ndarray,
-                slop: int) -> np.ndarray:
+                phrase_freqs: pd.arrays.SparseArray,
+                slop: int) -> pd.arrays.SparseArray:
     """Find span matches up to PAYLOAD_LSB bits span distance."""
     # Find posns to check for span candidates
     posns, lengths = _intersect_all(posns_encoded)
 
+    # For now copy from numpy array :(
+    phrase_freqs_dense = phrase_freqs.to_dense()
+
     # Populate phrase freqs with matches of slop
     r_span_search(posns, lengths,
-                  phrase_freqs, slop,
+                  phrase_freqs_dense, slop,
                   encoder.key_mask,
                   encoder.header_mask,
                   encoder.key_bits,
                   encoder.payload_lsb_bits)
-    return phrase_freqs
+    # Back to sparse
+    return pd.arrays.SparseArray(phrase_freqs_dense)
