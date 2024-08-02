@@ -20,8 +20,7 @@ def clz64(arr: NDArray[np.uint64]) -> NDArray[np.uint64]:
 
 
 def popcount_reduce_at(ids: NDArray[np.uint64],
-                       payload: NDArray[np.uint64],
-                       out: NDArray[np.float64]) -> NDArray[np.float64]:
+                       payload: NDArray[np.uint64]) -> Tuple[NDArray[np.uint64], NDArray[np.float32]]:
     ...
 
 
@@ -33,6 +32,5 @@ def popcount64_reduce(arr: NDArray[np.uint64],
 
 
 def key_sum_over(ids: NDArray[np.uint64],
-                 count: NDArray[np.uint64],
-                 output: NDArray[np.uint64]) -> NDArray[np.uint64]:
+                 counts: NDArray[np.uint64]) -> Tuple[NDArray[np.uint64], NDArray[np.float32]]:
     ...

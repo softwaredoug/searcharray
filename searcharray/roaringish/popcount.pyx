@@ -83,41 +83,87 @@ def popcount64(np.ndarray[DTYPE_t, ndim=1] arr):
     return np.array(popcount64_arr(arr))
 
 
-cdef _popcount_reduce_at(DTYPE_t[:] ids, DTYPE_t[:] payload, float[:] output):
-    cdef DTYPE_t idx = 1
-    cdef DTYPE_t popcount_sum = __builtin_popcountll(payload[0])
+cdef DTYPE_t _popcount_reduce_at(DTYPE_t[:] ids, DTYPE_t[:] payload,
+                                 DTYPE_t[:] merged_ids, float[:] merged_counts):
+    cdef DTYPE_t last_id = ids[0]
+    cdef DTYPE_t popcount_sum = 0
+    cdef DTYPE_t* merged_ids_ptr = &merged_ids[0]
+    cdef DTYPE_t* payload_ptr = &payload[0]
+    cdef DTYPE_t* ids_ptr = &ids[0]
+    cdef float* merged_counts_ptr = &merged_counts[0]
 
     # We already have 0, now add new values
-    while idx < ids.shape[0]:
-        if ids[idx] != ids[idx - 1]:
-            output[ids[idx - 1]] = popcount_sum
+    while ids_ptr < &ids[0] + ids.shape[0]:
+        if ids_ptr[0] != last_id:
+            merged_ids_ptr[0] = last_id
+            merged_counts_ptr[0] = popcount_sum
             popcount_sum = 0
-        popcount_sum += __builtin_popcountll(payload[idx])
-        idx += 1
+            merged_ids_ptr += 1
+            merged_counts_ptr += 1
+        popcount_sum += __builtin_popcountll(payload_ptr[0])
+        last_id = ids_ptr[0]
+        payload_ptr += 1
+        ids_ptr += 1
     # Save final value
-    output[ids[idx - 1]] = popcount_sum
+    merged_ids_ptr[0] = last_id
+    merged_counts_ptr[0] = popcount_sum
+    return merged_ids_ptr - &merged_ids[0] + 1
 
 
 def popcount_reduce_at(np.ndarray[DTYPE_t, ndim=1] ids,
-                       np.ndarray[DTYPE_t, ndim=1] payload,
-                       np.ndarray[np.float32_t, ndim=1] output):
-    """Write the sum of popcount of the payload at the indices in ids to the output array."""
+                       np.ndarray[DTYPE_t, ndim=1] payload):
+    """Write the sum of popcount of the payload at the indices in ids to the output array.
+
+    Add one to each plus_one ids
+
+    """
     if len(ids) != len(payload):
         raise ValueError("ids and payload must have the same length")
-    return np.array(_popcount_reduce_at(ids, payload, output))
+    if len(ids) == 0:
+        return np.array([]), np.array([])
+    merged_ids = np.empty(ids.shape[0], dtype=np.uint64)
+    merged_counts = np.empty(ids.shape[0], dtype=np.float32)
+    merged_len = _popcount_reduce_at(ids, payload, merged_ids, merged_counts)
+    return np.array(merged_ids[:merged_len]), np.array(merged_counts[:merged_len])
 
 
-cdef _key_sum_over(DTYPE_t[:] ids, DTYPE_t[:] count, float[:] output):
-    cdef DTYPE_t i = 0
-    for i in range(ids.shape[0]):
-        output[ids[i]] += count[i]
+cdef _key_sum_over(DTYPE_t[:] ids, DTYPE_t[:] count,
+                   DTYPE_t[:] merged_ids, float[:] merged_counts):
+    cdef DTYPE_t* ids_ptr = &ids[0]
+    cdef DTYPE_t* count_ptr = &count[0]
+    cdef DTYPE_t* merged_ids_ptr = &merged_ids[0]
+    cdef float* merged_counts_ptr = &merged_counts[0]
+    cdef DTYPE_t last_id = ids[0]
+    cdef DTYPE_t payload_sum = 0
+
+    while ids_ptr < &ids[0] + ids.shape[0]:
+        if ids_ptr[0] != last_id:
+            merged_ids_ptr[0] = last_id
+            merged_counts_ptr[0] = payload_sum
+            payload_sum = 0
+            merged_ids_ptr += 1
+            merged_counts_ptr += 1
+        payload_sum += count_ptr[0]
+        last_id = ids_ptr[0]
+        ids_ptr += 1
+        count_ptr += 1
+    # Save final value
+    merged_ids_ptr[0] = last_id
+    merged_counts_ptr[0] = payload_sum
+    return merged_ids_ptr - &merged_ids[0] + 1
 
 
 def key_sum_over(np.ndarray[DTYPE_t, ndim=1] ids,
-                 np.ndarray[DTYPE_t, ndim=1] count,
-                 np.ndarray[np.float32_t, ndim=1] output):
+                 np.ndarray[DTYPE_t, ndim=1] count):
     """Write the last value of the payload at the indices in ids to the output array."""
-    _key_sum_over(ids, count, output)
+    if len(ids) != len(count):
+        raise ValueError("ids and count must have the same length")
+    if len(ids) == 0:
+        return np.array([]), np.array([])
+    merged_ids = np.empty(ids.shape[0], dtype=np.uint64)
+    merged_counts = np.empty(ids.shape[0], dtype=np.float32)
+    merged_len = _key_sum_over(ids, count, merged_ids, merged_counts)
+    return np.array(merged_ids[:merged_len]), np.array(merged_counts[:merged_len])
 
 
 # Popcount reduce key-value pair
