@@ -65,6 +65,19 @@ def tmdb_pd_data(tmdb_raw_data):
     return df
 
 
+@pytest.fixture(scope="session")
+def tmdb_perf_data(tmdb_pd_data):
+    ensure_data_dir_exists()
+    df = tmdb_pd_data
+    indexed = SearchArray.index(df['title'])
+    df['title_tokens'] = indexed
+
+    indexed = SearchArray.index(df['overview'])
+    df['overview_tokens'] = indexed
+    yield df
+    clean_data_dir()
+
+
 @pytest.fixture(scope="session", params=["full", "ends_empty", "memmap", "small_batch",
                                          "smallbatch_memmap", "one_worker"])
 def tmdb_data(tmdb_pd_data, request):
@@ -264,32 +277,32 @@ def test_phrase_match_tmdb_matches(phrase, expected_matches, tmdb_data, benchmar
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.mark.parametrize("phrase,expected_matches", tmdb_phrase_matches)
-def test_phrase_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
+def test_phrase_match_tmdb(phrase, expected_matches, tmdb_perf_data, benchmark):
     prof = Profiler(benchmark)
-    scores = prof.run(tmdb_data['title_tokens'].array.score, phrase)
-    assert len(scores) == len(tmdb_data)
+    scores = prof.run(tmdb_perf_data['title_tokens'].array.score, phrase)
+    assert len(scores) == len(tmdb_perf_data)
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.mark.parametrize("phrase,expected_matches", tmdb_phrase_matches)
-def test_slop_match_tmdb(phrase, expected_matches, tmdb_data, benchmark):
+def test_slop_match_tmdb(phrase, expected_matches, tmdb_perf_data, benchmark):
     prof = Profiler(benchmark)
-    scores = prof.run(tmdb_data['overview_tokens'].array.score, phrase, default_bm25, 3)
-    tmdb_data['score'] = scores
-    assert len(scores) == len(tmdb_data)
+    scores = prof.run(tmdb_perf_data['overview_tokens'].array.score, phrase, default_bm25, 3)
+    tmdb_perf_data['score'] = scores
+    assert len(scores) == len(tmdb_perf_data)
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-def test_repr_html(tmdb_data, benchmark):
+def test_repr_html(tmdb_perf_data, benchmark):
     prof = Profiler(benchmark)
-    html = prof.run(tmdb_data._repr_html_)
+    html = prof.run(tmdb_perf_data._repr_html_)
     assert "<th>title</th>" in html
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-def test_unique(tmdb_data, benchmark):
+def test_unique(tmdb_perf_data, benchmark):
     prof = Profiler(benchmark)
-    prof.run(tmdb_data['overview'].array.unique)
+    prof.run(tmdb_perf_data['overview'].array.unique)
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
@@ -317,46 +330,46 @@ def test_index_benchmark_1k_random(benchmark, tmdb_pd_data):
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-def test_copy_benchmark(benchmark, tmdb_data):
+def test_copy_benchmark(benchmark, tmdb_perf_data):
     prof = Profiler(benchmark)
-    results = prof.run(tmdb_data['overview_tokens'].array.copy)
-    assert len(results) == len(tmdb_data)
+    results = prof.run(tmdb_perf_data['overview_tokens'].array.copy)
+    assert len(results) == len(tmdb_perf_data)
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-def test_slice_benchmark(benchmark, tmdb_data):
+def test_slice_benchmark(benchmark, tmdb_perf_data):
     # Slice the first 1000 elements
     prof = Profiler(benchmark)
-    results = prof.run(tmdb_data['overview_tokens'].array[:1000].copy)
+    results = prof.run(tmdb_perf_data['overview_tokens'].array[:1000].copy)
     assert len(results) == 1000
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-def test_repr_html_benchmark(benchmark, tmdb_data):
+def test_repr_html_benchmark(benchmark, tmdb_perf_data):
     prof = Profiler(benchmark)
-    results = prof.run(tmdb_data._repr_html_)
+    results = prof.run(tmdb_perf_data._repr_html_)
     assert len(results) > 0
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 @pytest.mark.parametrize("term", ['the', 'cat', 'star', 'skywalker'])
-def test_term_freq(benchmark, tmdb_data, term):
+def test_term_freq(benchmark, tmdb_perf_data, term):
     prof = Profiler(benchmark)
-    results = prof.run(tmdb_data['overview_tokens'].array.termfreqs, term)
+    results = prof.run(tmdb_perf_data['overview_tokens'].array.termfreqs, term)
     assert len(results) > 0
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-def test_gather_results(benchmark, tmdb_data):
+def test_gather_results(benchmark, tmdb_perf_data):
     """Gathering results typical of a search operation."""
     def gather_multiple_results():
         N = 10
         all_results = []
         for keywords in [['Star', 'Wars'], ['Black', 'Mirror:'], ['rambo']]:
-            score = tmdb_data['title_tokens'].array.score(keywords)
-            score += tmdb_data['overview_tokens'].array.score(keywords)
-            tmdb_data['score'] = score
-            top_n = tmdb_data.sort_values('score', ascending=False)[:N].copy()
+            score = tmdb_perf_data['title_tokens'].array.score(keywords)
+            score += tmdb_perf_data['overview_tokens'].array.score(keywords)
+            tmdb_perf_data['score'] = score
+            top_n = tmdb_perf_data.sort_values('score', ascending=False)[:N].copy()
             top_n.loc[:, 'doc_id'] = top_n['doc_id'].astype(int)
             top_n.loc[:, 'rank'] = np.arange(N) + 1
             top_n.loc[:, 'keywords'] = " ".join(keywords)
@@ -368,11 +381,9 @@ def test_gather_results(benchmark, tmdb_data):
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
-def test_eq_benchmark(benchmark, tmdb_data):
+def test_eq_benchmark(benchmark, tmdb_perf_data):
     prof = Profiler(benchmark)
-    idx_again = SearchArray.index(tmdb_data['overview'])
+    idx_again = SearchArray.index(tmdb_perf_data['overview'])
     compare_amount = 10000
-    results = prof.run(tmdb_data['overview_tokens'][:compare_amount].array.__eq__, idx_again[:compare_amount])
+    results = prof.run(tmdb_perf_data['overview_tokens'][:compare_amount].array.__eq__, idx_again[:compare_amount])
     assert np.sum(results) == compare_amount
-
-    # eq = benchmark(tmdb_data['overview_tokens'].array.__eq__, idx_again)

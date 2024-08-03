@@ -41,8 +41,7 @@ _neg1 = np.int64(-1)
 MAX_POSN = encoder.max_payload
 
 
-def trim_phrase_search(encoded_posns: List[np.ndarray],
-                       phrase_freqs: np.ndarray) -> List[np.ndarray]:
+def trim_phrase_search(encoded_posns: List[np.ndarray]) -> List[np.ndarray]:
     """Trim long phrases by searching the rarest terms first."""
 
     # Start with rarest term
@@ -71,77 +70,97 @@ def trim_phrase_search(encoded_posns: List[np.ndarray],
     return encoded_posns
 
 
+def _intersect_bigram_matches(ids: Optional[np.ndarray],
+                              counts: Optional[np.ndarray],
+                              new_ids: np.ndarray,
+                              new_counts: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Intersect bigram matches."""
+    if ids is None or counts is None:
+        return new_ids, new_counts
+    else:
+        # Intersect (Are these sorted?)
+        _, ids_idx, new_ids_idx = np.intersect1d(ids, new_ids, return_indices=True)
+        intersected_counts = counts[ids_idx]
+        counts = np.minimum(intersected_counts, new_counts[new_ids_idx])
+        ids = ids[ids_idx]
+        assert ids is not None
+        assert counts is not None
+        return ids, counts
+
+
 def _compute_phrase_freqs_left_to_right(encoded_posns: List[np.ndarray],
-                                        phrase_freqs: np.ndarray,
                                         max_doc_id: np.uint64 = _0,
-                                        trim: bool = True) -> np.ndarray:
+                                        trim: bool = True) -> Tuple[np.ndarray, np.ndarray]:
     """Compute phrase freqs from a set of encoded positions."""
     if len(encoded_posns) < 2:
         raise ValueError("phrase must have at least two terms")
 
     # Trim long phrases by searching the rarest terms first
     if trim and len(encoded_posns) > 3:
-        encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
-    mask = np.ones(len(phrase_freqs), dtype=bool)
+        encoded_posns = trim_phrase_search(encoded_posns)
+
+    ids = None
+    counts = None
 
     lhs = encoded_posns[0]
     for rhs in encoded_posns[1:]:
         # Only count the count of the last bigram (ignoring the ones where priors did not match)
-        phrase_freqs[mask] = 0
-        phrase_freqs, conts = bigram_freqs(lhs, rhs, phrase_freqs,
+        phrase_freqs, conts = bigram_freqs(lhs, rhs,
                                            cont=Continuation.RHS)
-
         assert conts[1] is not None
         lhs = conts[1]
-        mask &= (phrase_freqs > 0)
-    phrase_freqs[~mask] = 0
-    return phrase_freqs
+        ids, counts = _intersect_bigram_matches(ids, counts, phrase_freqs[0], phrase_freqs[1])
+
+    if ids is None or counts is None:
+        return np.array([], dtype=np.uint64), np.array([], dtype=np.float32)
+
+    return (ids, counts)
 
 
 def _compute_phrase_freqs_right_to_left(encoded_posns: List[np.ndarray],
-                                        phrase_freqs: np.ndarray,
                                         max_doc_id: np.uint64 = _0,
-                                        trim: bool = True) -> np.ndarray:
+                                        trim: bool = True) -> Tuple[np.ndarray, np.ndarray]:
     """Compute phrase freqs from a set of encoded positions."""
     if len(encoded_posns) < 2:
         raise ValueError("phrase must have at least two terms")
 
     # Trim long phrases by searching the rarest terms first
     if trim and len(encoded_posns) > 3:
-        encoded_posns = trim_phrase_search(encoded_posns, phrase_freqs)
-    mask = np.ones(len(phrase_freqs), dtype=bool)
+        encoded_posns = trim_phrase_search(encoded_posns)
+
+    ids = None
+    counts = None
 
     rhs = encoded_posns[-1]
     for lhs in encoded_posns[-2::-1]:
         # Only count the count of the last bigram (ignoring the ones where priors did not match)
-        phrase_freqs[mask] = 0
-        phrase_freqs, conts = bigram_freqs(lhs, rhs, phrase_freqs,
+        phrase_freqs, conts = bigram_freqs(lhs, rhs,
                                            cont=Continuation.LHS)
 
         assert conts[0] is not None
         rhs = conts[0]
-        mask &= (phrase_freqs > 0)
-    phrase_freqs[~mask] = 0
-    return phrase_freqs
+        ids, counts = _intersect_bigram_matches(ids, counts, phrase_freqs[0], phrase_freqs[1])
+
+    if ids is None or counts is None:
+        return np.array([], dtype=np.uint64), np.array([], dtype=np.float32)
+    return (ids, counts)
 
 
 def compute_phrase_freqs(encoded_posns: List[np.ndarray],
-                         phrase_freqs: np.ndarray,
                          max_doc_id: np.uint64 = _0,
-                         trim: bool = False) -> np.ndarray:
+                         trim: bool = False) -> Tuple[np.ndarray, np.ndarray]:
     """Compute phrase freqs from a set of encoded positions."""
     shortest_len_index = min(enumerate(encoded_posns), key=lambda x: len(x[1]))[0]
     if shortest_len_index <= 1:
-        return _compute_phrase_freqs_left_to_right(encoded_posns, phrase_freqs, trim=trim, max_doc_id=max_doc_id)
+        return _compute_phrase_freqs_left_to_right(encoded_posns, trim=trim, max_doc_id=max_doc_id)
     elif shortest_len_index >= len(encoded_posns) - 2:
-        return _compute_phrase_freqs_right_to_left(encoded_posns, phrase_freqs, trim=trim, max_doc_id=max_doc_id)
+        return _compute_phrase_freqs_right_to_left(encoded_posns, trim=trim, max_doc_id=max_doc_id)
     else:
         # We optimize this case by going middle-out
         # We can take the min of both directions phrase freqs
-        lhs = _compute_phrase_freqs_left_to_right(encoded_posns[:shortest_len_index], phrase_freqs, trim=trim, max_doc_id=max_doc_id)
-        rhs = _compute_phrase_freqs_right_to_left(encoded_posns[shortest_len_index:], phrase_freqs, trim=trim, max_doc_id=max_doc_id)
-        phrase_freqs = np.minimum(lhs, rhs)
-        return phrase_freqs
+        lhs_ids, lhs_counts = _compute_phrase_freqs_left_to_right(encoded_posns[:shortest_len_index], trim=trim, max_doc_id=max_doc_id)
+        rhs_ids, rhs_counts = _compute_phrase_freqs_right_to_left(encoded_posns[shortest_len_index:], trim=trim, max_doc_id=max_doc_id)
+        return _intersect_bigram_matches(lhs_ids, lhs_counts, rhs_ids, rhs_counts)
 
 
 class PosnBitArrayFromFlatBuilder:
@@ -408,7 +427,9 @@ class PosnBitArray:
                                             max_payload=max_posn) for term_id in term_ids]
 
         if slop == 0:
-            return compute_phrase_freqs(enc_term_posns, phrase_freqs, max_doc_id=np.uint64(self.max_doc_id))
+            ids, counts = compute_phrase_freqs(enc_term_posns, max_doc_id=np.uint64(self.max_doc_id))
+            phrase_freqs[ids] = counts
+            return phrase_freqs
         else:
             return span_search(enc_term_posns, phrase_freqs, slop)
 

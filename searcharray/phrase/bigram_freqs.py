@@ -212,8 +212,8 @@ def _set_adjbit_at_header(next_inner: np.ndarray, next_adj: np.ndarray,
 
 def bigram_freqs(lhs: np.ndarray,
                  rhs: np.ndarray,
-                 phrase_freqs: np.ndarray,
-                 cont: Continuation = Continuation.RHS) -> Tuple[np.ndarray, Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
+                 cont: Continuation = Continuation.RHS) -> Tuple[Tuple[np.ndarray, np.ndarray],
+                                                                 Tuple[Optional[np.ndarray], Optional[np.ndarray]]]:
     """Count bigram matches between two roaringish encoded posn arrays.
        Also return connection on right hand of the bigram
 
@@ -315,5 +315,4 @@ def bigram_freqs(lhs: np.ndarray,
         assert lhs_next_adj is not None
         lhs_next = _set_adjbit_at_header(lhs_next_inner, lhs_next_adj, Continuation.LHS)
 
-    phrase_freqs[doc_ids] = counts
-    return phrase_freqs, (lhs_next, rhs_next)
+    return (doc_ids, counts), (lhs_next, rhs_next)
