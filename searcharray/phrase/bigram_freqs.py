@@ -5,7 +5,7 @@ from searcharray.roaringish import RoaringishEncoder
 import logging
 from enum import Enum
 
-from searcharray.roaringish import intersect, popcount64, merge, popcount_reduce_at, key_sum_over
+from searcharray.roaringish import intersect, popcount64, merge, popcount_reduce_at, key_sum_over, sort_merge_counts
 
 
 logger = logging.getLogger(__name__)
@@ -270,6 +270,8 @@ def bigram_freqs(lhs: np.ndarray,
                                  lhs_adj, rhs_adj,
                                  cont)
 
+    doc_ids1, counts1 = sort_merge_counts(ids, counts.astype(np.float32),
+                                          adj_doc_ids, adj_counts.astype(np.float32))
     # Intersect ids+adj_doc_ids and add 1
     inner_shared_idx, adj_shared_idx = intersect(ids, adj_doc_ids)
 
@@ -282,7 +284,14 @@ def bigram_freqs(lhs: np.ndarray,
     # Append adj_doc_ids to ids, and 1 to each corresponding value
     doc_ids = np.concatenate([ids, rem_doc_ids])
     counts = np.concatenate([counts, rem_counts])
+
+    idx = np.argsort(doc_ids, kind='mergesort')
+    doc_ids = doc_ids[idx]
+    counts = counts[idx]
+
     assert len(doc_ids) == len(counts)
+    # if len(rem_doc_ids) > 0:
+    #     import pdb; pdb.set_trace()
 
     # ***************************************************************************
     # rhs_next is where the bigram ends on the rhs side, we can use this
@@ -315,4 +324,4 @@ def bigram_freqs(lhs: np.ndarray,
         assert lhs_next_adj is not None
         lhs_next = _set_adjbit_at_header(lhs_next_inner, lhs_next_adj, Continuation.LHS)
 
-    return (doc_ids, counts), (lhs_next, rhs_next)
+    return (doc_ids1, counts1), (lhs_next, rhs_next)

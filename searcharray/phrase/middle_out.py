@@ -8,7 +8,7 @@ https://colab.research.google.com/drive/10tIEkdlCE_1J_CcgEcV0jkLfBc-0H4am?authus
 import numpy as np
 from copy import deepcopy
 from typing import List, Tuple, Dict, Union, cast, Optional
-from searcharray.roaringish import RoaringishEncoder, convert_keys, merge
+from searcharray.roaringish import RoaringishEncoder, convert_keys, merge, intersect
 from searcharray.phrase.memmap_arrays import MemoryMappedArrays, ArrayDict
 from searcharray.phrase.bigram_freqs import bigram_freqs, Continuation
 from searcharray.phrase.spans import span_search
@@ -79,7 +79,12 @@ def _intersect_bigram_matches(ids: Optional[np.ndarray],
         return new_ids, new_counts
     else:
         # Intersect (Are these sorted?)
-        _, ids_idx, new_ids_idx = np.intersect1d(ids, new_ids, return_indices=True)
+        is_sorted = np.all(np.diff(ids) >= 0)
+        assert is_sorted
+        is_sorted = np.all(np.diff(new_ids) >= 0)
+        assert is_sorted
+
+        ids_idx, new_ids_idx = intersect(ids, new_ids)
         intersected_counts = counts[ids_idx]
         counts = np.minimum(intersected_counts, new_counts[new_ids_idx])
         ids = ids[ids_idx]

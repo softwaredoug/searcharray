@@ -156,3 +156,79 @@ def merge(np.ndarray[DTYPE_t, ndim=1] lhs,
                                 result_ptr)
 
     return np.array(results[:result_idx])
+
+
+cdef DTYPE_t _sort_merge_counts(DTYPE_t[:] lhs_ids, float[:] lhs_counts,
+                                DTYPE_t[:] rhs_ids, float[:] rhs_counts,
+                                DTYPE_t[:] merged_ids, float[:] merged_counts) nogil:
+    # Copy elements+counts from both, but ids_w_count_one get count=1
+    cdef DTYPE_t* lhs_ids_ptr = &lhs_ids[0]
+    cdef DTYPE_t* end_lhs_ids_ptr = &lhs_ids[lhs_ids.shape[0]]
+    cdef float* lhs_counts_ptr = &lhs_counts[0]
+    cdef DTYPE_t* rhs_ids_ptr = &rhs_ids[0]
+    cdef DTYPE_t* end_rhs_ids_ptr = &rhs_ids[rhs_ids.shape[0]]
+    cdef float* rhs_counts_ptr = &rhs_counts[0]
+
+    cdef DTYPE_t* merged_ids_ptr = &merged_ids[0]
+    cdef float* merged_counts_ptr = &merged_counts[0]
+
+    while lhs_ids_ptr < end_lhs_ids_ptr and rhs_ids_ptr < end_rhs_ids_ptr:
+        if lhs_ids_ptr[0] < rhs_ids_ptr[0]:
+            merged_ids_ptr[0] = lhs_ids_ptr[0]
+            merged_counts_ptr[0] = lhs_counts_ptr[0]
+
+            lhs_ids_ptr += 1
+            lhs_counts_ptr += 1
+        elif rhs_ids_ptr[0] < lhs_ids_ptr[0]:
+            merged_ids_ptr[0] = rhs_ids_ptr[0]
+            merged_counts_ptr[0] = rhs_counts_ptr[0]
+
+            rhs_ids_ptr += 1
+            rhs_counts_ptr += 1
+        else:
+            merged_ids_ptr[0] = lhs_ids_ptr[0]
+            merged_counts_ptr[0] = lhs_counts_ptr[0] + rhs_counts_ptr[0]
+
+            lhs_ids_ptr += 1
+            lhs_counts_ptr += 1
+            rhs_ids_ptr += 1
+            rhs_counts_ptr += 1
+        merged_ids_ptr += 1
+        merged_counts_ptr += 1
+
+    # Copy remaining elements if one side not consumed
+    while lhs_ids_ptr < end_lhs_ids_ptr:
+        merged_ids_ptr[0] = lhs_ids_ptr[0]
+        merged_counts_ptr[0] = lhs_counts_ptr[0]
+
+        lhs_ids_ptr += 1
+        lhs_counts_ptr += 1
+        merged_ids_ptr += 1
+        merged_counts_ptr += 1
+
+    while rhs_ids_ptr < end_rhs_ids_ptr:
+        merged_ids_ptr[0] = rhs_ids_ptr[0]
+        merged_counts_ptr[0] = rhs_counts_ptr[0]
+
+        rhs_ids_ptr += 1
+        rhs_counts_ptr += 1
+        merged_ids_ptr += 1
+        merged_counts_ptr += 1
+
+    return merged_ids_ptr - &merged_ids[0]
+
+
+def sort_merge_counts(np.ndarray[DTYPE_t, ndim=1] lhs_ids,
+                      np.ndarray[float, ndim=1] lhs_counts,
+                      np.ndarray[DTYPE_t, ndim=1] rhs_ids,
+                      np.ndarray[float, ndim=1] rhs_counts):  # Not great, but where this is used we have ints
+    cdef DTYPE_t result_idx = 0
+    cdef DTYPE_t[:] merged_ids = np.empty(lhs_ids.shape[0] + rhs_ids.shape[0], dtype=np.uint64)
+    cdef float[:] merged_counts = np.empty(lhs_ids.shape[0] + rhs_ids.shape[0], dtype=np.float32)
+    cdef DTYPE_t* merged_ids_ptr = &merged_ids[0]
+    cdef float* merged_counts_ptr = &merged_counts[0]
+
+    result_idx = _sort_merge_counts(lhs_ids, lhs_counts, rhs_ids, rhs_counts,
+                                    merged_ids, merged_counts)
+
+    return np.array(merged_ids[:result_idx]), np.array(merged_counts[:result_idx])
