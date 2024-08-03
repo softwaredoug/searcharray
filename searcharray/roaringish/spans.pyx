@@ -148,7 +148,7 @@ cdef ActiveSpans _collect_spans(ActiveSpans* spans, DTYPE_t num_terms, DTYPE_t m
 
 cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                  DTYPE_t[:] lengths,
-                 float[:] phrase_freqs,
+                 phrase_freqs,
                  DTYPE_t slop,
                  DTYPE_t key_mask,
                  DTYPE_t header_mask,
@@ -281,7 +281,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
 
 def span_search(np.ndarray[DTYPE_t, ndim=1] posns,
                 np.ndarray[DTYPE_t, ndim=1] lengths,
-                np.ndarray[float, ndim=1] phrase_freqs,
+                phrase_freqs,  # dictionary
                 DTYPE_t slop,
                 DTYPE_t key_mask,
                 DTYPE_t header_mask,

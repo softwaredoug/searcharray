@@ -8,6 +8,8 @@ from typing import List
 from searcharray.roaringish import intersect, adjacent, merge, span_search as r_span_search
 # from searcharary.roaringish import intersect_all
 from searcharray.roaringish.roaringish import RoaringishEncoder
+from typing import Tuple
+from collections import Counter
 
 encoder = RoaringishEncoder()
 
@@ -167,17 +169,19 @@ def _intersect_all(posns_encoded: List[np.ndarray]):
 #     Can we shrink the mask?
 #     If any hase leading or trailing 0s in mask, then shrink
 def span_search(posns_encoded: List[np.ndarray],
-                phrase_freqs: np.ndarray,
-                slop: int) -> np.ndarray:
+                slop: int) -> Tuple[np.ndarray, np.ndarray]:
     """Find span matches up to PAYLOAD_LSB bits span distance."""
     # Find posns to check for span candidates
     posns, lengths = _intersect_all(posns_encoded)
+    phrase_freqs: Counter = Counter()
 
     # Populate phrase freqs with matches of slop
     r_span_search(posns, lengths,
-                  phrase_freqs, slop,
+                  phrase_freqs,
+                  slop,
                   encoder.key_mask,
                   encoder.header_mask,
                   encoder.key_bits,
                   encoder.payload_lsb_bits)
-    return phrase_freqs
+    return (np.array(list(phrase_freqs.keys()), dtype=np.uint64),
+            np.array(list(phrase_freqs.values()), dtype=np.float32))

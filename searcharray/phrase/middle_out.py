@@ -436,7 +436,9 @@ class PosnBitArray:
             phrase_freqs[ids] = counts
             return phrase_freqs
         else:
-            return span_search(enc_term_posns, phrase_freqs, slop)
+            ids, counts = span_search(enc_term_posns, slop)
+            phrase_freqs[ids] = counts
+            return phrase_freqs
 
     def positions(self, term_id: int, doc_ids) -> Union[List[np.ndarray], np.ndarray]:
         if isinstance(doc_ids, numbers.Number):
