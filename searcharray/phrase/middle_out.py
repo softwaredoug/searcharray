@@ -319,7 +319,9 @@ class PosnBitArray:
         enc_term_posns = self.encoded_term_posns
         if isinstance(enc_term_posns, FilteredPosns):
             self.encoded_term_posns = enc_term_posns.base
-        return PosnBitArray(FilteredPosns(self.encoded_term_posns, doc_ids), self.max_doc_id)
+        filtered = FilteredPosns(self.encoded_term_posns, doc_ids)
+        new_bit_array = PosnBitArray(filtered, self.max_doc_id)
+        return new_bit_array
 
     def _reset_filter(self):
         if isinstance(self.encoded_term_posns, FilteredPosns):

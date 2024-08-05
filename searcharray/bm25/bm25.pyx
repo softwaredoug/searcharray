@@ -9,22 +9,40 @@ import numpy as np
 
 
 cdef void _bm25_score(float* term_freqs,
-                      float* adj_doc_lens,
-                      double idf,
+                      float* doc_lens,
+                      float idf,
+                      float avg_doc_lens,
+                      float k1,
+                      float b,
                       long length):
     """Modify termfreqs in place changing to BM25 score."""
+    cdef float doc_len_score = 0
     for _ in range(length):
-        term_freqs[0] /= (term_freqs[0] + adj_doc_lens[0])
-        term_freqs[0] *= idf
+        if term_freqs[0] == 0:
+            term_freqs[0] = 0
+        else:
+            if avg_doc_lens == 0:
+                doc_len_score = 0
+            else:
+                doc_len_score = ((1 - b) + (b * (doc_lens[0] / avg_doc_lens))) * k1
+
+            term_freqs[0] /= (term_freqs[0] + doc_len_score)
+            term_freqs[0] *= idf
         term_freqs += 1
-        adj_doc_lens += 1
+        doc_lens += 1
 
 
 def bm25_score(np.ndarray[np.float32_t, ndim=1] term_freqs,
-               np.ndarray[np.float32_t, ndim=1] adj_doc_lens,
-               idf):
+               np.ndarray[np.float32_t, ndim=1] doc_lens,
+               float avg_doc_lens,
+               float idf,
+               float k1,
+               float b):
     cdef long length = term_freqs.shape[0]
     _bm25_score(&term_freqs[0],
-                &adj_doc_lens[0],
+                &doc_lens[0],
                 idf,
+                avg_doc_lens,
+                k1,
+                b,
                 length)

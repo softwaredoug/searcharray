@@ -43,51 +43,17 @@ def compute_idf(num_docs, dfs):
     return np.sum(np.log(1 + (num_docs - dfs + 0.5) / (dfs + 0.5)))
 
 
-def compute_adj_doc_lens(doc_lens, avg_doc_lens, k1, b):
-    if avg_doc_lens == 0:
-        adj_doc_lens = np.zeros_like(doc_lens, dtype=np.float32)
-    else:
-        adj_doc_lens = np.divide(doc_lens, avg_doc_lens, dtype=np.float32)
-    adj_doc_lens *= b
-    adj_doc_lens += 1 - b
-    adj_doc_lens *= k1
-    assert adj_doc_lens.dtype == np.float32
-    # Divide tf in place for perf, but this means
-    # we can't use the same term_freqs for different k1, b
-    return adj_doc_lens
-
-
 def bm25_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
     """BM25 similarity function, as in Lucene 9."""
-    context = None
-    def bm25(term_freqs: np.ndarray, doc_freqs: np.ndarray,
+    def bm25(term_freqs: np.ndarray,
+             doc_freqs: np.ndarray,
              doc_lens: np.ndarray, avg_doc_lens: int, num_docs: int) -> np.ndarray:
         """Calculate BM25 scores."""
-        # Sum doc freqs
-        # Calculate idf
-        nonlocal context
-        assert term_freqs.dtype == np.float32
-        new_context = ScoringContext(doc_lens, avg_doc_lens, num_docs)
-        if context is None or not context.same_as(new_context):
-            context = new_context
-
-        idf = compute_idf(context.num_docs, doc_freqs)
-        try:
-            adj_doc_lens = context.working["adj_doc_lens"]
-            bm25_score(term_freqs, adj_doc_lens, idf)
-            return term_freqs
-        except (KeyError, ValueError):
-            try:
-                adj_doc_lens = compute_adj_doc_lens(context.doc_lens, context.avg_doc_lens, k1, b)
-                context.working["adj_doc_lens"] = adj_doc_lens
-                assert term_freqs.dtype == np.float32
-                bm25_score(term_freqs, adj_doc_lens, idf)
-                return term_freqs
-            except ValueError:
-                adj_doc_lens = compute_adj_doc_lens(doc_lens, avg_doc_lens, k1, b)
-                assert term_freqs.dtype == np.float32
-                bm25_score(term_freqs, adj_doc_lens, idf)
-                return term_freqs
+        idf = compute_idf(num_docs, doc_freqs)
+        bm25_score(term_freqs,
+                   doc_lens.astype(np.float32),
+                   avg_doc_lens, idf, k1, b)
+        return term_freqs
     return bm25
 
 

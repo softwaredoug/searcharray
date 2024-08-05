@@ -57,4 +57,4 @@ def test_bm25_similarity_matches_lucene(term_freqs, doc_freqs, doc_lens, avg_doc
                         arr(doc_lens),
                         avg_doc_len,
                         num_docs)
-    assert np.isclose(bm25, expected).all()
+    assert np.isclose(bm25, expected).all(), f"Expected {expected} but got {bm25}"

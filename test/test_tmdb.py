@@ -11,6 +11,7 @@ from searcharray.postings import SearchArray
 from searcharray.solr import edismax
 from searcharray.similarity import default_bm25
 from test_utils import Profiler, profile_enabled, naive_find_term
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 DATA_DIR = '/tmp/tmdb'
@@ -213,7 +214,6 @@ def test_tmdb_expected_edismax(query, tmdb_data):
                          mm=1)
     tmdb_data['matches'] = matches
     expected_matches = tmdb_data[title_has_term | overview_has_term].index
-    print(f"Query - {query} | Expected: {len(expected_matches)}")
     matches = tmdb_data[matches > 0]
     assert np.all(matches.index == expected_matches)
 
@@ -243,8 +243,60 @@ def test_tmdb_expected_edismax_and_query(query, tmdb_data):
     matches = tmdb_data[matches > 0]
 
     expected_matches = tmdb_data[all_terms_have_match].index
-    print(f"Query - {query} | Expected: {len(expected_matches)}")
     assert np.all(matches.index == expected_matches)
+
+
+def test_tmdb_edismax_repeated_matches(tmdb_data):
+    first_pass_results = {}
+    for query in queries:
+        first_pass, _ = edismax(tmdb_data, q=query,
+                                mm=2,
+                                qf=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                pf=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                pf2=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                pf3=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                tie=0.3)
+        first_pass_results[query] = first_pass
+
+    for query in queries:
+        second_pass, _ = edismax(tmdb_data, q=query,
+                                 mm=2,
+                                 qf=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                 pf=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                 pf2=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                 pf3=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                 tie=0.3)
+        assert np.all(first_pass_results[query][0] == second_pass[0])
+
+
+def test_tmdb_edismax_threaded_matches_single_threaded(tmdb_data):
+    executor = ThreadPoolExecutor(max_workers=3)
+    futures = {}
+
+    for query in queries:
+        future = executor.submit(edismax, tmdb_data, q=query,
+                                 mm=2,
+                                 qf=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                 pf=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                 pf2=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                 pf3=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                 tie=0.3)
+        futures[future] = query
+
+    threaded_results = {}
+    for future in as_completed(futures):
+        query = futures[future]
+        threaded_results[query] = future.result()
+
+    for query, expected_matches in threaded_results.items():
+        single_threaded, _ = edismax(tmdb_data, q=query,
+                                     mm=2,
+                                     qf=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                     pf=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                     pf2=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                     pf3=['title_tokens^1.0', 'overview_tokens^0.5'],
+                                     tie=0.3)
+        assert np.all(single_threaded == threaded_results[query][0]), f"Query: {query} does no match"
 
 
 tmdb_phrase_matches = [
