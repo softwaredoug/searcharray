@@ -64,6 +64,8 @@ def bm25_legacy_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
              doc_lens: np.ndarray, avg_doc_lens: int, num_docs: int) -> np.ndarray:
         """Calculate BM25 scores."""
         # Calculate idf
+        if avg_doc_lens == 0:
+            return np.zeros_like(term_freqs)
         idf = compute_idf(num_docs, doc_freqs)
         # Calculate tf
         tf = (term_freqs * (k1 + 1)) / (term_freqs + k1 * (1 - b + b * doc_lens / avg_doc_lens))

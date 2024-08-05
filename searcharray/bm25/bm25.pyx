@@ -16,18 +16,11 @@ cdef void _bm25_score(float* term_freqs,
                       float b,
                       long length) nogil:
     """Modify termfreqs in place changing to BM25 score."""
-    cdef float doc_len_score = 0
+    cdef float one_minus_b = 1 - b
     for _ in range(length):
-        if term_freqs[0] == 0:
-            term_freqs[0] = 0
-        else:
-            if avg_doc_lens == 0:
-                doc_len_score = 0
-            else:
-                doc_len_score = ((1 - b) + (b * (doc_lens[0] / avg_doc_lens))) * k1
-
-            term_freqs[0] /= (term_freqs[0] + doc_len_score)
-            term_freqs[0] *= idf
+        term_freqs[0] = (
+            term_freqs[0] / (term_freqs[0] + (k1 * (one_minus_b + (b * (doc_lens[0] / avg_doc_lens)))))
+        ) * idf
         term_freqs += 1
         doc_lens += 1
 
