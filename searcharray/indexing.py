@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.typing import NDArray
 import math
 import os
 import sys
@@ -34,19 +35,19 @@ def searcharray_home():
     return searcharray_dir
 
 
-def _compute_doc_lens(posns: np.ndarray, doc_ids: np.ndarray, num_docs: int) -> np.ndarray:
+def _compute_doc_lens(posns: np.ndarray, doc_ids: np.ndarray, num_docs: int) -> NDArray[np.float32]:
     """Given an array of positions, compute the length of each document."""
-    doc_lens = np.zeros(num_docs, dtype=np.uint32)
+    doc_lens = np.zeros(num_docs, dtype=np.float32)
 
     # Find were we ave posns for each doc
-    non_empty_doc_lens = -np.diff(posns) + 1
+    non_empty_doc_lens = -np.diff(posns).astype(np.float32) + 1
 
     non_empty_idxs = np.argwhere(non_empty_doc_lens > 0).flatten()
     non_empty_doc_ids = doc_ids[non_empty_idxs]
     non_empty_doc_lens = non_empty_doc_lens[non_empty_idxs]
     doc_lens[non_empty_doc_ids] = non_empty_doc_lens
     if len(doc_ids) > 0 and doc_ids[-1] not in non_empty_doc_ids:
-        doc_lens[doc_ids[-1]] = posns[-1] + 1
+        doc_lens[doc_ids[-1]] = np.float32(posns[-1] + 1)
     return doc_lens
 
 
@@ -291,7 +292,7 @@ def build_index_from_tokenizer(array: Iterable, tokenizer, batch_size=10000,
         logger.info(f"Memmapping bit positions to {data_dir}")
         bit_posns.memmap(data_dir)
     bit_posns.cache_gt_than = cache_gt_than
-    return term_doc_built, bit_posns, term_dict, avg_doc_length, np.array(doc_lens)
+    return term_doc_built, bit_posns, term_dict, avg_doc_length, np.array(doc_lens, dtype=np.float32)
 
 
 def build_index_from_terms_list(postings, Terms):
