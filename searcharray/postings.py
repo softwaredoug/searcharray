@@ -380,18 +380,18 @@ class SearchArray(ExtensionArray):
             is_encoded = False
             posns = None
             term_mat = np.asarray([])
-            doc_lens = np.asarray([])
+            doc_lens = np.asarray([], dtype=np.float32)
             if isinstance(value, float):
                 term_mat = np.asarray([value])
                 doc_lens = np.asarray([0])
             elif isinstance(value, Terms):
                 term_mat = np.asarray([value.tf_to_dense(self.term_dict)])
-                doc_lens = np.asarray([value.doc_len])
+                doc_lens = np.asarray([value.doc_len], dtype=np.float32)
                 is_encoded = value.encoded
                 posns = [value.raw_positions(self.term_dict)]
             elif isinstance(value, np.ndarray):
                 term_mat = np.asarray([x.tf_to_dense(self.term_dict) for x in value])
-                doc_lens = np.asarray([x.doc_len for x in value])
+                doc_lens = np.asarray([np.float32(x.doc_len) for x in value], dtype=np.float32)
                 is_encoded = value[0].encoded if len(value) > 0 else False
                 posns = [x.raw_positions(self.term_dict) for x in value]
             np.nan_to_num(term_mat, copy=False, nan=0)
