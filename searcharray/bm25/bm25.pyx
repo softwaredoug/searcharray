@@ -14,7 +14,7 @@ cdef void _bm25_score(float* term_freqs,
                       float avg_doc_lens,
                       float k1,
                       float b,
-                      long length):
+                      long length) nogil:
     """Modify termfreqs in place changing to BM25 score."""
     cdef float doc_len_score = 0
     for _ in range(length):
