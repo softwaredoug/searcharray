@@ -28,6 +28,8 @@ def bm25_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
              doc_lens: NDArray[np.float32],
              avg_doc_lens: int, num_docs: int) -> np.ndarray:
         """Calculate BM25 scores."""
+        if avg_doc_lens == 0:
+            return np.zeros_like(term_freqs)
         idf = compute_idf(num_docs, doc_freqs)
         bm25_score(term_freqs,
                    doc_lens,
