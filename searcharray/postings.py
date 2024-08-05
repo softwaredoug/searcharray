@@ -12,7 +12,6 @@ from typing import List, Union, Optional, Iterable
 
 
 import numpy as np
-from numpy.typing import NDArray
 from searcharray.phrase.middle_out import PosnBitArray
 from searcharray.similarity import Similarity, default_bm25
 from searcharray.indexing import build_index_from_tokenizer, build_index_from_terms_list
