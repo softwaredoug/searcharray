@@ -7,5 +7,5 @@ def bm25_score(term_freqs: NDArray[np.float32],
                avg_doc_lens: float,
                idf: float,
                b: float,
-               k1: float):
+               k1: float) -> NDArray[np.float32]:
     ...

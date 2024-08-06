@@ -236,7 +236,7 @@ def test_edismax(frame, expected, params):
 def always_one_similarity(term_freqs: np.ndarray, doc_freqs: np.ndarray,
                           doc_lens: np.ndarray, avg_doc_lens: int, num_docs: int) -> np.ndarray:
     term_freqs = term_freqs
-    return term_freqs > 0
+    return (term_freqs > 0).astype(np.float32)
 
 
 def always_tiny_similarity(term_freqs: np.ndarray, doc_freqs: np.ndarray,

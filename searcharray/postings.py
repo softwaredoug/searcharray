@@ -8,7 +8,7 @@ import json
 from collections import Counter
 import warnings
 import logging
-from typing import List, Union, Optional, Iterable
+from typing import List, Union, Optional, Iterable, Tuple
 
 
 import numpy as np
@@ -17,6 +17,7 @@ from searcharray.similarity import Similarity, default_bm25
 from searcharray.indexing import build_index_from_tokenizer, build_index_from_terms_list
 from searcharray.term_dict import TermMissingError
 from searcharray.roaringish.roaringish_ops import as_dense
+from searcharray.roaringish import intersect
 
 
 logger = logging.getLogger(__name__)
@@ -606,17 +607,20 @@ class SearchArray(ExtensionArray):
     # ***********************************************************
     def termfreqs(self, token: Union[List[str], str],
                   slop: int = 0,
+                  sparse: bool = False,
                   min_posn: Optional[int] = None,
-                  max_posn: Optional[int] = None) -> np.ndarray:
+                  max_posn: Optional[int] = None) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
         token = self._check_token_arg(token)
         if isinstance(token, list):
-            tfs = self._phrase_freq(token, slop=slop, min_posn=min_posn, max_posn=max_posn)
-            return tfs
+            ids, tfs = self._phrase_freq(token, slop=slop, min_posn=min_posn, max_posn=max_posn)
+            if sparse:
+                return ids, tfs
+            return as_dense(ids, tfs, len(self))
 
         try:
             term_id = self.term_dict.get_term_id(token)
             slice_of_rows = self.term_mat.rows
-            if self.term_mat.subset:
+            if self.term_mat.subset and not sparse:
                 matches = np.zeros(len(self), dtype=np.float32)
                 doc_ids, termfreqs = self.posns.termfreqs(term_id,
                                                           doc_ids=slice_of_rows,
@@ -625,6 +629,15 @@ class SearchArray(ExtensionArray):
                 mask = np.isin(self.term_mat.rows, doc_ids)
                 matches[mask] = termfreqs
                 return matches
+            elif self.term_mat.subset and sparse:
+                doc_ids, termfreqs = self.posns.termfreqs(term_id,
+                                                          doc_ids=slice_of_rows,
+                                                          min_posn=min_posn,
+                                                          max_posn=max_posn)
+                lhs_idx, rhs_idx = intersect(self.term_mat.rows.astype(np.uint64),
+                                             doc_ids.astype(np.uint64))
+                matching_ids = lhs_idx
+                return matching_ids, termfreqs
             else:
                 doc_ids, termfreqs = self.posns.termfreqs(term_id,
                                                           doc_ids=None,
@@ -633,8 +646,12 @@ class SearchArray(ExtensionArray):
 
                 # This copy to a dense numpy array is the
                 # bottleneck for termfreqs
+                if sparse:
+                    return doc_ids, termfreqs
                 return as_dense(doc_ids, termfreqs, len(self))
         except TermMissingError:
+            if sparse:
+                return np.asarray([], dtype=np.uint32), np.asarray([], dtype=np.float32)
             return np.zeros(len(self), dtype=np.float32)
 
     def docfreq(self, token: str) -> int:
@@ -671,13 +688,15 @@ class SearchArray(ExtensionArray):
         tokens_l = [token] if isinstance(token, str) else token
         all_dfs = np.asarray([self.docfreq(token) for token in tokens_l])
 
-        tfs = self.termfreqs(token, min_posn=min_posn, max_posn=max_posn,
-                             slop=slop)
+        ids, tfs = self.termfreqs(token, min_posn=min_posn, max_posn=max_posn,
+                                  sparse=True,
+                                  slop=slop)
         token = self._check_token_arg(token)
         doc_lens = self.doclengths()
 
-        scores = similarity(tfs, all_dfs, doc_lens, self.avg_doc_length, self.corpus_size)
-        return scores
+        tfs.setflags(write=False)
+        scores = similarity(tfs, all_dfs, doc_lens[ids], self.avg_doc_length, self.corpus_size)
+        return as_dense(ids, scores, len(self))
 
     def positions(self, token: str, key=None) -> List[np.ndarray]:
         """Return a list of lists of positions of the given term."""
@@ -689,20 +708,23 @@ class SearchArray(ExtensionArray):
     def _phrase_freq(self, tokens: List[str],
                      slop=0,
                      min_posn: Optional[int] = None,
-                     max_posn: Optional[int] = None) -> np.ndarray:
+                     max_posn: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray]:
         if slop > 0:
             logger.warning("!! Slop is experimental and may be slow, crash, or inaccurate etc")
         try:
             # Decide how/if we need to filter doc ids
             term_ids = [self.term_dict.get_term_id(token) for token in tokens]
-            phrase_freqs = self.posns.phrase_freqs(term_ids,
-                                                   slop=slop,
-                                                   min_posn=min_posn,
-                                                   max_posn=max_posn)
+            ids, phrase_freqs = self.posns.phrase_freqs(term_ids,
+                                                        slop=slop,
+                                                        min_posn=min_posn,
+                                                        max_posn=max_posn)
             if self.term_mat.subset:
-                return phrase_freqs[self.term_mat.rows]
-            return phrase_freqs
+                # Find what indexes are set in the subset
+                lhs_idx, rhs_idx = intersect(self.term_mat.rows.astype(np.uint64),
+                                             ids.astype(np.uint64))
+                phrase_freqs = phrase_freqs
+                matching_ids = lhs_idx
+                return matching_ids, phrase_freqs
+            return ids, phrase_freqs
         except TermMissingError:
-            if self.term_mat.subset:
-                return np.zeros(len(self), dtype=np.float32)
-            return self.posns.empty_buffer()
+            return np.asarray([], dtype=np.uint32), np.asarray([], dtype=np.float32)
