@@ -31,9 +31,10 @@ def bm25_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
         if avg_doc_lens == 0:
             return np.zeros_like(term_freqs)
         idf = compute_idf(num_docs, doc_freqs)
-        return bm25_score(term_freqs,
-                          doc_lens,
-                          avg_doc_lens, idf, k1, b)
+        bm25_score(term_freqs,
+                   doc_lens,
+                   avg_doc_lens, idf, k1, b)
+        return term_freqs
     return bm25
 
 

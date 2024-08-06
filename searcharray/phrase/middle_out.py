@@ -416,7 +416,7 @@ class PosnBitArray:
                      slop: int = 0,
                      doc_ids: Optional[np.ndarray] = None,
                      min_posn: Optional[int] = None,
-                     max_posn: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray]:
+                     max_posn: Optional[int] = None) -> np.ndarray:
         phrase_freqs = self.empty_buffer()
 
         if len(term_ids) < 2:
@@ -435,10 +435,12 @@ class PosnBitArray:
 
         if slop == 0:
             ids, counts = compute_phrase_freqs(enc_term_posns, max_doc_id=np.uint64(self.max_doc_id))
-            return ids, counts
+            phrase_freqs[ids] = counts
+            return phrase_freqs
         else:
             ids, counts = span_search(enc_term_posns, slop)
-            return ids, counts
+            phrase_freqs[ids] = counts
+            return phrase_freqs
 
     def positions(self, term_id: int, doc_ids) -> Union[List[np.ndarray], np.ndarray]:
         if isinstance(doc_ids, numbers.Number):

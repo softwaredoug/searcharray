@@ -14,15 +14,13 @@ cdef void _bm25_score(float* term_freqs,
                       float avg_doc_lens,
                       float k1,
                       float b,
-                      float* bm25_scores,
                       long length) nogil:
     """Modify termfreqs in place changing to BM25 score."""
     cdef float one_minus_b = 1 - b
     for _ in range(length):
-        bm25_scores[0] = (
+        term_freqs[0] = (
             term_freqs[0] / (term_freqs[0] + (k1 * (one_minus_b + (b * (doc_lens[0] / avg_doc_lens)))))
         ) * idf
-        bm25_scores += 1
         term_freqs += 1
         doc_lens += 1
 
@@ -34,13 +32,10 @@ def bm25_score(np.ndarray[np.float32_t, ndim=1] term_freqs,
                float k1,
                float b):
     cdef long length = term_freqs.shape[0]
-    cdef np.ndarray[np.float32_t, ndim=1] bm25_scores = np.zeros(length, dtype=np.float32)
     _bm25_score(&term_freqs[0],
                 &doc_lens[0],
                 idf,
                 avg_doc_lens,
                 k1,
                 b,
-                &bm25_scores[0],
                 length)
-    return bm25_scores

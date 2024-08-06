@@ -225,6 +225,8 @@ def sort_merge_counts(np.ndarray[DTYPE_t, ndim=1] lhs_ids,
     cdef DTYPE_t result_idx = 0
     cdef DTYPE_t[:] merged_ids = np.empty(lhs_ids.shape[0] + rhs_ids.shape[0], dtype=np.uint64)
     cdef float[:] merged_counts = np.empty(lhs_ids.shape[0] + rhs_ids.shape[0], dtype=np.float32)
+    cdef DTYPE_t* merged_ids_ptr = &merged_ids[0]
+    cdef float* merged_counts_ptr = &merged_counts[0]
 
     result_idx = _sort_merge_counts(lhs_ids, lhs_counts, rhs_ids, rhs_counts,
                                     merged_ids, merged_counts)

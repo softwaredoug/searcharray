@@ -69,15 +69,13 @@ cdef void _as_dense_array(DTYPE_t[:] indices,  # Its likely these indices are so
 
 def as_dense(indices, values, size):
     cdef float[:] arr_out = np.zeros(size, dtype=np.float32)
-    if len(indices) != len(values):
-        raise ValueError("indices and values must have the same length")
-    if len(indices) == 0:
-        return np.array(arr_out)
-    # _as_dense_array(indices_view, values_view,
-    #                 arr_out)
     cdef DTYPE_t[:] indices_view = indices
     cdef DTYPE_t len_indices = indices.shape[0]
     cdef float[:] values_view = values
+    if len(indices) != len(values):
+        raise ValueError("indices and values must have the same length")
+    # _as_dense_array(indices_view, values_view,
+    #                 arr_out)
     with nogil:
         scatter_naive(&arr_out[0],
                       &indices_view[0],
