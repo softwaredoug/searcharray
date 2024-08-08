@@ -238,5 +238,3 @@ def popcount64_reduce(arr,
         return np.array([]), np.array([])
     keys, popcounts, results_idx = _popcount64_reduce(arr_view, key_shift, value_mask)
     return np.array(keys[:results_idx]), np.array(popcounts[:results_idx])
-
-
