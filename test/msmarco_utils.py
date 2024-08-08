@@ -10,7 +10,7 @@ csv.field_size_limit(sys.maxsize)
 def msmarco_gz_path():
     path = "data/msmarco-docs.tsv.gz"
     unzipped_path = path[0:-3]
-    if not pathlib.Path(unzipped_path).exists():
+    if pathlib.Path(path).exists() and not pathlib.Path(unzipped_path).exists():
         print("Unzipping MSMARCO")
         import gzip
         with gzip.open(path, 'rb') as f_in:
@@ -107,5 +107,5 @@ def msmarco_all_raw_path():
     return msmarco_raw_path
 
 
-if not msmarco_exists() and "--benchmark" in sys.argv:
+if "--benchmark" in sys.argv and not msmarco_exists():
     download_msmarco()
