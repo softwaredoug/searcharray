@@ -195,7 +195,7 @@ class PosnBitArrayFromFlatBuilder:
                                                       boundaries=term_boundaries[:-1],
                                                       payload=self.flat_array[2].view(np.uint64))
         if len(encoded) == 0:
-            return PosnBitArray({}, self.max_doc_id)
+            return PosnBitArray(ArrayDict(), self.max_doc_id)
         term_ids = self.flat_array[0][term_boundaries[:-1]]
 
         encoded_term_posns = ArrayDict.from_array_with_boundaries(encoded,
@@ -252,7 +252,7 @@ class PosnBitArrayBuilder:
 class PosnBitArrayAlreadyEncBuilder:
 
     def __init__(self):
-        self.encoded_term_posns = {}
+        self.encoded_term_posns = ArrayDict()
         self.max_doc_id = 0
 
     def add_posns(self, doc_id: int, term_id: int, posns):
@@ -326,6 +326,9 @@ class PosnBitArray:
         self.docfreq_cache : Dict[int, np.uint64] = {}
         self.termfreq_cache : Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
         self.cache_gt_than = cache_gt_than
+
+    def __repr__(self):
+        return f"""PosnBitArray(encoded_term_posns={self.encoded_term_posns}, max_doc_id={self.max_doc_id})"""
 
     def memmap(self, data_dir):
         if self.encoded_term_posns:

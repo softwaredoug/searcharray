@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import reprlib
 from typing import Optional, List, Dict
 
 
@@ -18,6 +19,10 @@ class ArrayDict:
         self.dtype = np.uint64
         self.data = np.ndarray(0, dtype=self.dtype)
         self.metadata = {}
+
+    def __repr__(self):
+        repr_obj = reprlib.Repr()
+        return f'ArrayDict({repr_obj.repr(self.metadata)})'
 
     @staticmethod
     def from_arrays(arrays: List[np.ndarray]):
@@ -81,7 +86,8 @@ class ArrayDict:
             if sort:
                 curr_arr.sort()
 
-        arr.data = np.concatenate(lst_of_arrays)
+        if len(lst_of_arrays) > 0:
+            arr.data = np.concatenate(lst_of_arrays)
         return arr
 
     def __getitem__(self, key):

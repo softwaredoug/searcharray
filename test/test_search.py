@@ -224,3 +224,8 @@ def test_or_query_copy(docs, keywords, expected, min_should_match):
     num_matches = np.sum(np.array([sliced.score(k) for k in keywords]) > 0, axis=0)
     matches = num_matches >= min_should_match
     assert (expected_sliced == matches).all()
+
+
+def test_empty_batch():
+    idx = SearchArray.index(["a", ""], batch_size=1)
+    assert np.all((idx.score("a") > 0) == [True, False])
