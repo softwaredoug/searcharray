@@ -113,7 +113,7 @@ class RoaringishEncoder:
             cols |= keys.astype(np.uint64) << (_64 - self.key_bits)
         values = payload % self.payload_lsb_bits   # Value to encode
 
-        change_indices_one_doc = np.nonzero(np.diff(cols))[0] + _1
+        change_indices_one_doc = np.nonzero(np.diff(cols))[0] + 1
         change_indices_one_doc = change_indices_one_doc.view(np.uint64)
         change_indices_one_doc = np.concatenate([[_0], change_indices_one_doc], dtype=np.uint64)
         if boundaries is not None:

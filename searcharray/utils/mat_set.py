@@ -90,10 +90,9 @@ class SparseMatSet:
             self.cols = np.concatenate([front_cols, cols, trailing_cols], dtype=np.int64)
 
         if cols_added < 0:
-            # TODO some casting nonsense makes this necessary
-            self.rows[row + 1:] -= np.abs(cols_added)
+            self.rows[row + 1:] -= np.abs(cols_added).astype(np.uint32)
         else:
-            self.rows[row + 1:] += cols_added
+            self.rows[row + 1:] += cols_added.astype(np.uint32)
 
     def __setitem__(self, index, value):
         if isinstance(index, numbers.Integral):

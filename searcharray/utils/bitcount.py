@@ -8,7 +8,7 @@ m3 = np.uint64(0x0F0F0F0F0F0F0F0F)
 m4 = np.uint64(0x0101010101010101)
 
 
-mask = np.uint64(-1)
+mask = np.int64(-1).view(np.uint64)
 s55 = np.uint64(m1 & mask)  # Add more digits for 128bit support
 s33 = np.uint64(m2 & mask)
 s0F = np.uint64(m3 & mask)
