@@ -10,6 +10,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
 
+    env:
+      CIBW_BUILD_VERBOSITY: 3
+
     steps:
       - uses: actions/checkout@v4
 
@@ -20,7 +23,7 @@ jobs:
         run: python -m pip install cibuildwheel==2.21.3
 
       - name: Build wheels
-        run: python -m cibuildwheel --output-dir wheelhouse
+        run: python -m cibuildwheel --debug-traceback --output-dir wheelhouse
 
       - uses: actions/upload-artifact@v4
         with:
