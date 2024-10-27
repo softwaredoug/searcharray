@@ -12,6 +12,7 @@ jobs:
 
     env:
       CIBW_BUILD_VERBOSITY: 1
+      CIBW_ARCHS_LINUX: native
 
     steps:
       - uses: actions/checkout@v4
