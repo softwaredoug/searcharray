@@ -1,3 +1,4 @@
+"""Fetches the latest build artifacts from a GitHub Actions workflow and uploads them to PyPI using twine."""
 import os
 import subprocess
 import requests
