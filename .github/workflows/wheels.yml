@@ -11,7 +11,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
 
     env:
-      CIBW_BUILD_VERBOSITY: 3
+      CIBW_BUILD_VERBOSITY: 1
 
     steps:
       - uses: actions/checkout@v4
