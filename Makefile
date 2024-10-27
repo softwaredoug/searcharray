@@ -140,7 +140,7 @@ twine:
 
 publish: twine
 	@echo "Publishing..."
-	twine upload --skip-existing dist/*
+	python scripts/publish.py
 
 
 help:
@@ -149,10 +149,10 @@ help:
 	@echo "Targets:"
 	@echo "  deps            Install dependencies"
 	@echo "  test            Run tests"
-	@echo "  build           Build package"
+	@echo "  build           Build package (local)"
 	@echo "  clean           Clean build files"
 	@echo "  destroy         Completely destroy the dev env"
 	@echo "  help            Show this help message"
-	@echo "  publish         Publish package to PyPI"
+	@echo "  publish         Fetch current sha wheels github and publish to pypi" 
 
 .DEFAULT_GOAL := build
