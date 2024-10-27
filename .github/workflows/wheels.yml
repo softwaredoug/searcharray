@@ -1,4 +1,4 @@
-name: Build
+name: Build Wheels
 
 on: [push, pull_request]
 
@@ -17,7 +17,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Used to host cibuildwheel
       - uses: actions/setup-python@v5
 
       - name: Install cibuildwheel
@@ -30,3 +29,5 @@ jobs:
         with:
           name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
           path: ./wheelhouse/*.whl
+
+      # On tag, upload wheels to PyPI
