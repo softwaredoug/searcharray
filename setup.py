@@ -127,7 +127,7 @@ setup(
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/discussions/install-requires-vs-requirements/
     install_requires=["pandas>=2.2.0",
-                      "numpy>=2.1.0",
+                      "numpy>=1.26.0",
                       "Cython"],  # Optional
     include_dirs=[np.get_include()],
     ext_modules=cythonize([Extension("searcharray.roaringish.*",

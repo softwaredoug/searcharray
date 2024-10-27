@@ -36,7 +36,7 @@ more-itertools==10.1.0
 mypy==1.8.0
 mypy-extensions==1.0.0
 nh3==0.2.14
-numpy==2.1.2
+numpy>=1.26.0
 packaging==23.2
 pandas==2.2.3
 pandas-stubs==2.1.4.231218
