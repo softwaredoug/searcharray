@@ -1,6 +1,22 @@
 import numpy as np
-import pandas as pd
 import numbers
+import abc
+
+
+def _is_list_like(obj):
+    if isinstance(obj, np.ndarray):
+        return len(obj.shape) > 0
+    elif isinstance(obj, list):
+        return True
+    return (
+        # equiv: `isinstance(obj, abc.Iterable)`
+        isinstance(obj, abc.Iterable)
+        # we do not count strings/unicode/bytes as list-like
+        # exclude Generic types that have __iter__
+        and not isinstance(obj, (str, bytes))
+        # exclude zero-dimensional duck-arrays, effectively scalars
+        and not (hasattr(obj, "ndim") and obj.ndim == 0)
+    )
 
 
 class SparseMatSetBuilder:
@@ -110,7 +126,7 @@ class SparseMatSet:
                 raise ValueError("This sparse matrix only supports setting 1")
             self.set_cols(row, np.asarray([col]))
         # Multiple rows
-        elif pd.api.types.is_list_like(index):
+        elif _is_list_like(index):
             if len(index) == len(value):
                 for idx, val in zip(index, value):
                     self[idx] = val
