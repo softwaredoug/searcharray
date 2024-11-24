@@ -54,7 +54,7 @@ def download_msmarco():
     # Download to fixtures
     print("Downloading MSMARCO")
 
-    url = "https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-docs.tsv.gz"
+    url = "https://msmarco.z22.web.core.windows.net/msmarcoranking/msmarco-docs.tsv.gz"
     download_file(url)
     # Ensure data directory
     pathlib.Path("data").mkdir(exist_ok=True)
@@ -63,6 +63,16 @@ def download_msmarco():
     pathlib.Path(path).rename(f"data/{path}")
 
 
+# Decorator to check if MSMARCO exists and download if not
+def check_msmarco_and_download(func):
+    def wrapper(*args, **kwargs):
+        if not msmarco_exists():
+            download_msmarco()
+        return func(*args, **kwargs)
+    return wrapper
+
+
+@check_msmarco_and_download
 def msmarco1m_raw_path():
     msmarco_raw_path = 'data/msmarco1m_raw.pkl'
     msmarco1m_raw_path = pathlib.Path(msmarco_raw_path)
@@ -74,10 +84,10 @@ def msmarco1m_raw_path():
                               header=None, names=["id", "url", "title", "body"])
 
         msmarco.to_pickle(msmarco_raw_path)
-        return msmarco
     return msmarco1m_raw_path
 
 
+@check_msmarco_and_download
 def msmarco100k_raw_path():
     msmarco_raw_path = 'data/msmarco100k_raw.pkl'
     msmarco100k_raw_path = pathlib.Path(msmarco_raw_path)
@@ -92,6 +102,7 @@ def msmarco100k_raw_path():
     return msmarco100k_raw_path
 
 
+@check_msmarco_and_download
 def msmarco_all_raw_path():
     print("Loading docs...")
     msmarco_raw_path = 'data/msmarco_all_raw.pkl'
