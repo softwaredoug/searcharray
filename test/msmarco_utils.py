@@ -28,6 +28,8 @@ def msmarco_exists():
 def csv_col_iter(col_no, msmarco_unzipped_path=None, num_docs=None):
     if msmarco_unzipped_path is None:
         msmarco_unzipped_path = msmarco_gz_path()[0:-3]
+    if not pathlib.Path(msmarco_unzipped_path).exists():
+        raise FileNotFoundError(f"File {msmarco_unzipped_path} not found")
     with open(msmarco_unzipped_path, "rt") as f:
         csv_reader = csv.reader(f, delimiter="\t")
         for idx, row in enumerate(csv_reader):
