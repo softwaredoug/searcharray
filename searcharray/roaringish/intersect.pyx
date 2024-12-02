@@ -8,6 +8,16 @@
 # cython: language_level=3
 cimport numpy as np
 import numpy as np
+cimport libc.stdint
+from libc.stdio cimport printf
+from libc.stdint cimport uint32_t
+from libc.stdint cimport uint64_t
+cimport cython
+
+
+cdef extern from "timer.h":
+    cdef uint64_t timestamp() nogil
+    cdef void print_elapsed(uint64_t start, const char* msg) nogil
 
 
 cimport searcharray.roaringish.snp_ops
@@ -228,11 +238,18 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
     cdef DTYPE_t* lhs_adj_result_ptr = &adj_lhs_out[0]
     cdef DTYPE_t* rhs_adj_result_ptr = &adj_rhs_out[0]
 
+    cdef uint64_t gallop_time = 0
+    cdef uint64_t gallop_start = 0
+
+    cdef uint64_t collect_time = 0
+    cdef uint64_t collect_start = 0
+
     while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
 
         # Gallop to adjacent or equal value
         # if value_lhs < value_rhs - delta:
         # Gallop past the current element
+        gallop_start = timestamp()
         if (lhs_ptr[0] & args.mask) != (rhs_ptr[0] & args.mask):
             while lhs_ptr < end_lhs_ptr and ((lhs_ptr[0] & args.mask) + delta) < (rhs_ptr[0] & args.mask):
                 lhs_ptr += (gallop * args.lhs_stride)
@@ -246,6 +263,8 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
             gallop = 1
             # Now lhs is at or before RHS - delta
             # RHS is 4, LHS is at most 3
+        gallop_time += (timestamp() - gallop_start)
+        collect_start = timestamp()
         # Collect adjacent avalues
         if ((lhs_ptr[0] & args.mask) + delta) == ((rhs_ptr[0] & args.mask)):
             if (last_adj & args.mask) != (lhs_ptr[0] & args.mask):
@@ -270,6 +289,10 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
                 lhs_result_ptr += 1
                 rhs_result_ptr += 1
             rhs_ptr += args.rhs_stride
+        collect_time += (timestamp() - collect_start)
+
+    print_elapsed(gallop_time,  "Gallop ")
+    print_elapsed(collect_time, "Collect")
 
     adj_out_len[0] = lhs_adj_result_ptr - &adj_lhs_out[0]
     return lhs_result_ptr - &args.lhs_out[0]
@@ -381,6 +404,7 @@ def intersect_with_adjacents(np.ndarray[DTYPE_t, ndim=1] lhs,
     args.rhs_out = &rhs_out[0]
     adj_lhs_out_begin = &adj_lhs_out[0]
     adj_rhs_out_begin = &adj_rhs_out[0]
+    print(f"Lhs len: {lhs.shape[0]} | Rhs len: {rhs.shape[0]}")
     with nogil:
         amt_written = _gallop_int_and_adj_drop(args, delta,
                                                adj_lhs_out_begin,

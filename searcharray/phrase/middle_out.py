@@ -16,6 +16,8 @@ import numbers
 import logging
 from collections import defaultdict, abc
 
+from time import perf_counter
+
 
 logger = logging.getLogger(__name__)
 
@@ -139,8 +141,11 @@ def _compute_phrase_freqs_right_to_left(encoded_posns: List[np.ndarray],
     rhs = encoded_posns[-1]
     for lhs in encoded_posns[-2::-1]:
         # Only count the count of the last bigram (ignoring the ones where priors did not match)
+        # begin = perf_counter()
         phrase_freqs, conts = bigram_freqs(lhs, rhs,
                                            cont=Continuation.LHS)
+        # end = perf_counter()
+        # print(f"bigram_freqs {len(lhs)}|{len(rhs)} took {end - begin} seconds")
 
         assert conts[0] is not None
         rhs = conts[0]

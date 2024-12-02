@@ -350,6 +350,37 @@ def test_profile_masked_saved(suffix, benchmark):
 
 
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
+@pytest.mark.parametrize("suffix", [128, 185, 24179, 27685, 44358, 45907, 90596])
+def test_int_adj_saved(suffix, benchmark):
+    profiler = Profiler(benchmark)
+
+    print(f"Running with {suffix}")
+    lhs = np.load(f"fixtures/lhs_{suffix}.npy")
+    rhs = np.load(f"fixtures/rhs_{suffix}.npy")
+    mask = np.load(f"fixtures/mask_{suffix}.npy")
+    print(lhs.shape, rhs.shape)
+
+    def int_adj():
+        intersect_with_adjacents(lhs, rhs, mask=mask)
+
+    def two_ops():
+        intersect(lhs, rhs, mask)
+        adjacent(lhs, rhs, mask)
+
+    def upper_bound():
+        """An operation involving a scan, that's likely the upper bound of speed."""
+        count_odds(lhs, rhs)
+
+    def intersect_many():
+        for _ in range(10):
+            two_ops()
+            upper_bound()
+            int_adj()
+
+    profiler.run(intersect_many)
+
+
+@pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 def test_profile_masked_intersect_sparse_dense(benchmark):
     profiler = Profiler(benchmark)
 
