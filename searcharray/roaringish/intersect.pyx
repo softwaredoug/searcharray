@@ -225,7 +225,7 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
                                       DTYPE_t* adj_lhs_out,
                                       DTYPE_t* adj_rhs_out,
                                       DTYPE_t* adj_out_len) nogil:
-    """Two pointer approach to find the intersection of two sorted arrays."""
+    """Galloping approach to find the intersection w/ adjacents of two sorted arrays."""
     cdef DTYPE_t* lhs_ptr = &args.lhs[0]
     cdef DTYPE_t* rhs_ptr = &args.rhs[0]
     cdef DTYPE_t* end_lhs_ptr = &args.lhs[args.lhs_len]
@@ -238,18 +238,11 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
     cdef DTYPE_t* lhs_adj_result_ptr = &adj_lhs_out[0]
     cdef DTYPE_t* rhs_adj_result_ptr = &adj_rhs_out[0]
 
-    cdef uint64_t gallop_time = 0
-    cdef uint64_t gallop_start = 0
-
-    cdef uint64_t collect_time = 0
-    cdef uint64_t collect_start = 0
-
     while lhs_ptr < end_lhs_ptr and rhs_ptr < end_rhs_ptr:
 
         # Gallop to adjacent or equal value
         # if value_lhs < value_rhs - delta:
         # Gallop past the current element
-        gallop_start = timestamp()
         if (lhs_ptr[0] & args.mask) != (rhs_ptr[0] & args.mask):
             while lhs_ptr < end_lhs_ptr and ((lhs_ptr[0] & args.mask) + delta) < (rhs_ptr[0] & args.mask):
                 lhs_ptr += (gallop * args.lhs_stride)
@@ -263,8 +256,6 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
             gallop = 1
             # Now lhs is at or before RHS - delta
             # RHS is 4, LHS is at most 3
-        gallop_time += (timestamp() - gallop_start)
-        collect_start = timestamp()
         # Collect adjacent avalues
         if ((lhs_ptr[0] & args.mask) + delta) == ((rhs_ptr[0] & args.mask)):
             if (last_adj & args.mask) != (lhs_ptr[0] & args.mask):
@@ -289,10 +280,6 @@ cdef DTYPE_t _gallop_int_and_adj_drop(intersect_args_t args,
                 lhs_result_ptr += 1
                 rhs_result_ptr += 1
             rhs_ptr += args.rhs_stride
-        collect_time += (timestamp() - collect_start)
-
-    print_elapsed(gallop_time,  "Gallop ")
-    print_elapsed(collect_time, "Collect")
 
     adj_out_len[0] = lhs_adj_result_ptr - &adj_lhs_out[0]
     return lhs_result_ptr - &args.lhs_out[0]
@@ -412,3 +399,128 @@ def intersect_with_adjacents(np.ndarray[DTYPE_t, ndim=1] lhs,
                                                &adj_out_len)
     return (np.asarray(lhs_out)[:amt_written], np.asarray(rhs_out)[:amt_written],
             np.asarray(adj_lhs_out)[:adj_out_len], np.asarray(adj_rhs_out)[:adj_out_len])
+
+
+
+cdef DTYPE_t _int_w_index(intersect_args_t args,
+                          DTYPE_t index_mask,
+                          DTYPE_t* lhs_index,
+                          DTYPE_t lhs_index_len,
+                          DTYPE_t* rhs_index,
+                          DTYPE_t rhs_index_len) nogil:
+    """Two pointer intersect the index first THEN intersect the lhs / rhs within those indices."""
+    cdef DTYPE_t* lhs_ptr = &args.lhs[0]
+    cdef DTYPE_t* rhs_ptr = &args.rhs[0]
+    cdef DTYPE_t* lhs_index_ptr = &lhs_index[0]
+    cdef DTYPE_t* rhs_index_ptr = &rhs_index[0]
+    cdef DTYPE_t* end_lhs_ptr = &args.lhs[args.lhs_len]
+    cdef DTYPE_t* end_rhs_ptr = &args.rhs[args.rhs_len]
+    cdef DTYPE_t* end_lhs_index_ptr = &lhs_index[lhs_index_len]
+    cdef DTYPE_t* end_rhs_index_ptr = &rhs_index[rhs_index_len]
+    cdef DTYPE_t* lhs_result_ptr = &args.lhs_out[0]
+    cdef DTYPE_t* rhs_result_ptr = &args.rhs_out[0]
+    cdef DTYPE_t lhs_idx = 0 
+    cdef DTYPE_t rhs_idx = 0
+    cdef DTYPE_t lhs_curr_end = 0
+    cdef DTYPE_t rhs_curr_end = 0
+    cdef DTYPE_t index_lsb_mask = ~index_mask
+
+    while lhs_index_ptr < end_lhs_index_ptr and rhs_index_ptr < end_rhs_index_ptr:
+        if (lhs_index_ptr[0] & index_mask) < (rhs_index_ptr[0] & index_mask):
+            lhs_index_ptr += 1
+        elif (rhs_index_ptr[0] & index_mask) < (lhs_index_ptr[0] & index_mask):
+            rhs_index_ptr += 1
+        else:
+            # Now two pointer intersect within lhs_index_ptr -> lhs_index_ptr[1]
+            lhs_idx = lhs_index_ptr[0] & index_lsb_mask
+            rhs_idx = rhs_index_ptr[0] & index_lsb_mask
+            lhs_curr_end = (end_lhs_ptr - &args.lhs[0])
+            rhs_curr_end = (end_rhs_ptr - &args.rhs[0])
+            if lhs_index_ptr + 1 < end_lhs_index_ptr:
+                lhs_curr_end = ((lhs_index_ptr + 1)[0] & index_lsb_mask)
+            if rhs_index_ptr + 1 < end_rhs_index_ptr:
+                rhs_curr_end = ((rhs_index_ptr + 1)[0] & index_lsb_mask)
+
+            # Two pointer intesect between lhs_index_ptr and lhs_index_end w/ rhs_index_ptr and rhs_index_end
+            while lhs_idx < lhs_curr_end and rhs_idx < rhs_curr_end:
+                if (args.lhs[lhs_idx] & args.mask)  < (args.rhs[rhs_idx] & args.mask):
+                    lhs_idx += 1
+                elif (args.rhs[rhs_idx] & args.mask) < (args.lhs[lhs_idx] & args.mask):
+                    rhs_idx += 1
+                else:
+                    lhs_result_ptr[0] = lhs_idx
+                    rhs_result_ptr[0] = rhs_idx
+                    lhs_result_ptr += 1
+                    rhs_result_ptr += 1
+                    lhs_idx += 1
+                    rhs_idx += 1
+
+            lhs_index_ptr += 1
+            rhs_index_ptr += 1
+
+    return lhs_result_ptr - &args.lhs_out[0]
+
+
+cdef DTYPE_t _build_intersect_index(DTYPE_t* arr,
+                                    DTYPE_t arr_len,
+                                    DTYPE_t mask,
+                                    DTYPE_t* idx_out) nogil:
+    cdef DTYPE_t i = 0
+    cdef DTYPE_t headerVal = 0xFFFFFFFFFFFFFFFF
+    cdef DTYPE_t lastHeaderVal = 0
+    cdef DTYPE_t* currIdxOut = &idx_out[0]
+    for i in range(arr_len):
+        headerVal = arr[i] & mask
+        if headerVal != lastHeaderVal:
+            currIdxOut[0] = (headerVal | i)
+            currIdxOut += 1
+            lastHeaderVal = headerVal
+    return currIdxOut - &idx_out[0]
+
+
+
+def int_w_index(np.ndarray[DTYPE_t, ndim=1] lhs,
+                np.ndarray[DTYPE_t, ndim=1] rhs,
+                np.ndarray[DTYPE_t, ndim=1] lhs_index,
+                np.ndarray[DTYPE_t, ndim=1] rhs_index,
+                DTYPE_t index_mask=ALL_BITS,
+                DTYPE_t mask=ALL_BITS):
+    cdef np.uint64_t[:] lhs_out
+    cdef np.uint64_t[:] rhs_out
+    cdef intersect_args_t args
+    cdef DTYPE_t adj_out_len = 0
+    cdef DTYPE_t* lhs_index_ptr = &lhs_index[0]
+    cdef DTYPE_t* rhs_index_ptr = &rhs_index[0]
+    cdef DTYPE_t lhs_index_len = lhs_index.shape[0]
+    cdef DTYPE_t rhs_index_len = rhs_index.shape[0]
+    
+    lhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    rhs_out = np.empty(min(lhs.shape[0], rhs.shape[0]), dtype=np.uint64)
+    
+    args.mask = mask
+    args.lhs = &lhs[0]
+    args.rhs = &rhs[0]
+    args.lhs_len = lhs.shape[0] * lhs.strides[0] / sizeof(DTYPE_t)
+    args.rhs_len = rhs.shape[0] * rhs.strides[0] / sizeof(DTYPE_t)
+    args.lhs_out = &lhs_out[0]
+    args.rhs_out = &rhs_out[0]
+
+    with nogil:
+        amt_written = _int_w_index(args,
+                                   index_mask,
+                                   lhs_index_ptr, lhs_index_len,
+                                   rhs_index_ptr, rhs_index_len)
+
+    return (np.asarray(lhs_out)[:amt_written], np.asarray(rhs_out)[:amt_written])
+
+
+
+
+def build_intersect_index(np.ndarray[DTYPE_t, ndim=1] arr,
+                          DTYPE_t mask=ALL_BITS):
+    cdef np.uint64_t[:] idx_out = np.empty(arr.shape[0], dtype=np.uint64)
+    cdef DTYPE_t amt_written = 0
+    cdef DTYPE_t* arr_ptr = &arr[0]
+    with nogil:
+        amt_written = _build_intersect_index(arr_ptr, arr.shape[0], mask, &idx_out[0])
+    return np.asarray(idx_out[:amt_written])

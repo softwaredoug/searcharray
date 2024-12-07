@@ -5,7 +5,7 @@ import pytest
 from searcharray.roaringish.search import binary_search, galloping_search, count_odds
 from searcharray.roaringish.unique import unique
 from searcharray.roaringish.merge import merge
-from searcharray.roaringish.intersect import intersect, adjacent, intersect_with_adjacents
+from searcharray.roaringish.intersect import intersect, adjacent, intersect_with_adjacents, build_intersect_index, int_w_index
 from test_utils import w_scenarios
 from test_utils import Profiler, profile_enabled
 
@@ -263,6 +263,23 @@ def test_profile_masked_intersect(benchmark):
     profiler.run(intersect_many)
 
 
+@pytest.mark.parametrize("suffix", [128, 185, 24179, 27685, 44358, 45907, 90596])
+def test_indexed_intersect(suffix):
+    print(f"Running with {suffix}")
+    lhs = np.load(f"fixtures/lhs_{suffix}.npy")
+    rhs = np.load(f"fixtures/rhs_{suffix}.npy")
+    mask = np.load(f"fixtures/mask_{suffix}.npy")
+    # Set 28 bits to 1
+    key_mask = np.uint64(0xFFFFFFF000000000)
+    lhs_index = build_intersect_index(lhs, key_mask)
+    rhs_index = build_intersect_index(rhs, key_mask)
+
+    lhs_out_windex, rhs_out_windex = int_w_index(lhs, rhs, lhs_index, rhs_index, key_mask, mask)
+    lhs_out_int, rhs_out_out = intersect(lhs, rhs, mask)
+    assert np.all(lhs_out_windex == lhs_out_int)
+    assert np.all(rhs_out_windex == rhs_out_out)
+
+
 @pytest.mark.skipif(not profile_enabled, reason="Profiling disabled")
 def test_profile_masked_intersect_sparse_sparse(benchmark):
     profiler = Profiler(benchmark)
@@ -329,10 +346,16 @@ def test_profile_masked_saved(suffix, benchmark):
     lhs = np.load(f"fixtures/lhs_{suffix}.npy")
     rhs = np.load(f"fixtures/rhs_{suffix}.npy")
     mask = np.load(f"fixtures/mask_{suffix}.npy")
-    print(lhs.shape, rhs.shape)
+    # Set 28 bits to 1
+    key_mask = np.uint64(0xFFFFFFF000000000)
+    lhs_index = build_intersect_index(lhs, key_mask)
+    rhs_index = build_intersect_index(rhs, key_mask)
+
+    def with_indexed():
+        lhs_out, rhs_out = int_w_index(lhs, rhs, lhs_index, rhs_index, key_mask, mask)
 
     def with_snp_ops():
-        intersect(lhs, rhs, mask)
+        lhs_out, rhs_out = intersect(lhs, rhs, mask)
 
     def with_snp():
         snp.intersect(lhs >> 18, rhs >> 18, indices=True, duplicates=snp.DROP)
@@ -345,6 +368,7 @@ def test_profile_masked_saved(suffix, benchmark):
             with_snp_ops()
             with_snp()
             baseline()
+            with_indexed()
 
     profiler.run(intersect_many)
 
