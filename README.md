@@ -2,9 +2,9 @@
 
 [![Python package](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml/badge.svg)](https://github.com/softwaredoug/searcharray/actions/workflows/test.yml) | Discuss at [Relevance Slack](https://join.slack.com/t/relevancy/shared_invite/zt-2ccxvzn1w-2_50zf9xBOSv3n06Cu15jg)
 
-SearchArray turns Pandas string columns into a term index. It alows efficient BM25 / TFIDF scoring of phrases and individual tokens.
+SearchArray indexes an array of strings into a term index. It alows efficient BM25 / TFIDF scoring of phrases and individual tokens. Use it to search a numpy array of strings, list of strings, pandas column, or anything array-like.
 
-Think Lucene, but as a Pandas column.
+IE consider the following pandas example:
 
 ```python
 from searcharray import SearchArray
