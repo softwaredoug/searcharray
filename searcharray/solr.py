@@ -129,7 +129,7 @@ def _edismax_term_centric(frame: pd.DataFrame,
             boost_exp = f"{boost}" if boost is not None else "1"
             term_explain.append(f"{field}:{term}^{boost_exp}")
             sum_scores += field_term_score
-            max_scores = np.maximum(max_scores, field_term_score)
+            max_scores = np.maximum(max_scores, field_term_score)  # type: ignore
 
         remainder_scores = sum_scores - max_scores
         term_scores.append(max_scores + remainder_scores * tie)
