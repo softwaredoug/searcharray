@@ -171,7 +171,7 @@ Create your own using stemming libraries, or whatever Python functionality you w
 
 ### Use Pandas instead of function queries
 
-Solr has its [own unique function query syntax]()https://solr.apache.org/guide/7_7/function-queries.html. Elasticsearch has [Painless](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-painless.html).
+Solr has its [own unique function query syntax](https://solr.apache.org/guide/7_7/function-queries.html). Elasticsearch has [Painless](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-painless.html).
 
 Instead of recreating these, simply use Pandas on existing Pandas columns. Then later, if you need to implement this in Solr or Elasticsearch, attempt to recreate the functionality. Arguably what's in Solr / ES would be a subset of what you could do in Pandas.
 
