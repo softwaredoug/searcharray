@@ -11,12 +11,51 @@ import numpy as np
 cimport searcharray.roaringish.snp_ops
 from searcharray.roaringish.snp_ops cimport DTYPE_t
 
+cdef extern from *:
+    """
+    #if defined(_MSC_VER)
+        #include <intrin.h>
+        #pragma intrinsic(__popcnt64)
+        #pragma intrinsic(_BitScanForward64)
+        #pragma intrinsic(_BitScanReverse64)
 
-cdef extern from "stddef.h":
-    # Trailing and leading zeros to trim the span mask
-    int __builtin_popcountll(unsigned long long x)
-    int __builtin_ctzll(unsigned long long x)
-    int __builtin_clzll(unsigned long long x)
+        static int popcount(unsigned long long x) {
+            return __popcnt64(x);
+        }
+
+        static int ctzll(unsigned long long x) {
+            unsigned long index;
+            if (x == 0) return 64;
+            _BitScanForward64(&index, x);
+            return index;
+        }
+
+        static int clzll(unsigned long long x) {
+            unsigned long index;
+            if (x == 0) return 64;
+            _BitScanReverse64(&index, x);
+            return 63 - index;
+        }
+
+    #else
+        static int popcount(unsigned long long x) {
+            return __builtin_popcountll(x);
+        }
+
+        static int ctzll(unsigned long long x) {
+            return __builtin_ctzll(x);
+        }
+
+        static int clzll(unsigned long long x) {
+            return __builtin_clzll(x);
+        }
+    #endif
+    """
+
+cdef extern from *:
+    int popcount(unsigned long long x)
+    int ctzll(unsigned long long x)
+    int clzll(unsigned long long x)
 
 
 cdef _count_spans_of_slop(DTYPE_t[:] posns, DTYPE_t slop):
@@ -58,7 +97,7 @@ cdef np.int64_t _span_width(ActiveSpans* spans, DTYPE_t span_idx):
 
 cdef DTYPE_t _consume_lsb(DTYPE_t* term):
     """Get lowest set bit, clear it, and return the position it occured in."""
-    lsb = __builtin_ctzll(term[0])
+    lsb = ctzll(term[0])
     # Clear LSB
     term[0] = (term[0] & (term[0] - 1))
     return lsb
@@ -69,11 +108,11 @@ cdef DTYPE_t _posn_mask(np.int64_t curr_posn):
 
 
 cdef DTYPE_t _num_terms(ActiveSpans* spans, DTYPE_t span_idx):
-    return __builtin_popcountll(spans[0].terms[span_idx])
+    return popcount(spans[0].terms[span_idx])
 
 
 cdef DTYPE_t _num_posns(ActiveSpans* spans, DTYPE_t span_idx):
-    return __builtin_popcountll(spans[0].posns[span_idx])
+    return popcount(spans[0].posns[span_idx])
 
 
 cdef bint _do_spans_overlap(ActiveSpans* spans_lhs, DTYPE_t span_idx_lhs,
@@ -193,7 +232,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                 payload_base = ((term & payload_msb_mask) >> lsb_bits) * lsb_bits
                 term &= payload_mask
                 curr_term_mask = 0x1 << term_ord
-                sum_popcount[term_ord] += __builtin_popcountll(posns[curr_idx[term_ord]] & payload_mask)
+                sum_popcount[term_ord] += popcount(posns[curr_idx[term_ord]] & payload_mask)
 
                 # Consume every position into every possible span
                 while term != 0:

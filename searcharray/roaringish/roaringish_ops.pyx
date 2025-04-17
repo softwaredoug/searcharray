@@ -23,10 +23,23 @@ from searcharray.roaringish.snp_ops cimport DTYPE_t
 cdef DTYPE_t ALL_BITS = 0xFFFFFFFFFFFFFFFF
 
 
-cdef extern from "stddef.h":
-    # Assuming size_t is available via stddef.h for the example's simplicity
-    # and portability, though it's not directly used here.
-    int __builtin_popcountll(unsigned long long x)
+cdef extern from *:
+    """
+    #if defined(_MSC_VER)
+        #include <intrin.h>
+        #pragma intrinsic(__popcnt64)
+        static int popcount(unsigned long long x) {
+            return __popcnt64(x);
+        }
+    #else
+        static int popcount(unsigned long long x) {
+            return __builtin_popcountll(x);
+        }
+    #endif
+    """
+
+cdef extern from *:
+    int popcount(unsigned long long x)
 
 
 cdef _payload_slice(DTYPE_t[:] arr,
