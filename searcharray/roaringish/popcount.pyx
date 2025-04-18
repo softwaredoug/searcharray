@@ -15,14 +15,52 @@ import numpy as np
 cimport searcharray.roaringish.snp_ops
 from searcharray.roaringish.snp_ops cimport DTYPE_t
 
+cdef extern from *:
+    """
+    #if defined(_MSC_VER)
+        #include <intrin.h>
+        #pragma intrinsic(__popcnt64)
+        #pragma intrinsic(_BitScanForward64)
+        #pragma intrinsic(_BitScanReverse64)
 
-cdef extern from "stddef.h":
-    # Assuming size_t is available via stddef.h for the example's simplicity
-    # and portability, though it's not directly used here.
-    int __builtin_popcountll(unsigned long long x)
+        static int popcountll(unsigned long long x) {
+            return __popcnt64(x);
+        }
 
-    int __builtin_ctzll(unsigned long long x)
-    int __builtin_clzll(unsigned long long x)
+        static int ctzll(unsigned long long x) {
+            unsigned long index;
+            if (x == 0) return 64;
+            _BitScanForward64(&index, x);
+            return index;
+        }
+
+        static int clzll(unsigned long long x) {
+            unsigned long index;
+            if (x == 0) return 64;
+            _BitScanReverse64(&index, x);
+            return 63 - index;
+        }
+
+    #else
+        #include <stddef.h>
+        static int popcountll(unsigned long long x) {
+            return __builtin_popcountll(x);
+        }
+
+        static int ctzll(unsigned long long x) {
+            return __builtin_ctzll(x);
+        }
+
+        static int clzll(unsigned long long x) {
+            return __builtin_clzll(x);
+        }
+    #endif
+    """
+
+cdef extern from *:
+    int popcountll(unsigned long long x)
+    int ctzll(unsigned long long x)
+    int clzll(unsigned long long x)
 
 
 # Include mach performance timer
@@ -37,7 +75,7 @@ cdef popcount64_arr(DTYPE_t[:] arr):
     cdef DTYPE_t* arr_ptr = &arr[0]
 
     for _ in range(arr.shape[0]):
-        result_ptr[0] = __builtin_popcountll(arr_ptr[0])
+        result_ptr[0] = popcountll(arr_ptr[0])
         result_ptr += 1
         arr_ptr += 1
     return result
@@ -50,7 +88,7 @@ cdef ctz_arr(DTYPE_t[:] arr):
     cdef DTYPE_t* arr_ptr = &arr[0]
 
     for _ in range(arr.shape[0]):
-        result_ptr[0] = __builtin_ctzll(arr_ptr[0])
+        result_ptr[0] = ctzll(arr_ptr[0])
         result_ptr += 1
         arr_ptr += 1
     return result
@@ -63,7 +101,7 @@ cdef clz_arr(DTYPE_t[:] arr):
     cdef DTYPE_t* arr_ptr = &arr[0]
 
     for _ in range(arr.shape[0]):
-        result_ptr[0] = __builtin_clzll(arr_ptr[0])
+        result_ptr[0] = clzll(arr_ptr[0])
         result_ptr += 1
         arr_ptr += 1
     return result
@@ -74,7 +112,7 @@ cdef popcount64_arr_naive(DTYPE_t[:] arr):
     cdef int i = 0
 
     for i in range(arr.shape[0]):
-        result[i] = __builtin_popcountll(arr[i])
+        result[i] = popcountll(arr[i])
     return result
 
 
@@ -100,7 +138,7 @@ cdef DTYPE_t _popcount_reduce_at(DTYPE_t[:] ids, DTYPE_t[:] payload,
             popcount_sum = 0
             merged_ids_ptr += 1
             merged_counts_ptr += 1
-        popcount_sum += __builtin_popcountll(payload_ptr[0])
+        popcount_sum += popcountll(payload_ptr[0])
         last_id = ids_ptr[0]
         payload_ptr += 1
         ids_ptr += 1
@@ -187,14 +225,14 @@ cdef _popcount64_reduce(DTYPE_t[:] arr,
     for _ in range(arr.shape[0]):
         key = arr_ptr[0] >> key_shift
         if key == last_key:
-            popcounts_ptr[0] += __builtin_popcountll(arr_ptr[0] & value_mask)
+            popcounts_ptr[0] += popcountll(arr_ptr[0] & value_mask)
         else:
             last_key = key
             popcounts_ptr += 1
             keys_ptr += 1
             # Init next key
             keys_ptr[0] = last_key
-            popcounts_ptr[0] = __builtin_popcountll(arr_ptr[0] & value_mask)
+            popcounts_ptr[0] = popcountll(arr_ptr[0] & value_mask)
         arr_ptr += 1
     return keys, popcounts, (keys_ptr - &keys[0] + 1)
 
@@ -223,7 +261,7 @@ cdef _popcount64_reduce_nobranch(DTYPE_t[:] arr,
         key = arr_ptr[0] >> key_shift
         popcounts_ptr += (key != last_key)
         keys_ptr += (key != last_key)
-        popcounts_ptr[0] += __builtin_popcountll(arr_ptr[0] & value_mask)
+        popcounts_ptr[0] += popcountll(arr_ptr[0] & value_mask)
         keys_ptr[0] = key
         last_key = key
         arr_ptr += 1
