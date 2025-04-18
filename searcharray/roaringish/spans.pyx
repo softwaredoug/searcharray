@@ -19,7 +19,7 @@ cdef extern from *:
         #pragma intrinsic(_BitScanForward64)
         #pragma intrinsic(_BitScanReverse64)
 
-        static int popcount(unsigned long long x) {
+        static int popcountll(unsigned long long x) {
             return __popcnt64(x);
         }
 
@@ -38,7 +38,8 @@ cdef extern from *:
         }
 
     #else
-        static int popcount(unsigned long long x) {
+        #include <stddef.h>
+        static int popcountll(unsigned long long x) {
             return __builtin_popcountll(x);
         }
 
@@ -53,7 +54,7 @@ cdef extern from *:
     """
 
 cdef extern from *:
-    int popcount(unsigned long long x)
+    int popcountll(unsigned long long x)
     int ctzll(unsigned long long x)
     int clzll(unsigned long long x)
 
@@ -108,11 +109,11 @@ cdef DTYPE_t _posn_mask(np.int64_t curr_posn):
 
 
 cdef DTYPE_t _num_terms(ActiveSpans* spans, DTYPE_t span_idx):
-    return popcount(spans[0].terms[span_idx])
+    return popcountll(spans[0].terms[span_idx])
 
 
 cdef DTYPE_t _num_posns(ActiveSpans* spans, DTYPE_t span_idx):
-    return popcount(spans[0].posns[span_idx])
+    return popcountll(spans[0].posns[span_idx])
 
 
 cdef bint _do_spans_overlap(ActiveSpans* spans_lhs, DTYPE_t span_idx_lhs,
@@ -232,7 +233,7 @@ cdef _span_freqs(DTYPE_t[:] posns,      # Flattened all terms in one array
                 payload_base = ((term & payload_msb_mask) >> lsb_bits) * lsb_bits
                 term &= payload_mask
                 curr_term_mask = 0x1 << term_ord
-                sum_popcount[term_ord] += popcount(posns[curr_idx[term_ord]] & payload_mask)
+                sum_popcount[term_ord] += popcountll(posns[curr_idx[term_ord]] & payload_mask)
 
                 # Consume every position into every possible span
                 while term != 0:

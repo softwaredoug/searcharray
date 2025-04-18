@@ -28,18 +28,19 @@ cdef extern from *:
     #if defined(_MSC_VER)
         #include <intrin.h>
         #pragma intrinsic(__popcnt64)
-        static int popcount(unsigned long long x) {
+        static int popcountll(unsigned long long x) {
             return __popcnt64(x);
         }
     #else
-        static int popcount(unsigned long long x) {
+        #include <stddef.h>
+        static int popcountll(unsigned long long x) {
             return __builtin_popcountll(x);
         }
     #endif
     """
 
 cdef extern from *:
-    int popcount(unsigned long long x)
+    int popcountll(unsigned long long x)
 
 
 cdef _payload_slice(DTYPE_t[:] arr,
