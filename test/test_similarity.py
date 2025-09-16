@@ -58,3 +58,29 @@ def test_bm25_similarity_matches_lucene(term_freqs, doc_freqs, doc_lens, avg_doc
                         avg_doc_len,
                         num_docs)
     assert np.isclose(bm25, expected).all(), f"Expected {expected} but got {bm25}"
+
+
+@w_scenarios(lucene_bm25_scenarios)
+def test_bm25_impact_matches_lucene(term_freqs, doc_freqs, doc_lens, avg_doc_len, num_docs, expected):
+    from searcharray.similarity import bm25_impact
+    default_bm25_sim = bm25_similarity(k1=1.2, b=0.75)
+    bm25_sim = default_bm25_sim(arr(term_freqs),
+                                arr(doc_freqs),
+                                arr(doc_lens),
+                                avg_doc_len,
+                                num_docs)
+
+    default_bm25_imp = bm25_impact(k1=1.2, b=0.75)
+    bm25_imp = default_bm25_imp(arr(term_freqs),
+                                arr(doc_freqs),
+                                arr(doc_lens),
+                                avg_doc_len,
+                                num_docs)
+
+    def compute_idf(num_docs, dfs):
+        """Calculate idf."""
+        return np.sum(np.log(1 + (num_docs - dfs + 0.5) / (dfs + 0.5)))
+
+    idf = compute_idf(num_docs, arr(doc_freqs))
+    bm25 = bm25_imp * idf
+    assert np.isclose(bm25, bm25_sim).all(), f"Expected {bm25_sim} but got {bm25}"

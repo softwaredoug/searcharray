@@ -38,6 +38,21 @@ def bm25_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
     return bm25
 
 
+def bm25_impact(k1: float = 1.2, b: float = 0.75) -> Similarity:
+    """ All the parts of BM25 except the idf, for impact-ordered indexes and to enable BM25F."""
+    def bm25(term_freqs: NDArray[np.float32],
+             doc_freqs: NDArray[np.float32],
+             doc_lens: NDArray[np.float32],
+             avg_doc_lens: int, num_docs: int) -> np.ndarray:
+        """Calculate BM25 impact scores."""
+        if avg_doc_lens == 0:
+            return np.zeros_like(term_freqs)
+        # Calculate tf
+        tf = (term_freqs) / (term_freqs + k1 * (1 - b + b * doc_lens / avg_doc_lens))
+        return tf
+    return bm25
+
+
 def bm25_legacy_similarity(k1: float = 1.2, b: float = 0.75) -> Similarity:
     """BM25 similarity prior to LUCENE-8563 with k1 + 1 in numerator."""
     # (freq * (k1 + 1)) / (freq + k1 * (1 - b + b * fieldLength / avgFieldLength))
