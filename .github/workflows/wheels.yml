@@ -8,7 +8,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-13, macos-latest, windows-latest, ubuntu-latest-arm]
+        os: [ubuntu-latest, macos-13, macos-latest, windows-latest, ubuntu-24.04-arm]
 
     env:
       CIBW_BUILD_VERBOSITY: 1
