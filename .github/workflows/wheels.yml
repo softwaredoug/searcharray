@@ -8,11 +8,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-13, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-13, macos-latest, windows-latest, ubuntu-latest-arm]
 
     env:
       CIBW_BUILD_VERBOSITY: 1
-      CIBW_ARCHS_LINUX: aarch64
+      CIBW_ARCHS_LINUX: native
       CIBW_SKIP: "*-win32"          # skip all 32-bit CPython on Windows
       # (optionally restrict archs explicitly)
       CIBW_ARCHS_WINDOWS: "AMD64 ARM64"
