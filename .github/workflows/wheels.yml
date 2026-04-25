@@ -12,6 +12,7 @@ jobs:
 
     env:
       CIBW_BUILD_VERBOSITY: 1
+      CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
       CIBW_ARCHS_LINUX: native
       CIBW_SKIP: "*-win32"          # skip all 32-bit CPython on Windows
       # (optionally restrict archs explicitly)
