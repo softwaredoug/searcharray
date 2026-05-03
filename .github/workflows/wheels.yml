@@ -4,15 +4,29 @@ on: [push, pull_request]
 
 jobs:
   build_wheels:
-    name: Build wheels on ${{ matrix.os }}
+    name: Build wheels on ${{ matrix.os }} (${{ matrix.build }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-13, macos-latest, windows-latest, ubuntu-24.04-arm]
+        include:
+          - os: ubuntu-latest
+            build: "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
+          - os: macos-13
+            build: "cp38-* cp39-* cp310-*"
+          - os: macos-13
+            build: "cp311-* cp312-*"
+          - os: macos-13
+            build: "cp313-* cp314-*"
+          - os: macos-latest
+            build: "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
+          - os: windows-latest
+            build: "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
+          - os: ubuntu-24.04-arm
+            build: "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
 
     env:
       CIBW_BUILD_VERBOSITY: 1
-      CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
+      CIBW_BUILD: "${{ matrix.build }}"
       CIBW_ARCHS_LINUX: native
       CIBW_SKIP: "*-win32"          # skip all 32-bit CPython on Windows
       # (optionally restrict archs explicitly)
