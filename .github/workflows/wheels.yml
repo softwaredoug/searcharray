@@ -11,11 +11,11 @@ jobs:
         include:
           - os: ubuntu-latest
             build: "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
-          - os: macos-13
+          - os: macos-15-intel
             build: "cp38-* cp39-* cp310-*"
-          - os: macos-13
+          - os: macos-15-intel
             build: "cp311-* cp312-*"
-          - os: macos-13
+          - os: macos-15-intel
             build: "cp313-* cp314-*"
           - os: macos-latest
             build: "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
