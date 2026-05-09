@@ -241,6 +241,7 @@ class SearchArray(ExtensionArray):
 
         self.avoid_copies = avoid_copies
         self.tokenizer = tokenizer
+        self._readonly = False
         self.term_mat, self.posns, \
             self.term_dict, self.avg_doc_length, \
             self.doc_lens = build_index_from_terms_list(postings, Terms)
@@ -355,10 +356,13 @@ class SearchArray(ExtensionArray):
             arr.term_dict = self.term_dict
             arr.avg_doc_length = self.avg_doc_length
             arr.corpus_size = self.corpus_size
+            arr._readonly = self._readonly
             return arr
 
     def __setitem__(self, key, value):
         """Set an item in the array."""
+        if self._readonly:
+            raise ValueError("Cannot modify read-only array")
         key = pd.api.indexers.check_array_indexer(self, key)
         if isinstance(value, pd.Series):
             value = value.values
@@ -537,6 +541,7 @@ class SearchArray(ExtensionArray):
         postings_arr.term_dict = self.term_dict
         postings_arr.avg_doc_length = self.avg_doc_length
         postings_arr.corpus_size = self.corpus_size
+        postings_arr._readonly = False
 
         if not self.avoid_copies:
             postings_arr.posns = self.posns.copy()
