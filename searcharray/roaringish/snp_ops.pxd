@@ -5,9 +5,9 @@
 # cython: nonecheck=False
 # cython: language_level=3
 
-cdef extern from "stdint.h":
-    ctypedef unsigned long long uint64_t
-    ctypedef long long int64_t
+cimport numpy as np
 
+ctypedef np.uint64_t uint64_t
+ctypedef np.int64_t int64_t
 
-ctypedef unsigned long long DTYPE_t
+ctypedef np.uint64_t DTYPE_t
