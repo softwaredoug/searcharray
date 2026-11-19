@@ -4,6 +4,7 @@ import subprocess
 import requests
 import tempfile
 import zipfile
+from glob import glob
 
 
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
@@ -51,13 +52,19 @@ def wheels(git_sha):
     name = "Build Wheels"
     artifact_urls = []
     for run in actions['workflow_runs']:
-        if run['name'] == name:
+        if run['name'] == name and run['conclusion'] == "success":
             artifact_urls.append(run['artifacts_url'])
     return artifact_urls
 
 
 def twine_upload(from_dir):
-    subprocess.run(["twine", "upload", "--skip-existing", f"{from_dir}"], check=True)
+    distributions = sorted(glob(from_dir))
+    if not distributions:
+        raise ValueError(f"No distribution files found matching {from_dir}")
+    subprocess.run(
+        ["twine", "upload", "--verbose", "--non-interactive", "--skip-existing", *distributions],
+        check=True,
+    )
 
 
 def main():

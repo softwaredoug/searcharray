@@ -134,8 +134,8 @@ build: deps test lint
 
 
 twine:
-	@echo "Installing twine..."
-	pip install twine
+	@echo "Installing/upgrading twine..."
+	python -m pip install --upgrade "twine>=7.0.0"
 
 
 publish: twine
